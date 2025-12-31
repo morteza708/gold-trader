@@ -1,0 +1,32 @@
+/* 1. تعریف فونت */
+@font-face {
+    font-family: 'IranYekan';
+    src: url('../fonts/IRANYekanXVF.woff2') format('woff2-variations'),
+         url('../fonts/IRANYekanXVF.woff2') format('woff2');
+    font-weight: 100 900;
+    font-style: normal;
+}
+
+/* 2. اعمال فونت به تمام اجزای پنل */
+:root {
+    --font-family-primary: 'IranYekan', sans-serif; /* متغیر جدید جنگو */
+}
+
+body, 
+div, 
+p, 
+a, 
+h1, h2, h3, h4, h5, h6, 
+input, 
+textarea, 
+select, 
+button, 
+.module caption,
+th, td {
+    font-family: 'IranYekan', sans-serif !important;
+}
+
+/* اصلاح اعداد فارسی (اختیاری) */
+body {
+    font-feature-settings: "ss01";
+}

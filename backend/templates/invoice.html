@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>فاکتور فروش</title>
+    <style>
+        /* --- تنظیمات صفحه --- */
+        @page {
+            size: A5;
+            margin: 10mm; /* حاشیه دور کاغذ */
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        /* --- فونت‌ها --- */
+        {% if font_base64 %}
+        @font-face {
+            font-family: 'IRANYekan';
+            src: url('data:font/woff2;base64,{{ font_base64 }}') format('woff2');
+            font-weight: normal;
+        }
+        @font-face {
+            font-family: 'IRANYekan';
+            src: url('data:font/woff2;base64,{{ font_base64 }}') format('woff2');
+            font-weight: bold;
+        }
+        {% endif %}
+
+        body {
+            font-family: {% if font_base64 %}'IRANYekan'{% else %}Tahoma, Arial{% endif %}, sans-serif;
+            direction: rtl;
+            font-size: 10pt;
+            color: #000;
+            background: #fff;
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+
+        /* --- کانتینر اصلی با چیدمان فلکس --- 
+           این باعث می‌شود فوتر همیشه پایین بماند بدون تداخل
+        */
+        .main-border {
+            border: 2px solid #000;
+            padding: 10px;
+            /* ارتفاع فیکس برای A5 منهای مارجین‌ها حدودی 185mm */
+            min-height: 185mm; 
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        /* --- جداول --- */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        td, th {
+            padding: 5px;
+            vertical-align: middle;
+        }
+
+        /* --- هدر --- */
+        .header-section {
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .logo-placeholder {
+            font-size: 24px;
+            font-weight: 900;
+            border: 2px solid #000;
+            padding: 5px 15px;
+            display: inline-block;
+            border-radius: 5px;
+        }
+
+        .company-name { font-size: 16px; font-weight: 900; margin-top: 5px;}
+        .company-sub { font-size: 9px; color: #444; }
+
+        .invoice-title {
+            font-size: 18px;
+            font-weight: 900;
+            text-decoration: underline;
+            margin-bottom: 5px;
+        }
+        .invoice-meta { font-size: 10pt; line-height: 1.5; font-weight: bold;}
+
+        /* --- باکس‌های طرفین --- */
+        .parties-table {
+            border: 1px solid #000;
+            margin-bottom: 15px;
+        }
+        .parties-table td {
+            width: 50%;
+            padding: 10px;
+            vertical-align: top;
+        }
+        .parties-table td:first-child { border-left: 1px solid #000; }
+
+        .p-label { font-size: 9pt; font-weight: bold; color: #555; margin-bottom: 5px; text-decoration: underline;}
+        .p-name { font-size: 11pt; font-weight: 900; margin-bottom: 5px; }
+        .p-info { font-size: 10pt; }
+
+        /* --- جدول کالا --- */
+        .items-table {
+            border: 1px solid #000;
+            margin-bottom: 15px;
+        }
+        .items-table th {
+            background-color: #f0f0f0;
+            border-bottom: 1px solid #000;
+            border-left: 1px solid #000;
+            font-weight: 900;
+            font-size: 9pt;
+            text-align: center;
+            padding: 8px;
+        }
+        .items-table th:last-child { border-left: none; }
+
+        .items-table td {
+            border-bottom: 1px solid #ccc;
+            border-left: 1px solid #000;
+            text-align: center;
+            padding: 8px;
+            font-size: 10pt;
+        }
+        .items-table td:last-child { border-left: none; }
+
+        .col-desc { width: 40%; text-align: right !important; font-weight: bold;}
+        .col-karat { width: 10%; }
+        .col-weight { width: 15%; }
+        .col-price { width: 17.5%; }
+        .col-total { width: 17.5%; font-weight: bold;}
+
+        /* --- بخش جمع کل (اصلاح شده) --- */
+        .summary-wrapper {
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .totals-table {
+            width: 100%; /* جدول داخلی تمام عرض کانتینر خود را بگیرد */
+            border: 2px solid #000;
+        }
+        
+        .totals-table td {
+            padding: 8px;
+            border-bottom: 1px solid #000;
+            /* جلوگیری از شکستن متن */
+            white-space: nowrap; 
+        }
+        
+        .t-label { text-align: right; font-weight: bold; width: 35%; background: #f0f0f0;}
+        .t-value { text-align: left; font-weight: 900; width: 65%; padding-left: 10px;}
+        
+        .totals-table tr:last-child td { border-bottom: none; }
+
+        /* --- بخش امضا و فوتر (Flex Item) --- */
+        /* این دیو فضای خالی را پر می‌کند تا فوتر پایین برود */
+        .spacer {
+            flex-grow: 1; 
+        }
+
+        .sign-section {
+            margin-top: 30px;
+            border-top: 1px dashed #999;
+            padding-top: 20px;
+            /* تضمین فاصله مناسب از فوتر */
+            margin-bottom: 20px; 
+        }
+        
+        .sign-box {
+            text-align: center;
+            font-weight: bold;
+            font-size: 10pt;
+        }
+
+        .footer {
+            /* فوتر به عنوان آخرین آیتم فلکس */
+            margin-top: auto; 
+            text-align: center;
+            font-size: 8pt;
+            border-top: 1px solid #000;
+            padding-top: 8px;
+            width: 100%;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="main-border">
+        
+        <!-- محتوای اصلی -->
+        <div>
+            <!-- هدر -->
+            <table class="header-section">
+                <tr>
+                    <td style="width: 60%;">
+                        <div class="logo-placeholder">G</div>
+                        <div style="display: inline-block; vertical-align: middle; margin-right: 10px;">
+                            <div class="company-name">گلد تریدر</div>
+                            <div class="company-sub">سامانه هوشمند معاملات طلا</div>
+                        </div>
+                    </td>
+                    <td style="width: 40%; text-align: left;">
+                        <div class="invoice-title">فاکتور فروش</div>
+                        <div class="invoice-meta">
+                            شماره: {{ invoice_number }}<br>
+                            تاریخ: {{ date }}<br>
+                            ساعت: {{ time }}
+                        </div>
+                    </td>
+                </tr>
+            </table>
+
+            <!-- طرفین -->
+            <table class="parties-table">
+                <tr>
+                    <td>
+                        <div class="p-label">{{ seller_label }}:</div>
+                        <div class="p-name">{{ seller_name }}</div>
+                        <div class="p-info">شناسه/کد ملی: {{ seller_national_id }}</div>
+                    </td>
+                    <td>
+                        <div class="p-label">{{ buyer_label }}:</div>
+                        <div class="p-name">{{ buyer_name }}</div>
+                        <div class="p-info">شماره تماس: {{ buyer_mobile }}</div>
+                    </td>
+                </tr>
+            </table>
+
+            <!-- اقلام -->
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th class="col-desc">شرح کالا</th>
+                        <th class="col-karat">عیار</th>
+                        <th class="col-weight">وزن (g)</th>
+                        <th class="col-price">فی واحد</th>
+                        <th class="col-total">مبلغ کل</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="col-desc">{{ item_description }}</td>
+                        <td class="col-karat">۷۵۰ (۱۸)</td>
+                        <td class="col-weight">{{ amount }}</td>
+                        <td class="col-price">{{ price }}</td>
+                        <td class="col-total">{{ total }}</td>
+                    </tr>
+                    <!-- ردیف خالی -->
+                    <tr style="height: 30px;">
+                        <td style="border-left: 1px solid #000;"></td>
+                        <td style="border-left: 1px solid #000;"></td>
+                        <td style="border-left: 1px solid #000;"></td>
+                        <td style="border-left: 1px solid #000;"></td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- جمع کل (اصلاح شده: افزایش عرض باکس) -->
+            <table class="summary-wrapper">
+                <tr>
+                    <!-- عرض فضای خالی کاهش یافت (35%) -->
+                    <td style="width: 35%;"></td> 
+                    <!-- عرض باکس قیمت افزایش یافت (65%) -->
+                    <td style="width: 65%; padding: 0;">
+                        <table class="totals-table">
+                            <tr>
+                                <td class="t-label">جمع کل:</td>
+                                <td class="t-value">{{ total }}</td>
+                            </tr>
+                            <tr>
+                                <td class="t-label">مالیات:</td>
+                                <td class="t-value">۰</td>
+                            </tr>
+                            <tr style="background-color: #e5e7eb;">
+                                <td class="t-label" style="background-color: #d1d5db;">قابل پرداخت:</td>
+                                <td class="t-value">{{ total }} <span style="font-size: 8pt; font-weight: normal;">تومان</span></td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+
+            <!-- امضا -->
+            <table class="sign-section">
+                <tr>
+                    <td>
+                        <div class="sign-box">مهر و امضای فروشنده</div>
+                    </td>
+                    <td>
+                        <div class="sign-box">مهر و امضای خریدار</div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- فوتر چسبان -->
+        <div class="footer">
+            آدرس: تهران، بازار زرگرها، پلاک ۱۱۰ | تلفن: ۰۲۱-۸۸۸۸۸۸۸۸
+        </div>
+
+    </div>
+
+</body>
+</html>
