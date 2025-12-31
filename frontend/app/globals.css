@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/* 
+  در نسخه جدید، تم را اینجا تعریف می‌کنیم.
+  ما به تیلویند می‌گوییم: هر جا "font-sans" استفاده شد،
+  از متغیر "--font-iran-yekan" که در layout ساختیم استفاده کن.
+*/
+@theme {
+  --font-sans: var(--font-iran-yekan);
+  
+  /* تنظیمات کانتینر که قبلا می‌خواستیم انجام بدیم هم اینجا میاد */
+  --container-center: true;
+  --container-padding: 1rem;
+    /* اضافه کردن رنگ‌های سازمانی */
+    --color-gold-500: #D4AF37; /* رنگ اصلی طلا */
+    --color-gold-600: #aa8c2c; /* رنگ هاور (تیره‌تر) */
+    --color-gold-50: #fdf8e6;  /* رنگ پس‌زمینه خیلی روشن طلایی */
+}
+
+/* 
+  اگر نیاز به استایل‌های خاص دیگری دارید در ادامه می‌نویسید.
+  این تنظیمات برای بادی و روت پروژه است:
+*/
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-iran-yekan), ui-sans-serif, system-ui, sans-serif;
+  
+  /* اضافه کردن پترن نقطه‌ای */
+  background-image: 
+    radial-gradient(#e5e7eb 1px, transparent 1px);
+  background-size: 24px 24px; /* فاصله نقطه‌ها */
+}
+
+/* یک سایه ملایم برای اینکه متن‌ها روی پترن خوانا باشند */
+main {
+  background: radial-gradient(circle at center top, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 60%);
+}
+
+@layer utilities {
+  .container-custom {
+    @apply w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+}
