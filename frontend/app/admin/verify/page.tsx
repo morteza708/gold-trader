@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Edit2, RotateCcw, ShieldCheck } from "lucide-react";
@@ -9,7 +9,7 @@ import toast from "react-hot-toast";
 import { toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
 import { useAuth } from "@/contexts/AuthContext";
 
-export default function AdminVerifyPage() {
+function VerifyForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const mobile = searchParams.get("mobile");
@@ -217,6 +217,23 @@ export default function AdminVerifyPage() {
 
       </div>
     </div>
+  );
+}
+
+export default function AdminVerifyPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="w-full max-w-md text-center">
+          <div className="w-16 h-16 bg-gold-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gold-500/30">
+            <ShieldCheck className="text-gold-500" size={32} />
+          </div>
+          <p className="text-slate-400">در حال بارگذاری...</p>
+        </div>
+      </div>
+    }>
+      <VerifyForm />
+    </Suspense>
   );
 }
 

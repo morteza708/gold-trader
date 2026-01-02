@@ -65,7 +65,7 @@ export default function DepositDetailModalNew({
 
   // محاسبه مبلغ باقی‌مانده
   const totalAssigned = assignments.reduce((sum, a) => sum + a.amount, 0);
-  const remainingAmount = Number(request.amount) - totalAssigned;
+  const remainingAmount = Math.max(0, Number(request.amount) - totalAssigned); // اگر منفی شد، صفر می‌شود
 
   // بارگذاری داده‌ها
   useEffect(() => {
@@ -93,7 +93,7 @@ export default function DepositDetailModalNew({
   };
 
   // انتخاب/لغو انتخاب درخواست برداشت
-  const toggleWithdrawal = (withdrawalId: number, amount: number) => {
+  const toggleWithdrawal = (withdrawalId: number, withdrawalAmount: number, remainingAmount?: number) => {
     const newSelected = new Set(selectedWithdrawals);
     if (newSelected.has(withdrawalId)) {
       newSelected.delete(withdrawalId);
@@ -101,11 +101,24 @@ export default function DepositDetailModalNew({
       setAssignments(prev => prev.filter(a => a.withdrawal_request_id !== withdrawalId));
     } else {
       newSelected.add(withdrawalId);
+      // محاسبه باقی‌مانده فعلی (قبل از اضافه کردن این assignment)
+      const currentTotalAssigned = assignments.reduce((sum, a) => sum + a.amount, 0);
+      const currentRemaining = Math.max(0, Number(request.amount) - currentTotalAssigned);
+      
+      // استفاده از باقی‌مانده برداشت (اگر موجود باشد) یا مبلغ کل
+      // این برای حالتی است که برداشت ناقص است و باید فقط باقی‌مانده تخصیص داده شود
+      const withdrawalRemaining = remainingAmount !== undefined && remainingAmount > 0 
+        ? remainingAmount 
+        : withdrawalAmount;
+      
+      // محاسبه مبلغ تخصیص یافته: حداقل بین باقی‌مانده برداشت و باقی‌مانده درخواست واریز
+      const assignmentAmount = Math.min(withdrawalRemaining, currentRemaining);
+      
       // اضافه کردن به assignments
       setAssignments(prev => [...prev, {
         account_type: 'WITHDRAWAL',
         withdrawal_request_id: withdrawalId,
-        amount: amount,
+        amount: assignmentAmount, // استفاده از مبلغ محاسبه شده
         order: prev.length + 1,
       }]);
     }
@@ -173,10 +186,11 @@ export default function DepositDetailModalNew({
       toast.error("لطفا حداقل یک حساب انتخاب کنید");
       return;
     }
-    if (remainingAmount > 0) {
-      toast.error(`مبلغ ${toPersianDigits(remainingAmount.toLocaleString())} ریال باقی مانده است`);
-      return;
-    }
+    // حذف validation باقی‌مانده - اجازه می‌دهیم partial payment انجام شود
+    // if (remainingAmount > 0) {
+    //   toast.error(`مبلغ ${toPersianDigits(remainingAmount.toLocaleString())} ریال باقی مانده است`);
+    //   return;
+    // }
 
     setIsAssigning(true);
     try {
@@ -400,7 +414,7 @@ export default function DepositDetailModalNew({
                               <input
                                 type="checkbox"
                                 checked={selectedWithdrawals.has(wr.id)}
-                                onChange={() => toggleWithdrawal(wr.id, Number(wr.amount))}
+                                onChange={() => toggleWithdrawal(wr.id, Number(wr.amount), wr.remaining_amount)}
                                 className="w-5 h-5 rounded border-slate-600 bg-slate-800 text-gold-500 focus:ring-gold-500 focus:ring-2 cursor-pointer"
                               />
                               <div className="flex-1">
@@ -411,9 +425,22 @@ export default function DepositDetailModalNew({
                                       : wr.user_info?.phone_number || '-'
                                     }
                                   </p>
-                                  <p className="text-sm font-bold text-gold-400">
-                                    {toPersianDigits(Number(wr.amount).toLocaleString())} ریال
-                                  </p>
+                                  <div className="text-left">
+                                    {wr.remaining_amount !== undefined && wr.remaining_amount > 0 && wr.remaining_amount < Number(wr.amount) ? (
+                                      <>
+                                        <p className="text-sm font-bold text-gold-400">
+                                          {toPersianDigits(Number(wr.amount).toLocaleString())} ریال
+                                        </p>
+                                        <p className="text-xs text-orange-400 mt-1">
+                                          باقی‌مانده: {toPersianDigits(Number(wr.remaining_amount).toLocaleString())} ریال
+                                        </p>
+                                      </>
+                                    ) : (
+                                      <p className="text-sm font-bold text-gold-400">
+                                        {toPersianDigits(Number(wr.amount).toLocaleString())} ریال
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
                                 <p className="text-xs text-slate-400 mt-1">
                                   {wr.bank_card ? `${wr.bank_card.bank_name} - ${wr.bank_card.card_number.slice(-4)}` : 'کارت ثبت نشده'}

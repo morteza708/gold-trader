@@ -70,6 +70,9 @@ class WithdrawalRequestSerializer(serializers.ModelSerializer):
     receipt_image = serializers.SerializerMethodField()
     gold_pickup_address = serializers.SerializerMethodField()
     deposit_receipts_info = serializers.SerializerMethodField()
+    paid_amount = serializers.SerializerMethodField()
+    remaining_amount = serializers.SerializerMethodField()
+    is_fully_paid = serializers.SerializerMethodField()
     
     class Meta:
         model = WithdrawalRequest
@@ -78,7 +81,7 @@ class WithdrawalRequestSerializer(serializers.ModelSerializer):
             'bank_card', 'bank_card_id', 'receipt_image', 'admin_note',
             'user_info', 'created_at', 'created_at_jalali', 'completed_at',
             'completed_at_jalali', 'updated_at', 'gold_pickup_address',
-            'deposit_receipts_info'
+            'deposit_receipts_info', 'paid_amount', 'remaining_amount', 'is_fully_paid'
         ]
         read_only_fields = ['id', 'status', 'request_code', 'created_at', 'updated_at', 'completed_at']
     
@@ -125,11 +128,21 @@ class WithdrawalRequestSerializer(serializers.ModelSerializer):
             return obj.receipt_image.url
         return None
     
+    def get_paid_amount(self, obj):
+        """مبلغ پرداخت شده از طریق لینک‌های واریز"""
+        return float(obj.get_paid_amount())
+    
+    def get_remaining_amount(self, obj):
+        """باقی‌مانده درخواست برداشت"""
+        return float(obj.get_remaining_amount())
+    
+    def get_is_fully_paid(self, obj):
+        """بررسی اینکه آیا کل مبلغ پرداخت شده است"""
+        return obj.is_fully_paid()
+    
     def get_deposit_receipts_info(self, obj):
-        """اطلاعات فیش‌های واریزی مرتبط (برای درخواست‌های تایید شده خودکار)"""
-        # فقط برای درخواست‌های تایید شده که به صورت خودکار تایید شده‌اند
-        if obj.status != 'APPROVED':
-            return []
+        """اطلاعات فیش‌های واریزی مرتبط (همه لینک‌ها، نه فقط auto_approved)"""
+        # نمایش همه لینک‌ها، چه auto_approved=True و چه False
         
         # پاک کردن cache و refresh کردن object
         try:
@@ -145,10 +158,9 @@ class WithdrawalRequestSerializer(serializers.ModelSerializer):
         # چون ممکن است prefetch_related درست کار نکند
         from wallet.models import DepositWithdrawalLink
         
-        # بررسی مستقیم از دیتابیس
+        # بررسی مستقیم از دیتابیس - همه لینک‌ها (نه فقط auto_approved=True)
         direct_links = DepositWithdrawalLink.objects.filter(
-            withdrawal_request_id=obj.id,
-            auto_approved=True
+            withdrawal_request_id=obj.id
         ).select_related(
             'deposit_receipt',
             'deposit_receipt__deposit_request',

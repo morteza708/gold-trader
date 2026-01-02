@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Edit2, RotateCcw } from "lucide-react";
@@ -9,7 +9,7 @@ import toast from "react-hot-toast";
 import { toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
 import { useAuth } from "@/contexts/AuthContext";
 
-export default function VerifyPage() {
+function VerifyForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const mobile = searchParams.get("mobile");
@@ -191,5 +191,20 @@ export default function VerifyPage() {
 
       </form>
     </div>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="text-center mb-10">
+          <h1 className="text-2xl font-black text-gray-800 mb-3">کد تایید را وارد کنید</h1>
+          <p className="text-gray-500 text-sm">در حال بارگذاری...</p>
+        </div>
+      </div>
+    }>
+      <VerifyForm />
+    </Suspense>
   );
 }

@@ -5,6 +5,7 @@ import { X, CreditCard, Check } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import toast from "react-hot-toast";
+import { toEnglishDigits } from "@/lib/utils/numberUtils";
 
 interface AddCardModalProps {
   isOpen: boolean;
@@ -42,7 +43,10 @@ export default function AddCardModal({ isOpen, onClose, onAdd }: AddCardModalPro
 
   // هندلر تغییر شماره کارت (تشخیص بانک + فرمت دهی)
   const handleCardChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value.replace(/\D/g, "").slice(0, 16); // فقط عدد، ۱۶ رقم
+    // ۱. تبدیل اعداد فارسی به انگلیسی
+    let val = toEnglishDigits(e.target.value);
+    // ۲. حذف هر چیزی غیر از عدد
+    val = val.replace(/\D/g, "").slice(0, 16); // فقط عدد، ۱۶ رقم
     
     // تشخیص بانک
     if (val.length >= 4) {
@@ -60,18 +64,22 @@ export default function AddCardModal({ isOpen, onClose, onAdd }: AddCardModalPro
   };
 
   const handleSubmit = () => {
+    // تبدیل اعداد فارسی به انگلیسی قبل از اعتبارسنجی
+    const cardNumberEnglish = toEnglishDigits(cardNumber.replace(/-/g, ""));
+    const shebaNumberEnglish = toEnglishDigits(shebaNumber);
+    
     // اعتبارسنجی ساده
-    if (cardNumber.replace(/-/g, "").length !== 16) return toast.error("شماره کارت باید ۱۶ رقم باشد");
-    if (shebaNumber.length < 20) return toast.error("شماره شبا نامعتبر است");
+    if (cardNumberEnglish.length !== 16) return toast.error("شماره کارت باید ۱۶ رقم باشد");
+    if (shebaNumberEnglish.length < 20) return toast.error("شماره شبا نامعتبر است");
 
     setIsLoading(true);
     setTimeout(() => {
-      // ارسال کارت جدید به پرنت
+      // ارسال کارت جدید به پرنت (با اعداد انگلیسی)
       onAdd({
         id: Date.now(),
         bank: bankInfo.name,
-        number: cardNumber,
-        sheba: "IR" + shebaNumber,
+        number: cardNumberEnglish, // شماره کارت بدون خط تیره و با اعداد انگلیسی
+        sheba: "IR" + shebaNumberEnglish, // شماره شبا با اعداد انگلیسی
         active: false
       });
       setIsLoading(false);
@@ -143,6 +151,7 @@ export default function AddCardModal({ isOpen, onClose, onAdd }: AddCardModalPro
              value={cardNumber}
              onChange={handleCardChange}
              maxLength={19} // 16 رقم + 3 خط تیره
+             inputMode="numeric"
              className="text-center font-bold text-lg dir-ltr tracking-widest"
              icon={<CreditCard size={18} className="text-gray-400"/>}
            />
@@ -154,8 +163,15 @@ export default function AddCardModal({ isOpen, onClose, onAdd }: AddCardModalPro
                  <input 
                    className="w-full bg-gray-50 text-gray-900 border-2 border-gray-200 focus:border-gold-500 rounded-xl pl-10 pr-4 py-3 outline-none transition-all font-mono font-bold text-lg text-left"
                    placeholder="0000 0000 ..."
+                   inputMode="numeric"
                    value={shebaNumber}
-                   onChange={(e) => setShebaNumber(e.target.value.replace(/[^0-9]/g, "").slice(0, 24))}
+                   onChange={(e) => {
+                     // تبدیل اعداد فارسی به انگلیسی
+                     let val = toEnglishDigits(e.target.value);
+                     // حذف هر چیزی غیر از عدد و محدود کردن به 24 رقم
+                     val = val.replace(/[^0-9]/g, "").slice(0, 24);
+                     setShebaNumber(val);
+                   }}
                  />
               </div>
               <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">

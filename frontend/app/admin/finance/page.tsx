@@ -5,7 +5,7 @@ import {
   CreditCard, Search, Eye, CheckCircle2, 
   XCircle, Clock, ArrowDownCircle, ArrowUpCircle,
   TrendingUp, DollarSign, AlertCircle, Download,
-  User, Calendar, Building2, FileText, RefreshCw, Coins, Upload
+  User, Calendar, Building2, FileText, RefreshCw, Coins, Upload, Calculator
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -1055,7 +1055,7 @@ function WithdrawalDetailModal({
                   <p className="text-sm font-bold text-white font-mono dir-ltr">{request.request_code}</p>
                 </div>
                 <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
-                  <p className="text-xs text-slate-400 mb-1">مقدار</p>
+                  <p className="text-xs text-slate-400 mb-1">مبلغ کل درخواست</p>
                   <p className="text-sm font-bold text-white">
                     {request.withdrawal_type === 'RIAL'
                       ? `${toPersianDigits(Number(request.amount || 0).toLocaleString())} ریال`
@@ -1063,6 +1063,30 @@ function WithdrawalDetailModal({
                     }
                   </p>
                 </div>
+                {/* مبلغ پرداخت شده */}
+                {request.paid_amount !== undefined && request.paid_amount > 0 && (
+                  <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                    <p className="text-xs text-slate-400 mb-1">مبلغ پرداخت شده</p>
+                    <p className="text-sm font-bold text-green-400">
+                      {request.withdrawal_type === 'RIAL'
+                        ? `${toPersianDigits(Number(request.paid_amount || 0).toLocaleString())} ریال`
+                        : `${toPersianDigits(Number(request.paid_amount || 0).toFixed(3))} گرم`
+                      }
+                    </p>
+                  </div>
+                )}
+                {/* باقی‌مانده */}
+                {request.remaining_amount !== undefined && request.remaining_amount > 0 && (
+                  <div className="bg-slate-900 p-4 rounded-xl border border-yellow-500/50">
+                    <p className="text-xs text-slate-400 mb-1">باقی‌مانده</p>
+                    <p className="text-sm font-bold text-yellow-400">
+                      {request.withdrawal_type === 'RIAL'
+                        ? `${toPersianDigits(Number(request.remaining_amount || 0).toLocaleString())} ریال`
+                        : `${toPersianDigits(Number(request.remaining_amount || 0).toFixed(3))} گرم`
+                      }
+                    </p>
+                  </div>
+                )}
                 <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
                   <p className="text-xs text-slate-400 mb-1">وضعیت</p>
                   <div className="mt-2">
@@ -1144,13 +1168,78 @@ function WithdrawalDetailModal({
               </div>
             )}
 
-            {/* فیش‌های واریزی مرتبط (برای درخواست‌های تایید شده خودکار) */}
-            {request.status === 'APPROVED' && request.deposit_receipts_info && request.deposit_receipts_info.length > 0 && (
+            {/* نمایش وضعیت پرداخت برای برداشت‌های ریالی ناقص */}
+            {request.withdrawal_type === 'RIAL' && request.status === 'PENDING' && request.remaining_amount !== undefined && request.paid_amount !== undefined && (
               <div>
                 <h4 className="text-sm font-bold text-slate-400 mb-4 flex items-center gap-2">
-                  <FileText size={16} />
-                  فیش‌های واریزی مرتبط
+                  <Calculator size={16} />
+                  وضعیت پرداخت
                 </h4>
+                <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-xs text-slate-400 mb-1">مبلغ کل درخواست</p>
+                      <p className="text-lg font-bold text-white">
+                        {toPersianDigits(Number(request.amount || 0).toLocaleString())} ریال
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400 mb-1">مبلغ پرداخت شده</p>
+                      <p className="text-lg font-bold text-green-400">
+                        {toPersianDigits(Number(request.paid_amount || 0).toLocaleString())} ریال
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400 mb-1">باقی‌مانده</p>
+                      <p className="text-lg font-bold text-orange-400">
+                        {toPersianDigits(Number(request.remaining_amount || 0).toLocaleString())} ریال
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Progress bar */}
+                  {Number(request.amount || 0) > 0 && (
+                    <div className="mt-4">
+                      <div className="w-full bg-slate-700 rounded-full h-3">
+                        <div 
+                          className="bg-green-500 h-3 rounded-full transition-all"
+                          style={{ 
+                            width: `${Math.min(100, (Number(request.paid_amount || 0) / Number(request.amount || 1)) * 100)}%` 
+                          }}
+                        ></div>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-2 text-center">
+                        {toPersianDigits(Math.round((Number(request.paid_amount || 0) / Number(request.amount || 1)) * 100).toString())}% از مبلغ کل پرداخت شده
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* فیش‌های واریزی مرتبط (نمایش همه لینک‌ها، چه تایید شده و چه در انتظار) */}
+            {request.deposit_receipts_info && request.deposit_receipts_info.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-sm font-bold text-slate-400 flex items-center gap-2">
+                    <FileText size={16} />
+                    فیش‌های واریزی مرتبط ({request.deposit_receipts_info.length})
+                  </h4>
+                  {request.remaining_amount !== undefined && request.remaining_amount > 0 && (
+                    <div className="bg-yellow-500/20 border border-yellow-500/50 px-3 py-1.5 rounded-lg">
+                      <p className="text-xs text-yellow-400 font-bold">
+                        باقی‌مانده: {toPersianDigits(Number(request.remaining_amount).toLocaleString())} ریال
+                      </p>
+                    </div>
+                  )}
+                  {request.is_fully_paid && (
+                    <div className="bg-green-500/20 border border-green-500/50 px-3 py-1.5 rounded-lg">
+                      <p className="text-xs text-green-400 font-bold">
+                        ✓ پرداخت کامل شده
+                      </p>
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-4">
                   {request.deposit_receipts_info.map((receiptInfo, idx) => (
                     <div key={receiptInfo.id} className="bg-slate-900 p-4 rounded-xl border border-slate-700">
@@ -1186,9 +1275,15 @@ function WithdrawalDetailModal({
                         <p className="text-xs text-slate-400 mb-2">اطلاعات فیش</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div>
-                            <p className="text-xs text-slate-500 mb-1">مبلغ</p>
+                            <p className="text-xs text-slate-500 mb-1">مبلغ فیش</p>
                             <p className="text-sm font-bold text-white">
                               {toPersianDigits(Number(receiptInfo.amount).toLocaleString())} ریال
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">مبلغ تخصیص یافته به این برداشت</p>
+                            <p className="text-sm font-bold text-green-400">
+                              {toPersianDigits(Number(receiptInfo.link_amount || 0).toLocaleString())} ریال
                             </p>
                           </div>
                           {receiptInfo.tracking_number && (

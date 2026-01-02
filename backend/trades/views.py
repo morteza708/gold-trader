@@ -332,14 +332,22 @@ def download_invoice_pdf(request, trade_id):
         # تعیین نوع معامله
         is_buy = trade.trade_type == 'BUY'
         
-        # مسیر فونت
-        font_path = os.path.join(settings.BASE_DIR, '..', 'frontend', 'fonts', 'IRANYekanXVF.woff2')
-        font_abs_path = os.path.abspath(font_path)
+        # مسیر فونت - ابتدا از backend/static/fonts/ بررسی می‌کنیم، سپس از frontend
+        font_paths = [
+            os.path.join(settings.BASE_DIR, 'static', 'fonts', 'IRANYekanXVF.woff2'),
+            os.path.join(settings.BASE_DIR, '..', 'frontend', 'fonts', 'IRANYekanXVF.woff2'),
+        ]
+        font_abs_path = None
+        for path in font_paths:
+            abs_path = os.path.abspath(path)
+            if os.path.exists(abs_path):
+                font_abs_path = abs_path
+                break
         
         # بررسی وجود فایل فونت
-        if not os.path.exists(font_abs_path):
+        if not font_abs_path or not os.path.exists(font_abs_path):
             return Response(
-                {'error': f'فایل فونت یافت نشد: {font_abs_path}'},
+                {'error': f'فایل فونت یافت نشد. مسیرهای بررسی شده: {font_paths}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         
@@ -460,9 +468,11 @@ def download_invoice_pdf(request, trade_id):
         )
     except Exception as e:
         import traceback
+        import sys
         error_trace = traceback.format_exc()
-        print(f"خطا در download_invoice_pdf: {e}")
-        print(error_trace)
+        # Log به stderr که در Docker logs نمایش داده می‌شود
+        print(f"خطا در download_invoice_pdf: {e}", file=sys.stderr)
+        print(error_trace, file=sys.stderr)
         # در حالت debug، جزئیات خطا را برگردان
         if settings.DEBUG:
             return Response(

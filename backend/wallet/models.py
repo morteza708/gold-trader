@@ -1,4 +1,5 @@
 from django.db import models
+from decimal import Decimal
 from accounts.models import CustomUser
 
 
@@ -191,6 +192,30 @@ class WithdrawalRequest(models.Model):
         verbose_name = 'درخواست برداشت'
         verbose_name_plural = 'درخواست‌های برداشت'
         ordering = ['-created_at']
+    
+    def get_paid_amount(self):
+        """
+        محاسبه مبلغ پرداخت شده از طریق لینک‌های واریز
+        """
+        total_paid = Decimal('0')
+        links = self.deposit_links.all()
+        for link in links:
+            total_paid += link.amount
+        return total_paid
+    
+    def get_remaining_amount(self):
+        """
+        محاسبه باقی‌مانده درخواست برداشت
+        """
+        paid = self.get_paid_amount()
+        return self.amount - paid
+    
+    def is_fully_paid(self):
+        """
+        بررسی اینکه آیا کل مبلغ درخواست برداشت پرداخت شده است
+        """
+        remaining = self.get_remaining_amount()
+        return remaining <= Decimal('0')
     
     def __str__(self):
         return f"{self.request_code} - {self.user.phone_number} - {self.get_withdrawal_type_display()} - {self.amount}"

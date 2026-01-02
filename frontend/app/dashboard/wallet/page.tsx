@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { 
   CreditCard, ArrowUpCircle, ArrowDownCircle, Plus, 
@@ -21,7 +21,7 @@ import DatePicker, { DateObject } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 
-export default function WalletPage() {
+function WalletContent() {
   const { refreshUser } = useAuth();
   const searchParams = useSearchParams();
   const tabFromUrl = searchParams.get('tab') as "deposit" | "withdraw" | "withdraw-gold" | "cards" | "history" | null;
@@ -417,6 +417,103 @@ export default function WalletPage() {
                       )}
                     </Button>
 
+                    {/* نمایش فیش‌های آپلود شده برای درخواست‌های در انتظار تایید */}
+                    {depositRequests.filter(r => r.status === 'PENDING' && r.receipts && r.receipts.length > 0).length > 0 && (
+                      <div className="space-y-4 pt-6 border-t border-gray-200">
+                        <h4 className="font-black text-gray-800 text-base">فیش‌های آپلود شده (در انتظار تایید)</h4>
+                        {depositRequests
+                          .filter(r => r.status === 'PENDING' && r.receipts && r.receipts.length > 0)
+                          .map((request) => (
+                            <div key={request.id} className="bg-green-50 border border-green-200 rounded-2xl p-4 space-y-3">
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <p className="font-bold text-sm text-green-800">درخواست: {request.request_code}</p>
+                                  <p className="text-xs text-green-600 mt-1">
+                                    {request.receipts?.length || 0} فیش آپلود شده
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <div className="space-y-2">
+                                {request.receipts?.map((receipt: any) => {
+                                  const getReceiptStatusBadge = (status: string) => {
+                                    const statusMap: Record<string, { text: string; className: string }> = {
+                                      'PENDING': { text: 'در انتظار تایید', className: 'bg-orange-100 text-orange-700' },
+                                      'APPROVED': { text: 'تایید شده', className: 'bg-green-100 text-green-700' },
+                                      'REJECTED': { text: 'رد شده', className: 'bg-red-100 text-red-700' },
+                                    };
+                                    const statusInfo = statusMap[status] || { text: status, className: 'bg-gray-100 text-gray-700' };
+                                    return (
+                                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${statusInfo.className}`}>
+                                        {statusInfo.text}
+                                      </span>
+                                    );
+                                  };
+                                  
+                                  let accountDisplay = 'حساب نامشخص';
+                                  if (receipt.account_assignment_info) {
+                                    const assignment = receipt.account_assignment_info;
+                                    if (assignment.account_type === 'WITHDRAWAL' && assignment.withdrawal_request_info) {
+                                      const userInfo = assignment.withdrawal_request_info.user_info;
+                                      const bankCardInfo = assignment.withdrawal_request_info.bank_card_info;
+                                      accountDisplay = `${userInfo?.full_name || userInfo?.phone_number || 'نامشخص'} - ${bankCardInfo?.bank_name || ''}`;
+                                    } else if (assignment.account_type === 'DEPOSIT_ACCOUNT' && assignment.deposit_account_info) {
+                                      accountDisplay = `${assignment.deposit_account_info.owner_name || ''} - ${assignment.deposit_account_info.bank_name || ''}`;
+                                    } else if (assignment.account_type === 'CUSTOM') {
+                                      accountDisplay = `${assignment.custom_owner_name || 'نامشخص'} - ${assignment.custom_bank_name || 'نامشخص'}`;
+                                    }
+                                  }
+                                  
+                                  return (
+                                    <div key={receipt.id} className="bg-white border border-green-300 rounded-xl p-3">
+                                      <div className="flex justify-between items-start mb-2">
+                                        <div className="flex-1">
+                                          <p className="text-xs font-bold text-gray-700 mb-1">حساب مقصد:</p>
+                                          <p className="text-sm font-bold text-gray-800">{accountDisplay}</p>
+                                        </div>
+                                        {getReceiptStatusBadge(receipt.status)}
+                                      </div>
+                                      
+                                      <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                                        <div>
+                                          <p className="text-gray-500 mb-1">مبلغ:</p>
+                                          <p className="font-bold text-gray-800">
+                                            {toPersianDigits(Number(receipt.amount || 0).toLocaleString())} ریال
+                                          </p>
+                                        </div>
+                                        {receipt.tracking_number && (
+                                          <div>
+                                            <p className="text-gray-500 mb-1">شماره پیگیری:</p>
+                                            <p className="font-mono text-gray-600 dir-ltr">{receipt.tracking_number}</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                      
+                                      {receipt.receipt_image_url && (
+                                        <button
+                                          onClick={() => setSelectedReceiptImage(receipt.receipt_image_url)}
+                                          className="w-full flex items-center justify-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 border border-blue-200 rounded-lg py-2 px-3 hover:bg-blue-100 transition-colors"
+                                        >
+                                          <Eye size={14} />
+                                          مشاهده فیش
+                                        </button>
+                                      )}
+                                      
+                                      {receipt.admin_note && (
+                                        <div className="mt-2 pt-2 border-t border-green-200">
+                                          <p className="text-xs text-gray-500 mb-1">یادداشت مدیر:</p>
+                                          <p className="text-xs text-gray-700">{receipt.admin_note}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+
                     {/* لیست حساب‌های تخصیص یافته */}
                     {(() => {
                       const pendingRequestsWithAssignments = depositRequests.filter(r => {
@@ -501,9 +598,17 @@ export default function WalletPage() {
                                       const receipts = request.filteredAssignments.map(assignment => {
                                         const form = receiptForms[`${request.id}-${assignment.id}`];
                                         const gregorianDate = form.deposit_date!.toDate();
+                                        const amount = parseFloat(form.amount.replace(/,/g, ''));
+                                        const maxAmount = Number(assignment.amount);
+                                        
+                                        // بررسی اینکه مبلغ بیشتر از assignment.amount نباشد
+                                        if (amount > maxAmount) {
+                                          throw new Error(`مبلغ برای حساب ${assignment.account_display || assignment.id} نمی‌تواند بیشتر از ${toPersianDigits(maxAmount.toLocaleString())} ریال باشد`);
+                                        }
+                                        
                                         return {
                                           assignment_id: assignment.id,
-                                          amount: parseFloat(form.amount.replace(/,/g, '')),
+                                          amount: amount,
                                           tracking_number: form.tracking_number,
                                           deposit_date: gregorianDate.toISOString().split('T')[0],
                                           receipt_image: form.receipt_file!,
@@ -778,24 +883,105 @@ export default function WalletPage() {
                                                <span className="font-mono text-gray-600 dir-ltr">{request.request_code}</span>
                                             </div>
                                             <div className="flex justify-between text-sm">
-                                               <span className="text-gray-400">مبلغ:</span>
+                                               <span className="text-gray-400">مبلغ کل:</span>
                                                <span className="font-bold text-gray-800">
                                                   {toPersianDigits(Number(request.amount || 0).toLocaleString())} ریال
                                                </span>
                                             </div>
-                                            {request.tracking_number && (
-                                               <div className="flex justify-between text-sm">
-                                                  <span className="text-gray-400">شماره پیگیری:</span>
-                                                  <span className="font-mono text-gray-600 dir-ltr">{request.tracking_number}</span>
+                                            
+                                            {/* نمایش همه فیش‌های واریزی */}
+                                            {request.receipts && request.receipts.length > 0 && (
+                                               <div className="mt-3 pt-3 border-t border-gray-200">
+                                                  <p className="text-xs text-gray-400 mb-3 font-bold">فیش‌های واریزی ({request.receipts.length}):</p>
+                                                  <div className="space-y-3">
+                                                     {request.receipts.map((receipt: any) => {
+                                                        // تعیین وضعیت فیش
+                                                        const getReceiptStatusBadge = (status: string) => {
+                                                           const statusMap: Record<string, { text: string; className: string }> = {
+                                                              'PENDING': { text: 'در انتظار', className: 'bg-orange-100 text-orange-700' },
+                                                              'APPROVED': { text: 'تایید شده', className: 'bg-green-100 text-green-700' },
+                                                              'REJECTED': { text: 'رد شده', className: 'bg-red-100 text-red-700' },
+                                                           };
+                                                           const statusInfo = statusMap[status] || { text: status, className: 'bg-gray-100 text-gray-700' };
+                                                           return (
+                                                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${statusInfo.className}`}>
+                                                                 {statusInfo.text}
+                                                              </span>
+                                                           );
+                                                        };
+                                                        
+                                                        // نمایش اطلاعات حساب مقصد
+                                                        let accountDisplay = 'حساب نامشخص';
+                                                        if (receipt.account_assignment_info) {
+                                                           const assignment = receipt.account_assignment_info;
+                                                           if (assignment.account_type === 'WITHDRAWAL' && assignment.withdrawal_request_info) {
+                                                              const userInfo = assignment.withdrawal_request_info.user_info;
+                                                              const bankCardInfo = assignment.withdrawal_request_info.bank_card_info;
+                                                              accountDisplay = `${userInfo?.full_name || userInfo?.phone_number || 'نامشخص'} - ${bankCardInfo?.bank_name || ''}`;
+                                                           } else if (assignment.account_type === 'DEPOSIT_ACCOUNT' && assignment.deposit_account_info) {
+                                                              accountDisplay = `${assignment.deposit_account_info.owner_name || ''} - ${assignment.deposit_account_info.bank_name || ''}`;
+                                                           } else if (assignment.account_type === 'CUSTOM') {
+                                                              accountDisplay = `${assignment.custom_owner_name || 'نامشخص'} - ${assignment.custom_bank_name || 'نامشخص'}`;
+                                                           }
+                                                        }
+                                                        
+                                                        return (
+                                                           <div key={receipt.id} className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
+                                                              <div className="flex justify-between items-start">
+                                                                 <div className="flex-1">
+                                                                    <p className="text-xs font-bold text-gray-700 mb-1">حساب مقصد:</p>
+                                                                    <p className="text-sm font-bold text-gray-800">{accountDisplay}</p>
+                                                                 </div>
+                                                                 {getReceiptStatusBadge(receipt.status)}
+                                                              </div>
+                                                              
+                                                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                                                 <div>
+                                                                    <p className="text-gray-500 mb-1">مبلغ فیش:</p>
+                                                                    <p className="font-bold text-gray-800">
+                                                                       {toPersianDigits(Number(receipt.amount || 0).toLocaleString())} ریال
+                                                                    </p>
+                                                                 </div>
+                                                                 {receipt.tracking_number && (
+                                                                    <div>
+                                                                       <p className="text-gray-500 mb-1">شماره پیگیری:</p>
+                                                                       <p className="font-mono text-gray-600 dir-ltr">{receipt.tracking_number}</p>
+                                                                    </div>
+                                                                 )}
+                                                              </div>
+                                                              
+                                                              {receipt.deposit_date_jalali && (
+                                                                 <div className="text-xs">
+                                                                    <p className="text-gray-500 mb-1">تاریخ واریز:</p>
+                                                                    <p className="font-mono text-gray-600">{toPersianDigits(receipt.deposit_date_jalali)}</p>
+                                                                 </div>
+                                                              )}
+                                                              
+                                                              {receipt.receipt_image_url && (
+                                                                 <button
+                                                                    onClick={() => setSelectedReceiptImage(receipt.receipt_image_url)}
+                                                                    className="w-full flex items-center justify-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 bg-white border border-blue-200 rounded-lg py-2 px-3 hover:bg-blue-50 transition-colors mt-2"
+                                                                 >
+                                                                    <Eye size={14} />
+                                                                    مشاهده فیش واریزی
+                                                                 </button>
+                                                              )}
+                                                              
+                                                              {receipt.admin_note && (
+                                                                 <div className="mt-2 pt-2 border-t border-blue-200">
+                                                                    <p className="text-xs text-gray-500 mb-1">یادداشت مدیر:</p>
+                                                                    <p className="text-xs text-gray-700">{receipt.admin_note}</p>
+                                                                 </div>
+                                                              )}
+                                                           </div>
+                                                        );
+                                                     })}
+                                                  </div>
                                                </div>
                                             )}
-                                            {request.deposit_date_jalali && (
-                                               <div className="flex justify-between text-sm">
-                                                  <span className="text-gray-400">تاریخ واریز:</span>
-                                                  <span className="font-mono text-gray-600">{toPersianDigits(request.deposit_date_jalali)}</span>
-                                               </div>
-                                            )}
-                                            {(request.receipt_image_url || request.receipt_image) && (
+                                            
+                                            {/* نمایش فیش قدیمی (برای سازگاری با داده‌های قدیمی) */}
+                                            {(!request.receipts || request.receipts.length === 0) && (request.receipt_image_url || request.receipt_image) && (
                                                <div className="mt-2 pt-2 border-t border-gray-200">
                                                   <button
                                                      onClick={() => setSelectedReceiptImage(request.receipt_image_url || request.receipt_image || null)}
@@ -806,7 +992,8 @@ export default function WalletPage() {
                                                   </button>
                                                </div>
                                             )}
-                                            {request.admin_note && (
+                                            
+                                            {request.admin_note && (!request.receipts || request.receipts.length === 0) && (
                                                <div className="mt-2 pt-2 border-t border-gray-200">
                                                   <p className="text-xs text-gray-400 mb-1">یادداشت مدیر:</p>
                                                   <p className="text-sm text-gray-700">{request.admin_note}</p>
@@ -838,7 +1025,7 @@ export default function WalletPage() {
                                                <span className="font-mono text-gray-600 dir-ltr">{request.request_code}</span>
                                             </div>
                                             <div className="flex justify-between text-sm">
-                                               <span className="text-gray-400">مقدار:</span>
+                                               <span className="text-gray-400">مبلغ کل:</span>
                                                <span className="font-bold text-gray-800">
                                                   {request.withdrawal_type === 'RIAL' 
                                                     ? `${toPersianDigits(Number(request.amount || 0).toLocaleString())} ریال`
@@ -846,6 +1033,41 @@ export default function WalletPage() {
                                                   }
                                                </span>
                                             </div>
+                                            
+                                            {/* نمایش وضعیت پرداخت برای برداشت‌های ریالی ناقص */}
+                                            {request.withdrawal_type === 'RIAL' && request.status === 'PENDING' && request.remaining_amount !== undefined && request.paid_amount !== undefined && (
+                                               <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
+                                                  <div className="flex justify-between text-sm">
+                                                     <span className="text-gray-400">پرداخت شده:</span>
+                                                     <span className="font-bold text-green-600">
+                                                        {toPersianDigits(Number(request.paid_amount || 0).toLocaleString())} ریال
+                                                     </span>
+                                                  </div>
+                                                  <div className="flex justify-between text-sm">
+                                                     <span className="text-gray-400">باقی‌مانده:</span>
+                                                     <span className="font-bold text-orange-600">
+                                                        {toPersianDigits(Number(request.remaining_amount || 0).toLocaleString())} ریال
+                                                     </span>
+                                                  </div>
+                                                  {/* Progress bar */}
+                                                  {Number(request.amount || 0) > 0 && (
+                                                     <div className="mt-2">
+                                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                                           <div 
+                                                              className="bg-green-500 h-2 rounded-full transition-all"
+                                                              style={{ 
+                                                                 width: `${Math.min(100, (Number(request.paid_amount || 0) / Number(request.amount || 1)) * 100)}%` 
+                                                              }}
+                                                           ></div>
+                                                        </div>
+                                                        <p className="text-xs text-gray-500 mt-1 text-center">
+                                                           {toPersianDigits(Math.round((Number(request.paid_amount || 0) / Number(request.amount || 1)) * 100).toString())}% تکمیل شده
+                                                        </p>
+                                                     </div>
+                                                  )}
+                                               </div>
+                                            )}
+                                            
                                             {request.bank_card && (
                                                <div className="flex justify-between text-sm">
                                                   <span className="text-gray-400">کارت بانکی:</span>
@@ -864,8 +1086,8 @@ export default function WalletPage() {
                                                </div>
                                             )}
                                             
-                                            {/* فیش‌های واریزی مرتبط (برای درخواست‌های تایید شده خودکار) */}
-                                            {request.status === 'APPROVED' && request.deposit_receipts_info && request.deposit_receipts_info.length > 0 && (
+                                            {/* فیش‌های واریزی مرتبط (نمایش همه لینک‌ها) */}
+                                            {request.deposit_receipts_info && request.deposit_receipts_info.length > 0 && (
                                                <div className="mt-3 pt-3 border-t border-gray-200">
                                                   <p className="text-xs text-gray-400 mb-2 font-bold">فیش‌های واریزی مرتبط:</p>
                                                   <div className="space-y-3">
@@ -880,11 +1102,19 @@ export default function WalletPage() {
                                                                  </p>
                                                               )}
                                                            </div>
-                                                           <div className="mb-2">
-                                                              <p className="text-xs text-gray-500 mb-1">مبلغ:</p>
-                                                              <p className="text-sm font-bold text-gray-800">
-                                                                 {toPersianDigits(Number(receiptInfo.amount).toLocaleString())} ریال
-                                                              </p>
+                                                           <div className="mb-2 grid grid-cols-2 gap-2">
+                                                              <div>
+                                                                 <p className="text-xs text-gray-500 mb-1">مبلغ فیش:</p>
+                                                                 <p className="text-sm font-bold text-gray-800">
+                                                                    {toPersianDigits(Number(receiptInfo.amount).toLocaleString())} ریال
+                                                                 </p>
+                                                              </div>
+                                                              <div>
+                                                                 <p className="text-xs text-gray-500 mb-1">مبلغ تخصیص یافته:</p>
+                                                                 <p className="text-sm font-bold text-green-600">
+                                                                    {toPersianDigits(Number(receiptInfo.link_amount || 0).toLocaleString())} ریال
+                                                                 </p>
+                                                              </div>
                                                            </div>
                                                            {receiptInfo.receipt_image_url && (
                                                               <button
@@ -1007,12 +1237,27 @@ function AssignmentReceiptForm({
     receipt_image: string | null;
   }) => void;
 }) {
-  const amount = receiptForm?.amount || "";
+  // مقدار پیش‌فرض مبلغ = assignment.amount
+  const defaultAmount = assignment.amount ? Number(assignment.amount).toString() : "";
+  const amount = receiptForm?.amount || defaultAmount;
   const trackingNumber = receiptForm?.tracking_number || "";
   const depositDate = receiptForm?.deposit_date || null;
   const receiptFile = receiptForm?.receipt_file || null;
   const receiptImage = receiptForm?.receipt_image || null;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // تنظیم مقدار پیش‌فرض در اولین بار
+  useEffect(() => {
+    if (!receiptForm && defaultAmount) {
+      setReceiptForm({
+        amount: defaultAmount,
+        tracking_number: "",
+        deposit_date: null,
+        receipt_file: null,
+        receipt_image: null,
+      });
+    }
+  }, [defaultAmount, receiptForm, setReceiptForm]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1035,13 +1280,21 @@ function AssignmentReceiptForm({
     const englishValue = toEnglishDigits(e.target.value);
     const value = englishValue.replace(/,/g, '');
     if (/^\d*\.?\d*$/.test(value)) {
+      const numValue = parseFloat(value) || 0;
+      const maxAmount = Number(assignment.amount);
+      // محدود کردن مبلغ به حداکثر assignment.amount
+      const finalValue = numValue > maxAmount ? maxAmount.toString() : value;
       setReceiptForm({
-        amount: value,
+        amount: finalValue,
         tracking_number: receiptForm?.tracking_number || "",
         deposit_date: receiptForm?.deposit_date || null,
         receipt_file: receiptForm?.receipt_file || null,
         receipt_image: receiptForm?.receipt_image || null,
       });
+      // نمایش هشدار اگر مبلغ بیشتر از assignment باشد
+      if (numValue > maxAmount) {
+        toast.error(`مبلغ نمی‌تواند بیشتر از ${toPersianDigits(maxAmount.toLocaleString())} ریال باشد`);
+      }
     }
   };
 
@@ -1169,13 +1422,16 @@ function AssignmentReceiptForm({
         <div className="relative">
           <Input 
             label="مبلغ واریز شده"
-            placeholder="۰"
+            placeholder={toPersianDigits(Number(assignment.amount).toLocaleString())}
             value={amount ? toPersianDigits(formatNumber(amount)) : ""}
             onChange={handleAmountChange}
             className="text-center text-lg font-bold text-gray-800 dir-ltr"
             dir="ltr"
           />
           <span className="absolute left-4 top-[42px] text-gray-400 text-xs font-bold bg-white px-1">ریال</span>
+          <p className="text-xs text-gray-500 mt-1 text-center">
+            حداکثر: {toPersianDigits(Number(assignment.amount).toLocaleString())} ریال
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -1256,5 +1512,21 @@ function AssignmentReceiptForm({
 
       </div>
     </div>
+  );
+}
+
+export default function WalletPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <p className="text-center text-gray-500">در حال بارگذاری...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <WalletContent />
+    </Suspense>
   );
 }

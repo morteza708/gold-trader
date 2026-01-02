@@ -14,7 +14,7 @@ interface AuthContextType {
   
   // Actions
   login: (phoneNumber: string) => Promise<void>;
-  verifyOTP: (phoneNumber: string, otpCode: string) => Promise<void>;
+  verifyOTP: (phoneNumber: string, otpCode: string) => Promise<VerifyOTPResponse>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   completeProfile: (data: {
@@ -128,12 +128,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyOTP = async (phoneNumber: string, otpCode: string): Promise<VerifyOTPResponse> => {
     const response: VerifyOTPResponse = await authAPI.verifyOTP(phoneNumber, otpCode);
     
+    // تبدیل response.user به UserInfo (اضافه کردن فیلدهای missing)
+    const userInfo: UserInfo = {
+      ...response.user,
+      national_id: null,
+      birth_date: null,
+      avatar: null,
+    };
+    
     // ذخیره token ها
     localStorage.setItem('access_token', response.access);
     localStorage.setItem('refresh_token', response.refresh);
-    localStorage.setItem('user', JSON.stringify(response.user));
+    localStorage.setItem('user', JSON.stringify(userInfo));
     
-    setUser(response.user);
+    setUser(userInfo);
 
     // هدایت بر اساس نقش و وضعیت پروفایل
     const isAdmin = response.user.role === 'SUPER_ADMIN' || response.user.role === 'SITE_ADMIN';
