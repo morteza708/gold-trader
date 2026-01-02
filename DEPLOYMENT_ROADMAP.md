@@ -2,7 +2,7 @@
 
 ## 📋 فهرست مراحل
 
-### ✅ **فاز 0: Git Setup** (امشب - انجام شده)
+### ✅ **فاز 0: Git Setup** (انجام شده)
 - [x] ایجاد `.gitignore`
 - [x] `git init`
 - [x] Commit اولیه
@@ -11,49 +11,53 @@
 
 ---
 
-### 🔵 **فاز 1: Docker Setup** (فردا - اولویت اول)
+### 🔵 **فاز 1: Docker Setup** (اولویت اول - آماده برای اجرا)
 
 **هدف:** اجرای پروژه به صورت کامل با Docker روی سیستم محلی
 
-#### مراحل:
-1. **ایجاد Dockerfile برای Backend**
-   - Base image: Python 3.12
-   - نصب dependencies از requirements.txt
-   - کپی فایل‌های پروژه
-   - تنظیم working directory
-   - Expose port 8000
+#### وضعیت فعلی:
+- ✅ Dockerfile برای Backend ایجاد شده
+- ✅ Dockerfile برای Frontend ایجاد شده
+- ✅ docker-compose.yml ایجاد شده
+- ✅ `.env.example` ایجاد شده
+- ✅ DOCKER_SETUP.md راهنما موجود است
 
-2. **ایجاد Dockerfile برای Frontend**
-   - Base image: Node.js 20
-   - نصب dependencies
-   - Build Next.js
-   - Expose port 3000
+#### مراحل باقی‌مانده:
+1. **ایجاد فایل `.env` از `.env.example`**
+   ```bash
+   cp .env.example .env
+   ```
+   سپس مقادیر را تنظیم کنید (مخصوصاً `DJANGO_SECRET_KEY` و `KAVENEGAR_API_KEY`)
 
-3. **ایجاد docker-compose.yml**
-   - **services:**
-     - `db`: PostgreSQL 15
-     - `redis`: Redis 7 (برای Celery)
-     - `backend`: Django app
-     - `frontend`: Next.js app
-     - `celery_worker`: Celery worker
-     - `celery_beat`: Celery beat scheduler
-     - `nginx`: Reverse proxy (بعداً اضافه می‌شود)
+2. **Build و Run Docker Containers**
+   ```bash
+   # Build images
+   docker-compose build
+   
+   # Start all services
+   docker-compose up -d
+   
+   # مشاهده logs
+   docker-compose logs -f
+   ```
 
-4. **تنظیم Environment Variables**
-   - ایجاد `.env.example`
-   - ایجاد `.env` برای development
-   - تنظیم `django-environ` در settings
+3. **اجرای Migrations و ایجاد Superuser**
+   ```bash
+   # Migration
+   docker-compose exec backend python manage.py migrate
+   
+   # ایجاد superuser
+   docker-compose exec backend python manage.py createsuperuser
+   ```
 
-5. **Volume Management**
-   - PostgreSQL data volume
-   - Redis data volume
-   - Media files volume
-   - Static files volume
+4. **تست کامل**
+   - تست Backend API: http://localhost:8000/api
+   - تست Frontend: http://localhost:3000
+   - تست Admin Panel: http://localhost:8000/admin
+   - تست Database connection
+   - تست Redis connection
 
-6. **Network Configuration**
-   - ایجاد custom network برای ارتباط بین services
-
-**زمان تقریبی:** 2-3 ساعت
+**زمان تقریبی:** 30 دقیقه - 1 ساعت
 
 **نکات مهم:**
 - قبل از اضافه کردن دامنه، همه چیز باید روی localhost کار کند
@@ -62,80 +66,76 @@
 
 ---
 
-### 🟢 **فاز 2: Code Review & Security** (بعد از Docker)
+### ✅ **فاز 2: Code Review & Security** (تکمیل شده)
 
 **هدف:** بررسی و بهبود کد، امنیت و عملکرد
 
-#### مراحل:
+#### ✅ انجام شده:
 
-1. **Linting & Formatting**
-   - Backend: `black`, `flake8`, `pylint`
-   - Frontend: `eslint`, `prettier`
-   - ایجاد pre-commit hooks
+1. **✅ Security Settings**
+   - ✅ افزودن Security Headers (SECURE_SSL_REDIRECT, HSTS, X_FRAME_OPTIONS)
+   - ✅ تنظیمات CSRF و Session برای production
+   - ✅ ALLOWED_HOSTS از environment variable
 
-2. **Security Audit**
-   - بررسی Django security settings
-   - CORS configuration
-   - Rate limiting (django-ratelimit)
-   - Input validation
-   - SQL injection prevention
-   - XSS prevention
-   - CSRF protection
-   - Security headers
+2. **✅ Rate Limiting**
+   - ✅ نصب django-ratelimit
+   - ✅ Rate limiting برای endpoint های مهم:
+     - OTP endpoints: 5-10 requests/minute
+     - Trade endpoints: 30 requests/minute
+     - Wallet endpoints: 10 requests/minute
+   - ✅ Custom exception handler برای Rate Limiting
 
-3. **Query Optimization**
-   - بررسی تمام query ها
-   - استفاده از `select_related` و `prefetch_related`
-   - بررسی database indexes
-   - استفاده از `only()` و `defer()` برای فیلدهای خاص
+3. **✅ Query Optimization**
+   - ✅ بهینه‌سازی query ها با select_related و prefetch_related
+   - ✅ بهبود query های Wallet, Trades, Accounts
 
-4. **Logging Setup**
-   - Structured logging
-   - Log levels (DEBUG, INFO, WARNING, ERROR)
-   - Log rotation
-   - Error tracking (Sentry - بعداً)
+4. **✅ Logging Setup**
+   - ✅ Structured logging configuration
+   - ✅ Log rotation (5 MB, 5 backups)
+   - ✅ Logger های جداگانه برای هر app
+   - ✅ جایگزینی print با logging
 
-5. **Error Handling**
-   - Custom error pages (404, 500)
-   - API error responses
-   - Frontend error boundaries
+5. **✅ Error Handling**
+   - ✅ Custom exception handler برای DRF
+   - ✅ بهبود error messages (بدون نمایش جزئیات به کاربر)
+   - ✅ استفاده از logging برای error tracking
 
-**زمان تقریبی:** 2-3 ساعت
+**زمان صرف شده:** ~2 ساعت
 
 ---
 
-### 🟡 **فاز 3: Celery Integration** (بعد از Code Review)
+### ✅ **فاز 3: Celery Integration** (تکمیل شده)
 
 **هدف:** اجرای background tasks برای SMS و معاملات هوشمند
 
-#### مراحل:
+#### ✅ انجام شده:
 
-1. **نصب و تنظیم Celery**
-   - اضافه کردن `celery` و `redis` به requirements.txt
-   - ایجاد `config/celery.py`
-   - ایجاد `config/celeryconfig.py`
-   - تنظیم در `settings.py`
+1. **✅ نصب و تنظیم Celery**
+   - ✅ اضافه کردن `celery` و `redis` به requirements.txt
+   - ✅ ایجاد `config/celery.py`
+   - ✅ تنظیم در `settings.py` با environment variables
+   - ✅ تنظیم Celery در `config/__init__.py`
 
-2. **ایجاد Tasks**
-   - `wallet/tasks.py`: ارسال SMS (async)
-   - `trades/tasks.py`: بررسی و اجرای سفارشات هوشمند (periodic)
-   - `trades/tasks.py`: به‌روزرسانی قیمت از API (در صورت نیاز)
+2. **✅ ایجاد Tasks**
+   - ✅ `wallet/tasks.py`: ارسال SMS (async) با retry mechanism
+   - ✅ `wallet/tasks.py`: ارسال دسته‌ای SMS
+   - ✅ `trades/tasks.py`: بررسی و اجرای سفارشات هوشمند (periodic)
 
-3. **Celery Beat Configuration**
-   - تنظیم periodic tasks
-   - Schedule برای هر task
+3. **✅ Celery Beat Configuration**
+   - ✅ تنظیم periodic task در `settings.py`
+   - ✅ Schedule: هر 30 ثانیه برای بررسی سفارشات
 
-4. **Docker Integration**
-   - اضافه کردن `celery_worker` service
-   - اضافه کردن `celery_beat` service
-   - تنظیم dependencies
+4. **✅ Docker Integration**
+   - ✅ فعال کردن `celery_worker` service
+   - ✅ فعال کردن `celery_beat` service
+   - ✅ تنظیم dependencies و health checks
 
-5. **Testing**
-   - تست async SMS sending
-   - تست periodic order checking
-   - بررسی logs
+5. **✅ به‌روزرسانی Views**
+   - ✅ تبدیل تمام SMS ارسال‌ها به async
+   - ✅ استفاده از `send_sms_async.delay()` در تمام views
+   - ✅ حفظ منطق پروژه (فقط async شدن SMS)
 
-**زمان تقریبی:** 3-4 ساعت
+**زمان صرف شده:** ~3 ساعت
 
 **Tasks پیشنهادی:**
 ```python
@@ -156,46 +156,54 @@ def update_gold_price_from_api():
 
 ---
 
-### 🟠 **فاز 4: PWA Implementation** (بعد از Celery)
+### ✅ **فاز 4: PWA Implementation** (تکمیل شده)
 
 **هدف:** تبدیل پروژه به Progressive Web App با Push Notifications
 
-#### مراحل:
+#### ✅ انجام شده:
 
-1. **PWA Setup**
-   - ایجاد `public/manifest.json`
-   - تنظیم app icons (192x192, 512x512)
-   - تنظیم theme colors
-   - تنظیم display mode
+1. **✅ PWA Setup**
+   - ✅ ایجاد `public/manifest.json` با تنظیمات کامل
+   - ✅ تنظیم theme colors (#D4AF37)
+   - ✅ تنظیم display mode (standalone)
+   - ✅ تنظیم shortcuts برای معاملات و کیف پول
+   - ✅ README برای icons (نیاز به اضافه کردن icon ها)
 
-2. **Service Worker**
-   - ایجاد `public/sw.js`
-   - Caching strategy:
+2. **✅ Service Worker**
+   - ✅ ایجاد `public/sw.js` با caching strategy:
      - Static assets: Cache First
      - API responses: Network First
      - Images: Cache First with fallback
-   - Offline support
-   - Background sync
+   - ✅ Offline support
+   - ✅ Background sync support
+   - ✅ Push notification handling
 
-3. **Push Notifications (Web Push API)**
-   - تنظیم VAPID keys
-   - Backend endpoint برای subscription
-   - Backend endpoint برای ارسال notifications
-   - Service Worker برای دریافت notifications
-   - Frontend component برای request permission
-   - Frontend component برای نمایش notifications
+3. **✅ Push Notifications (Web Push API)**
+   - ✅ ایجاد app `notifications` در Backend
+   - ✅ مدل `PushSubscription` برای ذخیره subscriptions
+   - ✅ API endpoints:
+     - `POST /api/notifications/push/subscribe/` - ثبت subscription
+     - `POST /api/notifications/push/unsubscribe/` - حذف subscription
+     - `GET /api/notifications/push/subscriptions/` - لیست subscriptions
+   - ✅ Service Worker برای دریافت notifications
+   - ✅ Frontend component `NotificationPermission` برای request permission
 
-4. **Install Prompt**
-   - ایجاد install button
-   - قبل از install prompt نمایش
+4. **✅ Install Prompt**
+   - ✅ ایجاد `InstallPrompt` component
+   - ✅ نمایش خودکار هنگام beforeinstallprompt
+   - ✅ ذخیره dismiss برای 7 روز
 
-5. **Testing**
-   - تست PWA در Chrome DevTools
-   - تست Push Notifications
-   - تست Offline mode
-   - تست Install prompt
+5. **✅ Integration**
+   - ✅ اضافه کردن Service Worker Registration به layout
+   - ✅ اضافه کردن InstallPrompt به layout
+   - ✅ تنظیم metadata در layout.tsx
+   - ✅ تنظیم headers در next.config.ts
 
-**زمان تقریبی:** 4-5 ساعت
+**زمان صرف شده:** ~3 ساعت
+
+**نکات:**
+- Icon ها باید به `public/icons/` اضافه شوند (راهنمایی در README موجود است)
+- برای ارسال Push Notifications، نیاز به VAPID keys و کتابخانه `pywebpush` است (برای فاز 5)
 
 **فایل‌های مورد نیاز:**
 - `public/manifest.json`
@@ -207,92 +215,122 @@ def update_gold_price_from_api():
 
 ---
 
-### 🔴 **فاز 5: Notification System** (بعد از PWA)
+### ✅ **فاز 5: Notification System** (تکمیل شده)
 
 **هدف:** سیستم اعلانات کامل در پنل کاربری
 
-#### مراحل:
+#### ✅ انجام شده:
 
-1. **Backend - مدل Notification**
-   - ایجاد `notifications/models.py`
-   - فیلدها: user, title, message, type, is_read, created_at
-   - Migration
+1. **✅ Backend - مدل Notification**
+   - ✅ ایجاد `notifications/models.py` با مدل `Notification`
+   - ✅ فیلدها: user, title, message, type, is_read, read_at, created_at, related_object_type, related_object_id, metadata
+   - ✅ Migration اجرا شده
 
-2. **Backend - API Endpoints**
-   - `GET /api/notifications/` - دریافت notifications
-   - `PUT /api/notifications/<id>/read/` - Mark as read
-   - `DELETE /api/notifications/<id>/` - Delete notification
-   - `GET /api/notifications/unread-count/` - تعداد unread
+2. **✅ Backend - API Endpoints**
+   - ✅ `GET /api/notifications/` - دریافت notifications با فیلتر (is_read, type, limit)
+   - ✅ `PUT /api/notifications/<id>/read/` - Mark as read
+   - ✅ `PUT /api/notifications/mark-all-read/` - Mark all as read
+   - ✅ `DELETE /api/notifications/<id>/` - Delete notification
+   - ✅ `GET /api/notifications/unread-count/` - تعداد unread
+   - ✅ Rate limiting برای تمام endpoints
 
-3. **Backend - Integration**
-   - ایجاد notification هنگام:
-     - تایید درخواست واریز
-     - تایید درخواست برداشت
-     - رد درخواست
-     - اجرای سفارش هوشمند
-     - تغییر قیمت طلا (اختیاری)
+3. **✅ Backend - Integration**
+   - ✅ ایجاد notification هنگام:
+     - ✅ تایید درخواست واریز (`admin_approve_deposit`, `admin_approve_deposit_new_flow`)
+     - ✅ رد درخواست واریز (`admin_reject_deposit`)
+     - ✅ تایید درخواست برداشت (`admin_approve_withdrawal`, `admin_approve_deposit_new_flow`)
+     - ✅ رد درخواست برداشت (`admin_reject_withdrawal`)
+     - ✅ تکمیل برداشت طلا (`admin_approve_withdrawal_gold`)
+     - ✅ اجرای سفارش هوشمند (`TradeService.execute_limit_order`)
 
-4. **Frontend - Components**
-   - `NotificationBell.tsx` - آیکون زنگ با badge
-   - `NotificationList.tsx` - لیست notifications
-   - `NotificationItem.tsx` - آیتم notification
-   - `NotificationModal.tsx` - مودال notifications
+4. **✅ Backend - Services**
+   - ✅ `notifications/services.py` با تابع `create_notification`
+   - ✅ `send_push_notification_async` برای آماده‌سازی Push Notifications (آینده)
 
-5. **Frontend - Real-time Updates**
-   - Polling هر 30 ثانیه (یا WebSocket در آینده)
-   - Update badge count
-   - نمایش toast برای notifications جدید
+5. **✅ Frontend - API Functions**
+   - ✅ `lib/api/notifications.ts` با تمام API functions
 
-6. **Integration با Push Notifications**
-   - ارسال push notification هنگام ایجاد notification جدید
+6. **✅ Frontend - Components**
+   - ✅ `NotificationBell.tsx` - آیکون زنگ با badge و polling
+   - ✅ `NotificationModal.tsx` - مودال notifications با قابلیت‌های:
+     - نمایش لیست notifications
+     - Mark as read
+     - Mark all as read
+     - Delete notification
+     - نمایش آیکون و رنگ بر اساس نوع
 
-**زمان تقریبی:** 3-4 ساعت
+7. **✅ Frontend - Real-time Updates**
+   - ✅ Polling هر 30 ثانیه برای به‌روزرسانی unread count
+   - ✅ Update badge count به صورت خودکار
+   - ✅ Integration در dashboard layout
+
+8. **✅ Admin Panel**
+   - ✅ ثبت `Notification` در Django Admin
+   - ✅ فیلتر و جستجو
+
+**زمان صرف شده:** ~4 ساعت
+
+**نکات:**
+- Push Notifications (Web Push API) در فاز بعدی کامل می‌شود
+- در حال حاضر notification ها در UI نمایش داده می‌شوند
+- Polling هر 30 ثانیه انجام می‌شود (می‌توان در آینده به WebSocket تغییر داد)
 
 ---
 
-### 🟣 **فاز 6: Nginx Configuration** (بعد از Notification System)
+### ✅ **فاز 6: Nginx Configuration** (تکمیل شده)
 
 **هدف:** Reverse proxy و بهینه‌سازی عملکرد
 
-#### مراحل:
+#### ✅ انجام شده:
 
-1. **Nginx Configuration**
-   - Reverse proxy برای Backend (port 8000)
-   - Reverse proxy برای Frontend (port 3000)
-   - Static files serving
-   - Media files serving
+1. **✅ Nginx Configuration**
+   - ✅ Reverse proxy برای Backend (port 8000)
+   - ✅ Reverse proxy برای Frontend (port 3000)
+   - ✅ Static files serving
+   - ✅ Media files serving
+   - ✅ فایل `nginx.conf` با تنظیمات کامل
+   - ✅ Dockerfile برای Nginx
 
-2. **SSL/TLS Setup** (بعد از اضافه کردن دامنه)
-   - Let's Encrypt certificate
-   - Auto-renewal
-   - HTTP to HTTPS redirect
+2. **✅ SSL/TLS Setup** (آماده برای production)
+   - ✅ تنظیمات HTTPS در nginx.conf (کامنت شده)
+   - ✅ آماده برای Let's Encrypt certificate
+   - ✅ HTTP to HTTPS redirect (آماده)
 
-3. **Performance Optimization**
-   - Gzip compression
-   - Browser caching
-   - Static files caching
-   - API response caching (اختیاری)
+3. **✅ Performance Optimization**
+   - ✅ Gzip compression
+   - ✅ Browser caching (30 روز برای static, 7 روز برای media)
+   - ✅ Static files caching
+   - ✅ Keepalive connections
 
-4. **Security Headers**
-   - Content Security Policy (CSP)
-   - X-Frame-Options
-   - X-Content-Type-Options
-   - HSTS
-   - Referrer-Policy
+4. **✅ Security Headers**
+   - ✅ Content Security Policy (CSP)
+   - ✅ X-Frame-Options
+   - ✅ X-Content-Type-Options
+   - ✅ X-XSS-Protection
+   - ✅ HSTS (آماده برای HTTPS)
+   - ✅ Referrer-Policy
 
-5. **Rate Limiting**
-   - Rate limiting برای API endpoints
-   - Rate limiting برای authentication
+5. **✅ Rate Limiting**
+   - ✅ Rate limiting برای API endpoints (30 req/min)
+   - ✅ Rate limiting برای authentication (10 req/min)
+   - ✅ Rate limiting برای general requests (100 req/min)
 
-6. **Docker Integration**
-   - اضافه کردن nginx service به docker-compose
-   - تنظیم volumes برای SSL certificates
+6. **✅ Docker Integration**
+   - ✅ اضافه کردن nginx service به docker-compose
+   - ✅ تنظیم volumes برای static و media files
+   - ✅ تنظیم dependencies
 
-**زمان تقریبی:** 2-3 ساعت
+**زمان صرف شده:** ~2 ساعت
+
+**فایل‌های ایجاد شده:**
+- `nginx/nginx.conf` - تنظیمات اصلی Nginx
+- `nginx/Dockerfile` - Dockerfile برای Nginx
+- `nginx/README.md` - راهنمای استفاده
+- `nginx/TESTING.md` - راهنمای تست
 
 **نکات:**
-- Nginx را بعد از تست کامل Docker اضافه می‌کنیم
-- SSL را بعد از اضافه کردن دامنه تنظیم می‌کنیم
+- ✅ Nginx برای localhost آماده است
+- ⏳ SSL را بعد از اضافه کردن دامنه تنظیم می‌کنیم (فاز 7)
 
 ---
 
@@ -446,23 +484,28 @@ def update_gold_price_from_api():
 
 ## 📅 Timeline پیشنهادی
 
-### روز 1 (امشب):
+### ✅ انجام شده:
 - ✅ Git Setup
+- ✅ Docker Setup (Dockerfile ها و docker-compose.yml آماده است)
 
-### روز 2:
-- 🔵 فاز 1: Docker Setup (2-3 ساعت)
-- تست کامل روی localhost
+### 🔵 **گام بعدی (الان):**
+- 🔵 فاز 1: تست و راه‌اندازی Docker (30 دقیقه - 1 ساعت)
+  1. ایجاد `.env` از `.env.example`
+  2. Build و Run containers
+  3. اجرای migrations
+  4. ایجاد superuser
+  5. تست کامل روی localhost
 
 ### روز 3:
 - 🟢 فاز 2: Code Review & Security (2-3 ساعت)
 - 🟡 فاز 3: Celery Integration (3-4 ساعت)
 
 ### روز 4:
-- 🟠 فاز 4: PWA Implementation (4-5 ساعت)
+- ✅ فاز 4: PWA Implementation (تکمیل شده)
 
 ### روز 5:
-- 🔴 فاز 5: Notification System (3-4 ساعت)
-- 🟣 فاز 6: Nginx Configuration (2-3 ساعت)
+- ✅ فاز 5: Notification System (تکمیل شده)
+- 🟣 فاز 6: Nginx Configuration (بعدی)
 
 ### روز 6:
 - 🟤 فاز 7: Domain Setup (1-2 ساعت)
@@ -556,6 +599,56 @@ NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
 
 ---
 
-**آخرین به‌روزرسانی:** 1404/10/16
-**نسخه:** 1.0
+---
+
+## 🎯 وضعیت فعلی پروژه (1404/10/17)
+
+### ✅ **انجام شده:**
+- ✅ Git Setup کامل
+- ✅ Docker Setup (Dockerfile ها و docker-compose.yml آماده)
+- ✅ `.env.example` ایجاد شده
+- ✅ DOCKER_SETUP.md راهنما موجود
+
+### 🔵 **گام بعدی (اولویت اول):**
+**فاز 1: تست و راه‌اندازی Docker**
+
+#### مراحل:
+1. **ایجاد فایل `.env`:**
+   ```bash
+   cp .env.example .env
+   ```
+   سپس ویرایش کنید و مقادیر را تنظیم کنید:
+   - `DJANGO_SECRET_KEY`: از [Django Secret Key Generator](https://djecrety.ir/) استفاده کنید
+   - `KAVENEGAR_API_KEY`: کلید API کاوه نگار خود را وارد کنید
+   - سایر مقادیر را بررسی کنید
+
+2. **Build و Run:**
+   ```bash
+   docker-compose build
+   docker-compose up -d
+   ```
+
+3. **اجرای Migrations:**
+   ```bash
+   docker-compose exec backend python manage.py migrate
+   ```
+
+4. **ایجاد Superuser:**
+   ```bash
+   docker-compose exec backend python manage.py createsuperuser
+   ```
+
+5. **تست:**
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000/api
+   - Admin Panel: http://localhost:8000/admin
+
+### 🟢 **بعد از تست موفق Docker:**
+- فاز 2: Code Review & Security (2-3 ساعت)
+- فاز 3: Celery Integration (3-4 ساعت)
+
+---
+
+**آخرین به‌روزرسانی:** 1404/10/17
+**نسخه:** 1.1
 

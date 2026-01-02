@@ -1,6 +1,7 @@
 "use client";
 
 import { LogOut, Menu } from "lucide-react";
+import NotificationBell from "@/components/dashboard/NotificationBell";
 
 interface MobileHeaderProps {
   onMenuClick: () => void;
@@ -22,10 +23,15 @@ export default function MobileHeader({ onMenuClick, onLogoutClick }: MobileHeade
       {/* وسط: عنوان */}
       <span className="font-bold text-white flex-1 text-center" dir="rtl">داشبورد مدیریت</span>
       
-      {/* سمت راست: منو همبرگر */}
-      <button onClick={onMenuClick} className="text-white p-2 shrink-0">
-        <Menu size={20} />
-      </button>
+      {/* سمت راست: Notification و منو */}
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="text-white">
+          <NotificationBell />
+        </div>
+        <button onClick={onMenuClick} className="text-white p-2">
+          <Menu size={20} />
+        </button>
+      </div>
     </div>
   );
 }

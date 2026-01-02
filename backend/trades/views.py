@@ -9,6 +9,8 @@ from django.conf import settings
 from decimal import Decimal
 import os
 from jalali_date import datetime2jalali
+from django_ratelimit.decorators import ratelimit
+import logging
 
 from accounts.models import UserRole
 from .models import GoldPrice, Trade, Order
@@ -22,6 +24,8 @@ from .serializers import (
     CreateOrderSerializer,
 )
 from .services import TradeService
+
+logger = logging.getLogger('trades')
 
 try:
     from weasyprint import HTML, CSS
@@ -49,11 +53,9 @@ def get_current_price(request):
         serializer = GoldPriceSerializer(price_obj)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
-        import traceback
-        print(f"خطا در get_current_price: {e}")
-        print(traceback.format_exc())
+        logger.error(f"خطا در get_current_price: {e}", exc_info=True)
         return Response(
-            {'error': f'خطای سرور: {str(e)}'},
+            {'error': 'خطا در دریافت قیمت. لطفاً دوباره تلاش کنید.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -79,11 +81,13 @@ def get_trades_status(request):
         )
 
 
+@ratelimit(key='user', rate='30/m', method='POST', block=True)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def buy_gold(request):
     """
     خرید فوری طلا
+    Rate Limit: 30 requests per minute per user
     """
     try:
         amount = Decimal(str(request.data.get('amount', 0)))
@@ -111,20 +115,20 @@ def buy_gold(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     except Exception as e:
-        import traceback
-        print(f"خطا در buy_gold: {e}")
-        print(traceback.format_exc())
+        logger.error(f"خطا در buy_gold: {e}", exc_info=True)
         return Response(
-            {'error': f'خطای سرور: {str(e)}'},
+            {'error': 'خطا در انجام معامله خرید. لطفاً دوباره تلاش کنید.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
+@ratelimit(key='user', rate='30/m', method='POST', block=True)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def sell_gold(request):
     """
     فروش فوری طلا
+    Rate Limit: 30 requests per minute per user
     """
     try:
         amount = Decimal(str(request.data.get('amount', 0)))
@@ -152,33 +156,34 @@ def sell_gold(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     except Exception as e:
-        import traceback
-        print(f"خطا در sell_gold: {e}")
-        print(traceback.format_exc())
+        logger.error(f"خطا در sell_gold: {e}", exc_info=True)
         return Response(
-            {'error': f'خطای سرور: {str(e)}'},
+            {'error': 'خطا در انجام معامله فروش. لطفاً دوباره تلاش کنید.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
+@ratelimit(key='user', rate='60/m', method='GET', block=True)
+@ratelimit(key='user', rate='20/m', method='POST', block=True)
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def orders_view(request):
     """
     مدیریت سفارشات: GET برای دریافت لیست، POST برای ایجاد سفارش جدید
+    Rate Limit: 60 GET requests per minute, 20 POST requests per minute per user
     """
     if request.method == 'GET':
         # دریافت لیست سفارشات کاربر
         try:
-            orders = Order.objects.filter(user=request.user).select_related('executed_trade').order_by('-created_at')
+            orders = Order.objects.select_related(
+                'user', 'user__customer_profile', 'executed_trade'
+            ).filter(user=request.user).order_by('-created_at')
             serializer = OrderSerializer(orders, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
-            import traceback
-            print(f"خطا در get_orders: {e}")
-            print(traceback.format_exc())
+            logger.error(f"خطا در get_orders: {e}", exc_info=True)
             return Response(
-                {'error': f'خطای سرور: {str(e)}'},
+                {'error': 'خطا در دریافت لیست سفارشات. لطفاً دوباره تلاش کنید.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -207,11 +212,9 @@ def orders_view(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         except Exception as e:
-            import traceback
-            print(f"خطا در create_order: {e}")
-            print(traceback.format_exc())
+            logger.error(f"خطا در create_order: {e}", exc_info=True)
             return Response(
-                {'error': f'خطای سرور: {str(e)}'},
+                {'error': 'خطا در ثبت سفارش. لطفاً دوباره تلاش کنید.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -224,7 +227,9 @@ def cancel_order(request, order_id):
     """
     try:
         try:
-            order = Order.objects.get(id=order_id, user=request.user)
+            order = Order.objects.select_related(
+                'user', 'user__customer_profile', 'executed_trade'
+            ).get(id=order_id, user=request.user)
         except Order.DoesNotExist:
             return Response(
                 {'error': 'سفارش یافت نشد'},
@@ -729,7 +734,9 @@ def admin_get_orders(request):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        orders = Order.objects.select_related('user', 'executed_trade').order_by('-created_at')
+        orders = Order.objects.select_related(
+            'user', 'user__customer_profile', 'executed_trade'
+        ).order_by('-created_at')
         
         # فیلترها
         status_filter = request.query_params.get('status')

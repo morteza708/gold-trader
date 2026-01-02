@@ -50,8 +50,9 @@ services:
       - ./backend:/app
       - backend_static:/app/staticfiles
       - backend_media:/app/media
-    ports:
-      - "8000:8000"
+    # Port را فقط برای دسترسی داخلی نگه می‌داریم (nginx از طریق network دسترسی دارد)
+    expose:
+      - "8000"
     env_file:
       - .env
     environment:
@@ -77,12 +78,13 @@ services:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
-    ports:
-      - "3000:3000"
+    # Port را فقط برای دسترسی داخلی نگه می‌داریم (nginx از طریق network دسترسی دارد)
+    expose:
+      - "3000"
     env_file:
       - .env
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
+      - NEXT_PUBLIC_API_URL=http://localhost/api
       - NODE_ENV=development
     depends_on:
       - backend
@@ -90,54 +92,84 @@ services:
       - gold_trading_network
     restart: unless-stopped
 
-  # Celery Worker (for background tasks) - فعال در فاز 3
-  # celery_worker:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile
-  #   container_name: gold_trading_celery_worker
-  #   command: celery -A config worker --loglevel=info
-  #   volumes:
-  #     - ./backend:/app
-  #     - backend_media:/app/media
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     - DB_HOST=db
-  #     - DB_PORT=5432
-  #     - CELERY_BROKER_URL=redis://redis:6379/0
-  #     - CELERY_RESULT_BACKEND=redis://redis:6379/0
-  #   depends_on:
-  #     - db
-  #     - redis
-  #     - backend
-  #   networks:
-  #     - gold_trading_network
-  #   restart: unless-stopped
+  # Celery Worker (for background tasks)
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gold_trading_celery_worker
+    command: celery -A config worker --loglevel=info --concurrency=4
+    volumes:
+      - ./backend:/app
+      - backend_media:/app/media
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - gold_trading_network
+    restart: unless-stopped
 
-  # Celery Beat (for periodic tasks) - فعال در فاز 3
-  # celery_beat:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile
-  #   container_name: gold_trading_celery_beat
-  #   command: celery -A config beat --loglevel=info
-  #   volumes:
-  #     - ./backend:/app
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     - DB_HOST=db
-  #     - DB_PORT=5432
-  #     - CELERY_BROKER_URL=redis://redis:6379/0
-  #     - CELERY_RESULT_BACKEND=redis://redis:6379/0
-  #   depends_on:
-  #     - db
-  #     - redis
-  #     - backend
-  #   networks:
-  #     - gold_trading_network
-  #   restart: unless-stopped
+  # Celery Beat (for periodic tasks)
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gold_trading_celery_beat
+    command: celery -A config beat --loglevel=info
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+      celery_worker:
+        condition: service_started
+    networks:
+      - gold_trading_network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: gold_trading_nginx
+    ports:
+      - "80:80"
+      # برای production بعد از تنظیم SSL:
+      # - "443:443"
+    volumes:
+      - backend_static:/var/www/staticfiles:ro
+      - backend_media:/var/www/media:ro
+      # برای production بعد از تنظیم SSL:
+      # - ./nginx/ssl:/etc/letsencrypt:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - gold_trading_network
+    restart: unless-stopped
 
 volumes:
   postgres_data:

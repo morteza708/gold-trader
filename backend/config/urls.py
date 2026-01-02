@@ -27,6 +27,7 @@ urlpatterns = [
     path('api/', include('wallet.urls')),
     path('api/', include('settings.urls')),
     path('api/', include('trades.urls')),
+    path('api/', include('notifications.urls')),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]
 

@@ -10,6 +10,7 @@ import {
 import MobileHeader from "@/components/admin/MobileHeader";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
+import NotificationBell from "@/components/dashboard/NotificationBell";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -88,6 +89,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
            onMenuClick={() => setIsSidebarOpen(true)}
            onLogoutClick={logout}
          />
+
+         {/* هدر دسکتاپ */}
+         <div className="hidden md:flex items-center justify-between h-16 bg-slate-950 border-b border-slate-800 px-8 sticky top-0 z-40">
+           <div className="flex items-center gap-4">
+             <h2 className="text-lg font-bold text-white">پنل مدیریت</h2>
+           </div>
+           <div className="flex items-center gap-4">
+             <NotificationBell />
+           </div>
+         </div>
 
          <div className="p-4 md:p-8 flex-1 overflow-y-auto pb-20 md:pb-8">
             {children}

@@ -5,6 +5,10 @@ from accounts.models import CustomUser
 from wallet.models import Wallet
 from settings.models import SystemSettings
 from .models import GoldPrice, Trade, Order
+from notifications.services import create_notification
+import logging
+
+logger = logging.getLogger('trades')
 
 
 class TradeService:
@@ -424,6 +428,30 @@ class TradeService:
         order.status = 'EXECUTED'
         order.executed_trade = trade
         order.save()
+        
+        # ایجاد notification برای کاربر
+        try:
+            if order.order_type == 'BUY_LIMIT':
+                message = f'سفارش خرید هوشمند شما به مقدار {float(order.amount)} گرم در قیمت {int(order.target_price):,} ریال با موفقیت اجرا شد.'
+            else:  # SELL_LIMIT
+                message = f'سفارش فروش هوشمند شما به مقدار {float(order.amount)} گرم در قیمت {int(order.target_price):,} ریال با موفقیت اجرا شد.'
+            
+            create_notification(
+                user=order.user,
+                title='اجرای سفارش هوشمند',
+                message=message,
+                notification_type='ORDER_EXECUTED',
+                related_object_type='order',
+                related_object_id=order.id,
+                metadata={
+                    'order_type': order.order_type,
+                    'amount': str(order.amount),
+                    'target_price': str(order.target_price),
+                    'trade_id': trade.id if trade else None,
+                }
+            )
+        except Exception as e:
+            logger.error(f"خطا در ایجاد notification برای اجرای سفارش: {e}", exc_info=True)
         
         return trade
     

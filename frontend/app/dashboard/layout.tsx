@@ -13,6 +13,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
 import { useTradesStatus } from "@/hooks/useTradesStatus";
 import { walletAPI, Wallet } from "@/lib/api/auth";
+import NotificationPermission from "@/components/PWA/NotificationPermission";
+import NotificationBell from "@/components/dashboard/NotificationBell";
 
 // آواتار پیش‌فرض (آیکون کاربر)
 export const DEFAULT_AVATAR =
@@ -227,10 +229,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                <WalletIcon size={20} />
             </button>
             
-            <button className="relative p-2 text-gray-500 hover:text-gold-600 hover:bg-gold-50 rounded-xl transition-colors">
-               <Bell size={20} />
-               <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
+            <NotificationBell />
           </div>
         </header>
         {/* --- نوار وضعیت بازار --- */}

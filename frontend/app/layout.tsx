@@ -1,8 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "@/contexts/AuthContext";
+import ServiceWorkerRegistration from "@/components/PWA/ServiceWorkerRegistration";
+import InstallPrompt from "@/components/PWA/InstallPrompt";
 
 // 1. فراخوانی فونت لوکال
 const iranYekan = localFont({
@@ -22,6 +24,29 @@ export const metadata: Metadata = {
     default: "پلتفرم معاملات طلا",
   },
   description: "سامانه امن خرید و فروش طلای آب‌شده",
+  manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/icons/web-app-manifest-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/web-app-manifest-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/web-app-manifest-192x192.png", sizes: "192x192", type: "image/png" },
+    ],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "گلد تریدر",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: "#D4AF37",
 };
 
 export default function RootLayout({
@@ -44,6 +69,10 @@ export default function RootLayout({
         <AuthProvider>
           {children}
         </AuthProvider>
+        {/* Service Worker Registration */}
+        <ServiceWorkerRegistration />
+        {/* PWA Install Prompt */}
+        <InstallPrompt />
         {/* 2. اضافه کردن کامپوننت نمایش پیام‌ها */}
         <Toaster 
            position="top-center" 

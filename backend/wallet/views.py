@@ -5,11 +5,15 @@ from rest_framework.response import Response
 from django.db.models import Q
 from jalali_date import datetime2jalali
 import uuid
+from django_ratelimit.decorators import ratelimit
+import logging
 
 from accounts.models import CustomUser, UserRole
 from accounts.services import send_double_token_message, send_triple_token_message
 from .models import Wallet, BankCard, WithdrawalRequest, DepositRequest, DepositAccountAssignment, DepositReceipt, DepositWithdrawalLink
 from settings.models import SystemSettings, DepositAccount
+from .tasks import send_sms_async
+from notifications.services import create_notification, create_notification_for_admins
 from .serializers import (
     WalletSerializer,
     BankCardSerializer,
@@ -21,6 +25,8 @@ from .serializers import (
     DepositReceiptSerializer,
     DepositWithdrawalLinkSerializer
 )
+
+logger = logging.getLogger('wallet')
 
 
 # ==================== User Wallet Views ====================
@@ -36,11 +42,9 @@ def wallet_info(request):
         serializer = WalletSerializer(wallet)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except Exception as e:
-        import traceback
-        print(f"خطا در wallet_info: {e}")
-        print(traceback.format_exc())
+        logger.error(f"خطا در wallet_info: {e}", exc_info=True)
         return Response(
-            {'error': f'خطای سرور: {str(e)}'},
+            {'error': 'خطا در دریافت اطلاعات کیف پول. لطفاً دوباره تلاش کنید.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -65,11 +69,9 @@ def bank_cards(request):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
     except Exception as e:
-        import traceback
-        print(f"خطا در bank_cards: {e}")
-        print(traceback.format_exc())
+        logger.error(f"خطا در bank_cards: {e}", exc_info=True)
         return Response(
-            {'error': f'خطای سرور: {str(e)}'},
+            {'error': 'خطا در دریافت لیست کارت‌های بانکی. لطفاً دوباره تلاش کنید.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -82,7 +84,7 @@ def bank_card_detail(request, card_id):
     """
     try:
         try:
-            card = BankCard.objects.get(id=card_id, user=request.user)
+            card = BankCard.objects.select_related('user').get(id=card_id, user=request.user)
         except BankCard.DoesNotExist:
             return Response(
                 {'error': 'کارت بانکی یافت نشد'},
@@ -104,20 +106,20 @@ def bank_card_detail(request, card_id):
             )
             
     except Exception as e:
-        import traceback
-        print(f"خطا در bank_card_detail: {e}")
-        print(traceback.format_exc())
+        logger.error(f"خطا در bank_card_detail: {e}", exc_info=True)
         return Response(
-            {'error': f'خطای سرور: {str(e)}'},
+            {'error': 'خطا در دریافت اطلاعات کارت بانکی. لطفاً دوباره تلاش کنید.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
+@ratelimit(key='user', rate='10/m', method='POST', block=True)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_deposit_request(request):
     """
     ایجاد درخواست واریز (فقط مبلغ - بدون tracking_number, deposit_date, receipt_image)
+    Rate Limit: 10 requests per minute per user
     """
     try:
         serializer = DepositRequestSerializer(data=request.data)
@@ -158,14 +160,15 @@ def create_deposit_request(request):
             
             for admin_phone in admin_phones:
                 try:
-                    print(f"DEBUG: در حال ارسال پیامک به {admin_phone}...")
-                    result = send_double_token_message(
+                    # ارسال async SMS
+                    send_sms_async.delay(
                         phone_number=admin_phone,
+                        template='deposit-request-notification-admin',
                         token=account_code,
-                        token2=f"{int(amount):,}",
-                        template='deposit-request-notification-admin'
+                        token2=f"{int(amount):,}"
                     )
-                    if result:
+                    logger.info(f"پیامک deposit-request-notification-admin به صف ارسال اضافه شد برای مدیر {admin_phone}")
+                    if True:  # برای حفظ منطق
                         print(f"✓ پیامک با موفقیت ارسال شد به {admin_phone}")
                     else:
                         print(f"✗ خطا در ارسال پیامک به {admin_phone}")
@@ -177,25 +180,45 @@ def create_deposit_request(request):
             print("⚠ هشدار: شماره مدیران برای دریافت پیامک ثبت نشده است یا لیست خالی است")
             print(f"   تنظیمات فعلی: {settings.admin_phone_numbers}")
         
+        # ایجاد notification برای مدیران
+        try:
+            account_code = request.user.customer_profile.account_code if hasattr(request.user, 'customer_profile') else 'N/A'
+            create_notification_for_admins(
+                title='درخواست واریز جدید',
+                message=f'کاربر {account_code} درخواست واریز به مبلغ {int(amount):,} ریال ثبت کرده است.',
+                notification_type='SYSTEM',
+                related_object_type='deposit',
+                related_object_id=deposit_request.id,
+                metadata={
+                    'user_phone': request.user.phone_number,
+                    'account_code': account_code,
+                    'amount': str(amount),
+                    'request_code': deposit_request.request_code,
+                }
+            )
+        except Exception as e:
+            logger.error(f"خطا در ایجاد notification برای مدیران (درخواست واریز): {e}", exc_info=True)
+        
         # Serialize و برگرداندن
         response_serializer = DepositRequestSerializer(deposit_request, context={'request': request})
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
         
     except Exception as e:
         import traceback
-        print(f"خطا در create_deposit_request: {e}")
-        print(traceback.format_exc())
+        logger.error(f"خطا در create_deposit_request: {e}", exc_info=True)
         return Response(
-            {'error': f'خطای سرور: {str(e)}'},
+            {'error': 'خطا در ثبت درخواست واریز. لطفاً دوباره تلاش کنید.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
 
+@ratelimit(key='user', rate='10/m', method='POST', block=True)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_withdrawal_request(request):
     """
     ایجاد درخواست برداشت (وجه یا طلا)
+    Rate Limit: 10 requests per minute per user
     """
     try:
         print(f"دریافت داده‌های درخواست برداشت: {request.data}")
@@ -224,7 +247,7 @@ def create_withdrawal_request(request):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             try:
-                bank_card = BankCard.objects.get(id=bank_card_id, user=request.user, is_active=True)
+                bank_card = BankCard.objects.select_related('user').get(id=bank_card_id, user=request.user, is_active=True)
             except BankCard.DoesNotExist:
                 return Response(
                     {'error': 'کارت بانکی یافت نشد'},
@@ -292,13 +315,15 @@ def create_withdrawal_request(request):
                 
                 for admin_phone in admin_phones:
                     try:
-                        result = send_double_token_message(
+                        # ارسال async SMS
+                        send_sms_async.delay(
                             phone_number=admin_phone,
+                            template=template,
                             token=account_code,
-                            token2=token2,
-                            template=template
+                            token2=token2
                         )
-                        if result:
+                        logger.info(f"پیامک {template} به صف ارسال اضافه شد برای مدیر {admin_phone}")
+                        if True:  # برای حفظ منطق
                             print(f"✓ پیامک {template} با موفقیت ارسال شد به {admin_phone}")
                         else:
                             print(f"✗ خطا در ارسال پیامک {template} به {admin_phone}")
@@ -310,16 +335,39 @@ def create_withdrawal_request(request):
             traceback.print_exc()
             # خطای پیامک نباید باعث شکست کل عملیات شود
         
+        # ایجاد notification برای مدیران
+        try:
+            account_code = request.user.customer_profile.account_code if hasattr(request.user, 'customer_profile') else 'N/A'
+            if withdrawal_type == 'RIAL':
+                message = f'کاربر {account_code} درخواست برداشت به مبلغ {int(amount):,} ریال ثبت کرده است.'
+            else:
+                message = f'کاربر {account_code} درخواست برداشت طلا به مقدار {float(amount)} گرم ثبت کرده است.'
+            
+            create_notification_for_admins(
+                title='درخواست برداشت جدید',
+                message=message,
+                notification_type='SYSTEM',
+                related_object_type='withdrawal',
+                related_object_id=withdrawal_request.id,
+                metadata={
+                    'user_phone': request.user.phone_number,
+                    'account_code': account_code,
+                    'amount': str(amount),
+                    'withdrawal_type': withdrawal_type,
+                    'request_code': withdrawal_request.request_code,
+                }
+            )
+        except Exception as e:
+            logger.error(f"خطا در ایجاد notification برای مدیران (درخواست برداشت): {e}", exc_info=True)
+        
         # Serialize و برگرداندن
         response_serializer = WithdrawalRequestSerializer(withdrawal_request, context={'request': request})
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
         
     except Exception as e:
-        import traceback
-        print(f"خطا در create_withdrawal_request: {e}")
-        print(traceback.format_exc())
+        logger.error(f"خطا در create_withdrawal_request: {e}", exc_info=True)
         return Response(
-            {'error': f'خطای سرور: {str(e)}'},
+            {'error': 'خطا در ثبت درخواست برداشت. لطفاً دوباره تلاش کنید.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -624,12 +672,36 @@ def admin_approve_withdrawal(request, request_id):
             template = 'gold-withdrawal-approved-user'
             token2 = float(withdrawal_request.amount)
         
-        send_double_token_message(
+        # ارسال async SMS
+        send_sms_async.delay(
             phone_number=withdrawal_request.user.phone_number,
+            template=template,
             token=account_code,
-            token2=token2,
-            template=template
+            token2=token2
         )
+        
+        # ایجاد notification
+        try:
+            if withdrawal_request.withdrawal_type == 'RIAL':
+                message = f'درخواست برداشت شما به مبلغ {int(withdrawal_request.amount):,} ریال تایید شد.'
+            else:
+                message = f'درخواست برداشت طلا شما به مقدار {float(withdrawal_request.amount)} گرم تایید شد.'
+            
+            create_notification(
+                user=withdrawal_request.user,
+                title='تایید برداشت',
+                message=message,
+                notification_type='WITHDRAWAL_APPROVED',
+                related_object_type='withdrawal',
+                related_object_id=withdrawal_request.id,
+                metadata={
+                    'amount': str(withdrawal_request.amount),
+                    'withdrawal_type': withdrawal_request.withdrawal_type,
+                    'request_code': withdrawal_request.request_code,
+                }
+            )
+        except Exception as e:
+            logger.error(f"خطا در ایجاد notification برای تایید برداشت: {e}", exc_info=True)
         
         # اگر برداشت ناقص بوده و حالا تکمیل شده، پیامک تایید برداشت قبلاً ارسال شده است
         # فیش‌های مرتبط در پنل کاربری نمایش داده می‌شوند
@@ -701,6 +773,33 @@ def admin_reject_withdrawal(request, request_id):
             withdrawal_request.admin_note = admin_note
             withdrawal_request.save()
         
+        # ایجاد notification
+        try:
+            if withdrawal_request.withdrawal_type == 'RIAL':
+                message = f'درخواست برداشت شما به مبلغ {int(withdrawal_request.amount):,} ریال رد شد.'
+            else:
+                message = f'درخواست برداشت طلا شما به مقدار {float(withdrawal_request.amount)} گرم رد شد.'
+            
+            if admin_note:
+                message += f' یادداشت مدیر: {admin_note}'
+            
+            create_notification(
+                user=withdrawal_request.user,
+                title='رد درخواست برداشت',
+                message=message,
+                notification_type='WITHDRAWAL_REJECTED',
+                related_object_type='withdrawal',
+                related_object_id=withdrawal_request.id,
+                metadata={
+                    'amount': str(withdrawal_request.amount),
+                    'withdrawal_type': withdrawal_request.withdrawal_type,
+                    'request_code': withdrawal_request.request_code,
+                    'admin_note': admin_note,
+                }
+            )
+        except Exception as e:
+            logger.error(f"خطا در ایجاد notification برای رد برداشت: {e}", exc_info=True)
+        
         serializer = WithdrawalRequestSerializer(withdrawal_request, context={'request': request})
         return Response({
             'message': 'درخواست رد شد',
@@ -764,19 +863,34 @@ def admin_complete_gold_withdrawal(request, request_id):
         account_code = withdrawal_request.user.customer_profile.account_code if hasattr(withdrawal_request.user, 'customer_profile') else 'N/A'
         token2 = float(withdrawal_request.amount)
         
+        # ارسال async SMS
         try:
-            result = send_double_token_message(
+            send_sms_async.delay(
                 phone_number=withdrawal_request.user.phone_number,
+                template='gold-withdrawal-completed-user',
                 token=account_code,
-                token2=token2,
-                template='gold-withdrawal-completed-user'
+                token2=token2
             )
-            if not result:
-                print(f"خطا در ارسال پیامک تسویه طلا به کاربر {withdrawal_request.user.phone_number}")
         except Exception as e:
-            print(f"خطا در ارسال پیامک تسویه طلا به کاربر {withdrawal_request.user.phone_number}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"خطا در queue کردن پیامک تسویه طلا به کاربر {withdrawal_request.user.phone_number}: {e}", exc_info=True)
+        
+        # ایجاد notification
+        try:
+            create_notification(
+                user=withdrawal_request.user,
+                title='تکمیل برداشت طلا',
+                message=f'درخواست برداشت طلا شما به مقدار {float(withdrawal_request.amount)} گرم با موفقیت تسویه شد.',
+                notification_type='WITHDRAWAL_COMPLETED',
+                related_object_type='withdrawal',
+                related_object_id=withdrawal_request.id,
+                metadata={
+                    'amount': str(withdrawal_request.amount),
+                    'withdrawal_type': withdrawal_request.withdrawal_type,
+                    'request_code': withdrawal_request.request_code,
+                }
+            )
+        except Exception as e:
+            logger.error(f"خطا در ایجاد notification برای تکمیل برداشت طلا: {e}", exc_info=True)
         
         serializer = WithdrawalRequestSerializer(withdrawal_request, context={'request': request})
         return Response({
@@ -828,21 +942,19 @@ def admin_upload_receipt(request, request_id):
             withdrawal_request.save()
             
             # ارسال پیامک به کاربر
+            # ارسال async SMS
             try:
-                from accounts.services import send_double_token_message
                 account_code = withdrawal_request.user.customer_profile.account_code if hasattr(withdrawal_request.user, 'customer_profile') else 'N/A'
                 token2 = f"{int(withdrawal_request.amount):,}"  # مبلغ به ریال با فرمت جداکننده
                 
-                result = send_double_token_message(
+                send_sms_async.delay(
                     phone_number=withdrawal_request.user.phone_number,
+                    template='withdrawal-receipt-uploaded-user',
                     token=account_code,
-                    token2=token2,
-                    template='withdrawal-receipt-uploaded-user'
+                    token2=token2
                 )
-                if not result:
-                    print(f"خطا در ارسال پیامک فیش واریزی به کاربر {withdrawal_request.user.phone_number}")
             except Exception as e:
-                print(f"خطا در ارسال پیامک فیش واریزی به کاربر {withdrawal_request.user.phone_number}: {e}")
+                logger.error(f"خطا در queue کردن پیامک فیش واریزی به کاربر {withdrawal_request.user.phone_number}: {e}", exc_info=True)
                 import traceback
                 traceback.print_exc()
             
@@ -983,19 +1095,33 @@ def admin_approve_deposit(request, request_id):
         # ارسال پیامک به کاربر
         account_code = deposit_request.user.customer_profile.account_code if hasattr(deposit_request.user, 'customer_profile') else 'N/A'
         
+        # ارسال async SMS
         try:
-            result = send_double_token_message(
+            send_sms_async.delay(
                 phone_number=deposit_request.user.phone_number,
+                template='deposit-approved-user',
                 token=account_code,
-                token2=f"{int(deposit_request.amount):,}",  # مبلغ به ریال با فرمت جداکننده
-                template='deposit-approved-user'
+                token2=f"{int(deposit_request.amount):,}"  # مبلغ به ریال با فرمت جداکننده
             )
-            if not result:
-                print(f"خطا در ارسال پیامک تایید واریز به کاربر {deposit_request.user.phone_number}")
         except Exception as e:
-            print(f"خطا در ارسال پیامک تایید واریز به کاربر {deposit_request.user.phone_number}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"خطا در queue کردن پیامک تایید واریز به کاربر {deposit_request.user.phone_number}: {e}", exc_info=True)
+        
+        # ایجاد notification
+        try:
+            create_notification(
+                user=deposit_request.user,
+                title='تایید واریز',
+                message=f'درخواست واریز شما به مبلغ {int(deposit_request.amount):,} ریال تایید شد و مبلغ به کیف پول شما اضافه شد.',
+                notification_type='DEPOSIT_APPROVED',
+                related_object_type='deposit',
+                related_object_id=deposit_request.id,
+                metadata={
+                    'amount': str(deposit_request.amount),
+                    'request_code': deposit_request.request_code,
+                }
+            )
+        except Exception as e:
+            logger.error(f"خطا در ایجاد notification برای تایید واریز: {e}", exc_info=True)
         
         serializer = DepositRequestSerializer(deposit_request, context={'request': request})
         return Response({
@@ -1197,18 +1323,35 @@ def admin_assign_deposit_accounts(request, request_id):
         # ارسال پیامک به کاربر برای ورود به پنل و مشاهده لیست حساب‌ها
         account_code = deposit_request.user.customer_profile.account_code if hasattr(deposit_request.user, 'customer_profile') else 'N/A'
         
+        # ارسال async SMS
         try:
-            # استفاده از send_message با یک token (کد حساب کاربری)
-            from accounts.services import send_message
-            send_message(
+            send_sms_async.delay(
                 phone_number=deposit_request.user.phone_number,
-                message=account_code,  # فقط کد حساب کاربری
-                template='deposit-accounts-sms'  # template جدید
+                template='deposit-accounts-sms',
+                token=account_code  # فقط کد حساب کاربری
             )
+            logger.info(f"پیامک deposit-accounts-sms به صف ارسال اضافه شد برای کاربر {deposit_request.user.phone_number}")
         except Exception as e:
-            print(f"خطا در ارسال پیامک حساب‌ها به کاربر {deposit_request.user.phone_number}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"خطا در queue کردن پیامک حساب‌ها به کاربر {deposit_request.user.phone_number}: {e}", exc_info=True)
+        
+        # ایجاد notification برای کاربر
+        try:
+            create_notification(
+                user=deposit_request.user,
+                title='حساب‌های واریز تخصیص داده شد',
+                message=f'حساب‌های واریز برای درخواست شما به مبلغ {int(deposit_request.amount):,} ریال تخصیص داده شد. لطفاً وارد پنل کاربری شوید و فیش‌های واریزی را آپلود کنید.',
+                notification_type='SYSTEM',
+                related_object_type='deposit',
+                related_object_id=deposit_request.id,
+                metadata={
+                    'amount': str(deposit_request.amount),
+                    'request_code': deposit_request.request_code,
+                    'assignments_count': len(assignments),
+                }
+            )
+            logger.info(f"Notification ایجاد شد برای کاربر {deposit_request.user.phone_number}: حساب‌های واریز تخصیص داده شد")
+        except Exception as e:
+            logger.error(f"خطا در ایجاد notification برای کاربر {deposit_request.user.phone_number}: {e}", exc_info=True)
         
         # Serialize و برگرداندن
         response_serializer = DepositAccountAssignmentSerializer(assignments, many=True)
@@ -1285,7 +1428,11 @@ def user_upload_deposit_receipt(request, request_id):
             )
         
         try:
-            assignment = DepositAccountAssignment.objects.get(
+            assignment = DepositAccountAssignment.objects.select_related(
+                'deposit_request', 'deposit_request__user',
+                'withdrawal_request', 'withdrawal_request__user',
+                'deposit_account'
+            ).get(
                 id=assignment_id,
                 deposit_request=deposit_request
             )
@@ -1420,7 +1567,11 @@ def user_upload_deposit_receipts_batch(request, request_id):
             )
         
         # دریافت assignments
-        assignments = DepositAccountAssignment.objects.filter(
+        assignments = DepositAccountAssignment.objects.select_related(
+            'deposit_request', 'deposit_request__user',
+            'withdrawal_request', 'withdrawal_request__user',
+            'deposit_account'
+        ).filter(
             deposit_request=deposit_request
         )
         
@@ -1559,21 +1710,16 @@ def user_upload_deposit_receipts_batch(request, request_id):
                 
                 for admin_phone in admin_phones:
                     try:
-                        print(f"DEBUG: در حال ارسال پیامک deposit-receipt-uploaded-admin به {admin_phone}...")
-                        result = send_double_token_message(
+                        # ارسال async SMS
+                        send_sms_async.delay(
                             phone_number=admin_phone,
+                            template='deposit-receipt-uploaded-admin',
                             token=account_code,
-                            token2=f"{int(deposit_request.amount):,}",
-                            template='deposit-receipt-uploaded-admin'
+                            token2=f"{int(deposit_request.amount):,}"
                         )
-                        if result:
-                            print(f"✓ پیامک deposit-receipt-uploaded-admin با موفقیت ارسال شد به مدیر {admin_phone}")
-                        else:
-                            print(f"✗ خطا در ارسال پیامک deposit-receipt-uploaded-admin به مدیر {admin_phone}")
+                        logger.info(f"پیامک deposit-receipt-uploaded-admin به صف ارسال اضافه شد برای مدیر {admin_phone}")
                     except Exception as e:
-                        print(f"✗ خطا در ارسال پیامک deposit-receipt-uploaded-admin به مدیر {admin_phone}: {e}")
-                        import traceback
-                        traceback.print_exc()
+                        logger.error(f"خطا در queue کردن پیامک deposit-receipt-uploaded-admin به مدیر {admin_phone}: {e}", exc_info=True)
             else:
                 print("⚠ هشدار: شماره مدیران برای دریافت پیامک ثبت نشده است یا لیست خالی است")
                 print(f"   تنظیمات فعلی: {settings.admin_phone_numbers}")
@@ -1582,6 +1728,26 @@ def user_upload_deposit_receipts_batch(request, request_id):
             import traceback
             traceback.print_exc()
             # خطای پیامک نباید باعث شکست کل عملیات شود
+        
+        # ایجاد notification برای مدیران
+        try:
+            account_code = deposit_request.user.customer_profile.account_code if hasattr(deposit_request.user, 'customer_profile') else 'N/A'
+            create_notification_for_admins(
+                title='آپلود فیش واریزی',
+                message=f'کاربر {account_code} {len(created_receipts)} فیش واریزی برای درخواست {deposit_request.request_code} آپلود کرده است.',
+                notification_type='SYSTEM',
+                related_object_type='deposit',
+                related_object_id=deposit_request.id,
+                metadata={
+                    'user_phone': deposit_request.user.phone_number,
+                    'account_code': account_code,
+                    'amount': str(deposit_request.amount),
+                    'request_code': deposit_request.request_code,
+                    'receipts_count': len(created_receipts),
+                }
+            )
+        except Exception as e:
+            logger.error(f"خطا در ایجاد notification برای مدیران (آپلود فیش): {e}", exc_info=True)
         
         # Serialize و برگرداندن
         serializer = DepositReceiptSerializer(created_receipts, many=True, context={'request': request})
@@ -1663,7 +1829,11 @@ def admin_approve_deposit_new_flow(request, request_id):
             )
         
         # بررسی اینکه تمام فیش‌ها تایید شده‌اند (یا در انتظار)
-        receipts = DepositReceipt.objects.filter(
+        receipts = DepositReceipt.objects.select_related(
+            'deposit_request', 'deposit_request__user',
+            'account_assignment', 'account_assignment__withdrawal_request',
+            'account_assignment__deposit_account'
+        ).filter(
             deposit_request=deposit_request,
             status__in=['PENDING', 'APPROVED']
         )
@@ -1743,7 +1913,10 @@ def admin_approve_deposit_new_flow(request, request_id):
                                 'account_code': account_code,
                                 'amount': withdrawal_request.amount,
                                 'template': 'withdrawal-approved-user',
-                                'user_type': 'withdrawal'
+                                'user_type': 'withdrawal',
+                                'user': withdrawal_request.user,
+                                'withdrawal_id': withdrawal_request.id,
+                                'withdrawal_type': withdrawal_request.withdrawal_type,
                             })
                         # اگر باقی‌مانده > 0 باشد، درخواست برداشت در حالت PENDING می‌ماند
                         # و مدیر باید باقی‌مانده را از طریق مودال برداشت پرداخت کند
@@ -1767,47 +1940,77 @@ def admin_approve_deposit_new_flow(request, request_id):
                 'account_code': account_code,
                 'amount': deposit_request.amount,
                 'template': 'deposit-approved-user',
-                'user_type': 'deposit'
+                'user_type': 'deposit',
+                'user': deposit_request.user,
+                'deposit_id': deposit_request.id,
             })
         
-        # ارسال پیامک‌ها خارج از transaction (تا اگر خطایی رخ داد، transaction rollback نشود)
+        # ارسال async پیامک‌ها و ایجاد notification خارج از transaction
         for user_info in users_to_notify:
             try:
-                result = send_double_token_message(
+                send_sms_async.delay(
                     phone_number=user_info['phone_number'],
+                    template=user_info['template'],
                     token=user_info['account_code'],
-                    token2=f"{int(user_info['amount']):,}",
-                    template=user_info['template']
+                    token2=f"{int(user_info['amount']):,}"
                 )
-                if result:
-                    print(f"✓ پیامک {user_info['user_type']} با موفقیت ارسال شد به {user_info['phone_number']}")
-                else:
-                    print(f"✗ خطا در ارسال پیامک {user_info['user_type']} به {user_info['phone_number']}")
+                logger.info(f"پیامک {user_info['user_type']} به صف ارسال اضافه شد برای {user_info['phone_number']}")
             except Exception as e:
-                print(f"✗ خطا در ارسال پیامک {user_info['user_type']} به کاربر {user_info['phone_number']}: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.error(f"خطا در queue کردن پیامک {user_info['user_type']} به کاربر {user_info['phone_number']}: {e}", exc_info=True)
+            
+            # ایجاد notification
+            try:
+                if user_info['user_type'] == 'deposit':
+                    logger.info(f"ایجاد notification برای کاربر {user_info['user'].phone_number} - نوع: deposit - deposit_id: {user_info.get('deposit_id')}")
+                    notification = create_notification(
+                        user=user_info['user'],
+                        title='تایید واریز',
+                        message=f'درخواست واریز شما به مبلغ {int(user_info["amount"]):,} ریال تایید شد و مبلغ به کیف پول شما اضافه شد.',
+                        notification_type='DEPOSIT_APPROVED',
+                        related_object_type='deposit',
+                        related_object_id=user_info.get('deposit_id'),
+                        metadata={
+                            'amount': str(user_info['amount']),
+                        }
+                    )
+                    if notification:
+                        logger.info(f"✓ Notification با موفقیت ایجاد شد برای کاربر {user_info['user'].phone_number} - ID: {notification.id}")
+                    else:
+                        logger.error(f"✗ Notification ایجاد نشد برای کاربر {user_info['user'].phone_number}")
+                elif user_info['user_type'] == 'withdrawal':
+                    if user_info['withdrawal_type'] == 'RIAL':
+                        message = f'درخواست برداشت شما به مبلغ {int(user_info["amount"]):,} ریال تایید شد.'
+                    else:
+                        message = f'درخواست برداشت طلا شما به مقدار {float(user_info["amount"])} گرم تایید شد.'
+                    
+                    logger.info(f"ایجاد notification برای کاربر {user_info['user'].phone_number} - نوع: withdrawal - withdrawal_id: {user_info.get('withdrawal_id')}")
+                    notification = create_notification(
+                        user=user_info['user'],
+                        title='تایید برداشت',
+                        message=message,
+                        notification_type='WITHDRAWAL_APPROVED',
+                        related_object_type='withdrawal',
+                        related_object_id=user_info.get('withdrawal_id'),
+                        metadata={
+                            'amount': str(user_info['amount']),
+                            'withdrawal_type': user_info['withdrawal_type'],
+                        }
+                    )
+                    if notification:
+                        logger.info(f"✓ Notification با موفقیت ایجاد شد برای کاربر {user_info['user'].phone_number} - ID: {notification.id}")
+                    else:
+                        logger.error(f"✗ Notification ایجاد نشد برای کاربر {user_info['user'].phone_number}")
+            except Exception as e:
+                logger.error(f"خطا در ایجاد notification برای {user_info['user_type']} - کاربر {user_info['user'].phone_number}: {e}", exc_info=True)
         
         # ارسال پیامک به مدیر برای اطلاع از تایید واریز و فیش‌های آپلود شده
         # این پیامک قبلاً در user_upload_deposit_receipts_batch ارسال می‌شود
         # اما برای اطمینان، در اینجا هم ارسال می‌کنیم
         from settings.models import SystemSettings
-        settings = SystemSettings.get_settings()
-        admin_phones = settings.admin_phone_numbers or []
-        
-        if admin_phones:
-            depositor_account_code = deposit_request.user.customer_profile.account_code if hasattr(deposit_request.user, 'customer_profile') else 'N/A'
-            for admin_phone in admin_phones:
-                try:
-                    # استفاده از پیامک موجود برای اطلاع مدیر از تایید واریز
-                    send_double_token_message(
-                        phone_number=admin_phone,
-                        token=depositor_account_code,
-                        token2=f"{int(deposit_request.amount):,}",
-                        template='deposit-approved-user'  # استفاده از template موجود
-                    )
-                except Exception as e:
-                    print(f"✗ خطا در ارسال پیامک تایید واریز به مدیر {admin_phone}: {e}")
+        # مدیر قبلاً از طریق deposit-receipt-uploaded-admin (در user_upload_deposit_receipts_batch) 
+        # و deposit-request-notification-admin (در create_deposit_request) اطلاع پیدا کرده است
+        # نیازی به ارسال پیامک اضافی برای مدیر نیست
+        # template deposit-approved-user فقط برای کاربر ارسال می‌شود
         
         # Serialize و برگرداندن
         deposit_serializer = DepositRequestSerializer(deposit_request, context={'request': request})

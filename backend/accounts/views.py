@@ -5,6 +5,10 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 import uuid
+from django_ratelimit.decorators import ratelimit
+from django_ratelimit.exceptions import Ratelimited
+from django.utils.decorators import method_decorator
+import logging
 from .serializers import (
     SendOTPSerializer,
     VerifyOTPSerializer,
@@ -24,13 +28,16 @@ from wallet.models import Wallet
 from trades.models import Trade
 
 User = get_user_model()
+logger = logging.getLogger('accounts')
 
 
+@ratelimit(key='ip', rate='5/m', method='POST', block=True)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def send_otp(request):
     """
     ارسال کد OTP به شماره موبایل
+    Rate Limit: 5 requests per minute per IP
     """
     serializer = SendOTPSerializer(data=request.data)
     if serializer.is_valid():
@@ -42,11 +49,13 @@ def send_otp(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@ratelimit(key='ip', rate='10/m', method='POST', block=True)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def verify_otp(request):
     """
     تایید کد OTP و لاگین کاربر
+    Rate Limit: 10 requests per minute per IP
     """
     serializer = VerifyOTPSerializer(data=request.data)
     if serializer.is_valid():
@@ -339,8 +348,7 @@ def admin_register_or_verify_phone(request):
     except Exception as e:
         # لاگ کردن خطا برای دیباگ
         import traceback
-        print(f"خطا در admin_register_or_verify_phone: {e}")
-        print(traceback.format_exc())
+        logger.error(f"خطا در admin_register_or_verify_phone: {e}", exc_info=True)
         return Response(
             {'error': f'خطای سرور: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -460,8 +468,7 @@ def admin_users_list(request):
         
     except Exception as e:
         import traceback
-        print(f"خطا در admin_users_list: {e}")
-        print(traceback.format_exc())
+        logger.error(f"خطا در admin_users_list: {e}", exc_info=True)
         return Response(
             {'error': f'خطای سرور: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -517,8 +524,7 @@ def admin_user_detail(request, user_id):
         
     except Exception as e:
         import traceback
-        print(f"خطا در admin_user_detail: {e}")
-        print(traceback.format_exc())
+        logger.error(f"خطا در admin_user_detail: {e}", exc_info=True)
         return Response(
             {'error': f'خطای سرور: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
