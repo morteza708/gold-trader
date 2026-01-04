@@ -10,8 +10,10 @@ COPY package*.json ./
 # Copy scripts directory (needed for postinstall)
 COPY scripts/ ./scripts/
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (با استفاده از npm registry ایرانی)
+RUN npm config set registry https://registry.npm.ir && \
+    npm ci --timeout=600000 --maxsockets=1 || \
+    (npm config set registry https://registry.npmjs.org && npm ci --timeout=600000 --maxsockets=1)
 
 # Copy project files
 COPY . .
