@@ -3,7 +3,10 @@ FROM nginx:1.25-alpine
 # حذف فایل پیش‌فرض nginx
 RUN rm /etc/nginx/conf.d/default.conf
 
-# کپی فایل تنظیمات nginx
+# کپی فایل nginx.conf کامل (با http block)
+COPY nginx-complete.conf /etc/nginx/nginx.conf
+
+# کپی فایل تنظیمات server
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # ایجاد پوشه‌های لازم برای static و media files

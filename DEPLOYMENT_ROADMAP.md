@@ -289,20 +289,28 @@ def update_gold_price_from_api():
    - ✅ Static files serving
    - ✅ Media files serving
    - ✅ فایل `nginx.conf` با تنظیمات کامل
+   - ✅ فایل `nginx-complete.conf` با ساختار کامل nginx (http block)
    - ✅ Dockerfile برای Nginx
+   - ✅ Volume mount برای sync کردن فایل‌های config
 
-2. **✅ SSL/TLS Setup** (آماده برای production)
+2. **✅ URL Routing**
+   - ✅ مسیر `/adminpanel` برای Next.js Admin Panel
+   - ✅ مسیر `/admin` برای Django Super Admin
+   - ✅ مسیر `/api/` برای Backend API
+   - ✅ حل conflict بین Next.js Admin Panel و Django Admin
+
+3. **✅ SSL/TLS Setup** (آماده برای production)
    - ✅ تنظیمات HTTPS در nginx.conf (کامنت شده)
    - ✅ آماده برای Let's Encrypt certificate
    - ✅ HTTP to HTTPS redirect (آماده)
 
-3. **✅ Performance Optimization**
+4. **✅ Performance Optimization**
    - ✅ Gzip compression
    - ✅ Browser caching (30 روز برای static, 7 روز برای media)
    - ✅ Static files caching
    - ✅ Keepalive connections
 
-4. **✅ Security Headers**
+5. **✅ Security Headers**
    - ✅ Content Security Policy (CSP)
    - ✅ X-Frame-Options
    - ✅ X-Content-Type-Options
@@ -310,67 +318,115 @@ def update_gold_price_from_api():
    - ✅ HSTS (آماده برای HTTPS)
    - ✅ Referrer-Policy
 
-5. **✅ Rate Limiting**
-   - ✅ Rate limiting برای API endpoints (30 req/min)
-   - ✅ Rate limiting برای authentication (10 req/min)
-   - ✅ Rate limiting برای general requests (100 req/min)
+6. **✅ Rate Limiting** (برای development کمتر محدود)
+   - ✅ Rate limiting zones تعریف شده:
+     - `api_limit`: 200 req/min (برای development)
+     - `auth_limit`: 50 req/min (برای development)
+     - `general_limit`: 500 req/min (برای development)
+   - ✅ Rate limiting برای API endpoints (غیرفعال برای development)
+   - ✅ Rate limiting برای authentication (50 req/min)
+   - ✅ Rate limiting برای general requests (500 req/min)
+   - ✅ Location block جداگانه برای `/admin/(settings|users|trades|finance|notifications)/`
 
-6. **✅ Docker Integration**
+7. **✅ Docker Integration**
    - ✅ اضافه کردن nginx service به docker-compose
    - ✅ تنظیم volumes برای static و media files
+   - ✅ تنظیم volume mount برای nginx.conf (live sync)
    - ✅ تنظیم dependencies
 
-**زمان صرف شده:** ~2 ساعت
+**زمان صرف شده:** ~3 ساعت
 
 **فایل‌های ایجاد شده:**
-- `nginx/nginx.conf` - تنظیمات اصلی Nginx
+- `nginx/nginx.conf` - تنظیمات server (برای conf.d)
+- `nginx/nginx-complete.conf` - تنظیمات کامل nginx (http block)
 - `nginx/Dockerfile` - Dockerfile برای Nginx
 - `nginx/README.md` - راهنمای استفاده
 - `nginx/TESTING.md` - راهنمای تست
 
+**مشکلات حل شده:**
+- ✅ حل مشکل 503 برای `/adminpanel/login`
+- ✅ حل مشکل 429 برای `/api/admin/settings/`
+- ✅ حل conflict بین Next.js Admin Panel و Django Admin
+- ✅ اصلاح ساختار nginx config (جدا کردن http block از server block)
+
 **نکات:**
 - ✅ Nginx برای localhost آماده است
 - ⏳ SSL را بعد از اضافه کردن دامنه تنظیم می‌کنیم (فاز 7)
+- ⚠️ Rate limiting برای development غیرفعال/کم است - باید برای production فعال شود
 
 ---
 
-### 🟤 **فاز 7: Domain Setup** (بعد از تست کامل Docker)
+### 🟤 **فاز 7: Domain Setup & SSL** (آماده برای شروع)
 
-**هدف:** اضافه کردن دامنه به پروژه
+**هدف:** اضافه کردن دامنه و تنظیم SSL
 
-#### زمان مناسب:
-**بعد از اینکه:**
-- ✅ Docker setup کامل شد
+#### پیش‌نیازها:
+- ✅ Docker setup کامل
 - ✅ همه services به درستی کار می‌کنند
 - ✅ تست کامل روی localhost انجام شد
 - ✅ Nginx configuration آماده شد
+- ✅ مسیر `/adminpanel` و `/admin` به درستی کار می‌کنند
 
 #### مراحل:
 
 1. **DNS Configuration**
    - تنظیم A record به IP سرور
    - تنظیم CNAME برای www (اختیاری)
+   - بررسی propagation (می‌تواند 24-48 ساعت طول بکشد)
 
 2. **Docker Configuration**
-   - به‌روزرسانی ALLOWED_HOSTS در Django
-   - به‌روزرسانی CORS_ALLOWED_ORIGINS
-   - به‌روزرسانی Nginx server_name
+   - به‌روزرسانی ALLOWED_HOSTS در Django:
+     ```python
+     ALLOWED_HOSTS = ['yourdomain.com', 'www.yourdomain.com']
+     ```
+   - به‌روزرسانی CORS_ALLOWED_ORIGINS:
+     ```python
+     CORS_ALLOWED_ORIGINS = [
+         'https://yourdomain.com',
+         'https://www.yourdomain.com',
+     ]
+     ```
+   - به‌روزرسانی Nginx server_name در `nginx.conf`
 
 3. **SSL Certificate**
-   - نصب Certbot
-   - دریافت Let's Encrypt certificate
-   - تنظیم auto-renewal
+   - نصب Certbot:
+     ```bash
+     sudo apt-get install certbot python3-certbot-nginx
+     ```
+   - دریافت Let's Encrypt certificate:
+     ```bash
+     sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+     ```
+   - تنظیم auto-renewal:
+     ```bash
+     sudo certbot renew --dry-run
+     ```
 
-4. **Testing**
+4. **Production Settings**
+   - فعال کردن rate limiting (راهنما در `NGINX_PRODUCTION_NOTES.md`)
+   - سخت‌تر کردن security headers
+   - به‌روزرسانی environment variables:
+     ```env
+     DEBUG=False
+     ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
+     SECURE_SSL_REDIRECT=True
+     SESSION_COOKIE_SECURE=True
+     CSRF_COOKIE_SECURE=True
+     ```
+
+5. **Testing**
    - تست دسترسی با دامنه
    - تست SSL certificate
    - تست همه endpoints
+   - تست redirect از HTTP به HTTPS
 
 **زمان تقریبی:** 1-2 ساعت
 
 **نکات مهم:**
-- دامنه را فقط بعد از تست کامل Docker اضافه می‌کنیم
-- قبل از اضافه کردن دامنه، همه چیز باید روی localhost کار کند
+- ⚠️ قبل از تنظیم SSL، مطمئن شوید که DNS به درستی propagate شده است
+- ⚠️ برای دریافت SSL certificate، سرور باید از طریق دامنه قابل دسترسی باشد
+- ⚠️ بعد از تنظیم SSL، rate limiting و security headers را برای production فعال کنید
+- 📝 راهنمای کامل در `NGINX_PRODUCTION_NOTES.md` موجود است
 
 ---
 
@@ -505,10 +561,17 @@ def update_gold_price_from_api():
 
 ### روز 5:
 - ✅ فاز 5: Notification System (تکمیل شده)
-- 🟣 فاز 6: Nginx Configuration (بعدی)
+- ✅ فاز 6: Nginx Configuration (تکمیل شده)
+  - ✅ حل مشکل دسترسی به `/adminpanel`
+  - ✅ حل مشکل rate limiting
+  - ✅ حل conflict بین Next.js Admin Panel و Django Admin
 
 ### روز 6:
-- 🟤 فاز 7: Domain Setup (1-2 ساعت)
+- 🟤 فاز 7: Domain Setup & SSL (1-2 ساعت)
+  - تنظیم DNS
+  - دریافت SSL certificate
+  - فعال کردن rate limiting برای production
+  - سخت‌تر کردن security headers
 - تست کامل با دامنه
 
 ### روز 7:
@@ -608,47 +671,58 @@ NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
 - ✅ Docker Setup (Dockerfile ها و docker-compose.yml آماده)
 - ✅ `.env.example` ایجاد شده
 - ✅ DOCKER_SETUP.md راهنما موجود
+- ✅ فاز 2: Code Review & Security (تکمیل شده)
+- ✅ فاز 3: Celery Integration (تکمیل شده)
+- ✅ فاز 4: PWA Implementation (تکمیل شده)
+- ✅ فاز 5: Notification System (تکمیل شده)
+- ✅ فاز 6: Nginx Configuration (تکمیل شده)
+  - ✅ حل مشکل دسترسی به `/adminpanel`
+  - ✅ حل مشکل rate limiting برای API endpoints
+  - ✅ حل conflict بین Next.js Admin Panel و Django Admin
 
 ### 🔵 **گام بعدی (اولویت اول):**
-**فاز 1: تست و راه‌اندازی Docker**
+**فاز 7: Domain Setup & SSL**
+
+#### پیش‌نیازها:
+- ✅ Docker setup کامل
+- ✅ همه services به درستی کار می‌کنند
+- ✅ تست کامل روی localhost انجام شد
+- ✅ Nginx configuration آماده
 
 #### مراحل:
-1. **ایجاد فایل `.env`:**
-   ```bash
-   cp .env.example .env
-   ```
-   سپس ویرایش کنید و مقادیر را تنظیم کنید:
-   - `DJANGO_SECRET_KEY`: از [Django Secret Key Generator](https://djecrety.ir/) استفاده کنید
-   - `KAVENEGAR_API_KEY`: کلید API کاوه نگار خود را وارد کنید
-   - سایر مقادیر را بررسی کنید
+1. **DNS Configuration**
+   - تنظیم A record به IP سرور
+   - تنظیم CNAME برای www (اختیاری)
 
-2. **Build و Run:**
-   ```bash
-   docker-compose build
-   docker-compose up -d
-   ```
+2. **Docker Configuration**
+   - به‌روزرسانی ALLOWED_HOSTS در Django
+   - به‌روزرسانی CORS_ALLOWED_ORIGINS
+   - به‌روزرسانی Nginx server_name
 
-3. **اجرای Migrations:**
-   ```bash
-   docker-compose exec backend python manage.py migrate
-   ```
+3. **SSL Certificate**
+   - نصب Certbot
+   - دریافت Let's Encrypt certificate
+   - تنظیم auto-renewal
 
-4. **ایجاد Superuser:**
-   ```bash
-   docker-compose exec backend python manage.py createsuperuser
-   ```
+4. **Production Settings**
+   - فعال کردن rate limiting (راهنما در `NGINX_PRODUCTION_NOTES.md`)
+   - سخت‌تر کردن security headers
+   - به‌روزرسانی environment variables
 
-5. **تست:**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000/api
-   - Admin Panel: http://localhost:8000/admin
-
-### 🟢 **بعد از تست موفق Docker:**
-- فاز 2: Code Review & Security (2-3 ساعت)
-- فاز 3: Celery Integration (3-4 ساعت)
+### 🟢 **بعد از Domain Setup:**
+- فاز 8: CI/CD Pipeline (2-3 ساعت)
+- فاز 9: Monitoring & Error Tracking (1-2 ساعت)
+- فاز 10: Server Deployment (3-4 ساعت)
 
 ---
 
 **آخرین به‌روزرسانی:** 1404/10/17
-**نسخه:** 1.1
+**نسخه:** 1.2
+
+---
+
+## 📚 فایل‌های مستندات اضافی:
+
+- `NGINX_PRODUCTION_NOTES.md` - نکات مهم برای production deployment
+- `TODAY_PROGRESS.md` - خلاصه پیشرفت امروز
 

@@ -36,7 +36,7 @@ export default function AdminLoginPage() {
     try {
       await login(englishMobile);
       toast.success("کد تایید ارسال شد");
-      router.push(`/admin/verify?mobile=${englishMobile}`);
+      router.push(`/adminpanel/verify?mobile=${englishMobile}`);
     } catch (error: any) {
       // بررسی نوع خطا
       if (error.response?.status === 400) {

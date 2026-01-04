@@ -196,13 +196,18 @@ KAVENEGAR_API_KEY = env.str('KAVENEGAR_API_KEY')
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
-# CORS Settings
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3001",
-]
+# CORS Settings - در production از env خوانده می‌شود
+CORS_ALLOWED_ORIGINS_STR = env.str('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://127.0.0.1:3000')
+if CORS_ALLOWED_ORIGINS_STR:
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS_STR.split(',') if origin.strip()]
+else:
+    # Default برای development
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ]
 
 CORS_ALLOW_CREDENTIALS = True
 

@@ -18,28 +18,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { logout } = useAuth();
 
   // صفحات لاگین و verify را از layout مستثنی می‌کنیم
-  const isLoginPage = pathname === "/admin/login" || pathname === "/admin/verify";
+  const isLoginPage = pathname === "/adminpanel/login" || pathname === "/adminpanel/verify";
   
   if (isLoginPage) {
     return <>{children}</>;
   }
 
   const menuItems = [
-    { name: "اتاق فرمان", href: "/admin", icon: LayoutDashboard },
-    { name: "مدیریت کاربران", href: "/admin/users", icon: Users },
-    { name: "تراکنش‌های مالی", href: "/admin/finance", icon: CreditCard },
-    { name: "مانیتورینگ معاملات", href: "/admin/trades", icon: Banknote },
-    { name: "تایید شماره موبایل", href: "/admin/mobile-verification", icon: Phone },
-    { name: "تنظیمات سیستم", href: "/admin/settings", icon: Settings },
+    { name: "اتاق فرمان", href: "/adminpanel", icon: LayoutDashboard },
+    { name: "مدیریت کاربران", href: "/adminpanel/users", icon: Users },
+    { name: "تراکنش‌های مالی", href: "/adminpanel/finance", icon: CreditCard },
+    { name: "مانیتورینگ معاملات", href: "/adminpanel/trades", icon: Banknote },
+    { name: "تایید شماره موبایل", href: "/adminpanel/mobile-verification", icon: Phone },
+    { name: "تنظیمات سیستم", href: "/adminpanel/settings", icon: Settings },
   ];
 
   // آیتم‌های Bottom Navigation (فقط 5 آیتم اصلی)
   const bottomNavItems = [
-    { name: "اتاق فرمان", href: "/admin", icon: LayoutDashboard },
-    { name: "کاربران", href: "/admin/users", icon: Users },
-    { name: "معاملات", href: "/admin/trades", icon: Banknote },
-    { name: "مالی", href: "/admin/finance", icon: CreditCard },
-    { name: "تایید موبایل", href: "/admin/mobile-verification", icon: Phone },
+    { name: "اتاق فرمان", href: "/adminpanel", icon: LayoutDashboard },
+    { name: "کاربران", href: "/adminpanel/users", icon: Users },
+    { name: "معاملات", href: "/adminpanel/trades", icon: Banknote },
+    { name: "مالی", href: "/adminpanel/finance", icon: CreditCard },
+    { name: "تایید موبایل", href: "/adminpanel/mobile-verification", icon: Phone },
   ];
 
   return (

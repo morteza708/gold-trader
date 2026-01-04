@@ -89,7 +89,7 @@ function VerifyForm() {
       }
 
       // مدیران مستقیماً به پنل مدیریت می‌روند (نیازی به تکمیل پروفایل ندارند)
-      router.push('/admin');
+      router.push('/adminpanel');
     } catch (error: any) {
       if (error.response?.status === 400) {
         const errorMessage = error.response?.data?.error || error.response?.data?.otp_code?.[0];
@@ -123,7 +123,7 @@ function VerifyForm() {
             <span>
               کد ۴ رقمی به <span className="font-bold text-white mx-1 dir-ltr">{mobile ? toPersianDigits(mobile) : ""}</span> ارسال شد
             </span>
-            <Link href="/admin/login" className="text-gold-500 hover:text-gold-400 hover:bg-gold-500/10 p-1.5 rounded-lg transition-all" title="ویرایش شماره">
+            <Link href="/adminpanel/login" className="text-gold-500 hover:text-gold-400 hover:bg-gold-500/10 p-1.5 rounded-lg transition-all" title="ویرایش شماره">
               <Edit2 size={16} />
             </Link>
           </div>
@@ -210,7 +210,7 @@ function VerifyForm() {
 
         {/* لینک بازگشت */}
         <div className="mt-6 text-center">
-          <Link href="/admin/login" className="text-sm text-slate-400 hover:text-slate-300 transition-colors">
+          <Link href="/adminpanel/login" className="text-sm text-slate-400 hover:text-slate-300 transition-colors">
             بازگشت به صفحه لاگین
           </Link>
         </div>

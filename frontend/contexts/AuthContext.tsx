@@ -67,18 +67,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
 
-    const isAdminRoute = pathname?.startsWith('/admin');
+    const isAdminRoute = pathname?.startsWith('/adminpanel');
     const isAuthRoute = pathname?.startsWith('/auth');
     const isDashboardRoute = pathname?.startsWith('/dashboard');
 
     if (!user) {
       // اگر کاربر لاگین نیست و در route محافظت شده است
       // اما صفحات login و verify را مستثنی می‌کنیم
-      const isAdminLoginPage = pathname === '/admin/login' || pathname === '/admin/verify';
+      const isAdminLoginPage = pathname === '/adminpanel/login' || pathname === '/adminpanel/verify';
       const isAuthLoginPage = pathname === '/auth/login' || pathname === '/auth/verify';
       
       if (isAdminRoute && !isAdminLoginPage) {
-        router.push('/admin/login');
+        router.push('/adminpanel/login');
       } else if (isDashboardRoute && !isAuthLoginPage) {
         router.push('/auth/login');
       }
@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (isAdmin) {
         // مدیران مستقیماً به پنل مدیریت می‌روند (نیازی به تکمیل پروفایل ندارند)
-        router.push('/admin');
+        router.push('/adminpanel');
       } else {
         // مشتریان: اگر پروفایل کامل است، به داشبورد، وگرنه به صفحه تکمیل پروفایل
         if (user.profile_completed) {
@@ -148,7 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     if (isAdmin) {
       // مدیران مستقیماً به پنل مدیریت می‌روند (نیازی به تکمیل پروفایل ندارند)
-      router.push('/admin');
+      router.push('/adminpanel');
     } else {
       // مشتریان: اگر پروفایل کامل نشده، به صفحه تکمیل پروفایل
       if (!response.profile_completed) {
@@ -205,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     // هدایت به داشبورد مناسب
     if (response.user.role === 'SUPER_ADMIN' || response.user.role === 'SITE_ADMIN') {
-      router.push('/admin');
+      router.push('/adminpanel');
     } else {
       router.push('/dashboard');
     }

@@ -66,7 +66,7 @@ export default function Navbar() {
                 ورود / ثبت‌نام
               </Button>
               <Link 
-                href="/admin/login" 
+                href="/adminpanel/login" 
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 hover:text-gold-600 bg-gray-50 hover:bg-gold-50 rounded-lg border border-gray-200 hover:border-gold-200 transition-colors"
                 title="ورود به پنل مدیریت"
               >
@@ -124,7 +124,7 @@ export default function Navbar() {
                   ورود به حساب کاربری
                </Button>
                <Link 
-                 href="/admin/login"
+                 href="/adminpanel/login"
                  className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gray-50 hover:bg-gold-50 text-gray-700 hover:text-gold-600 rounded-xl border border-gray-200 hover:border-gold-200 transition-colors font-medium text-sm"
                >
                   <ShieldCheck size={18} />
