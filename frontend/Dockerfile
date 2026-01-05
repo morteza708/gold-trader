@@ -35,6 +35,12 @@ RUN npm run build
 # Set production environment
 ENV NODE_ENV=production
 
-# Start Next.js in standalone mode (standalone output includes everything needed)
-CMD ["node", ".next/standalone/server.js"]
+# Copy static files and public files to standalone directory
+# Next.js standalone mode doesn't include static and public files automatically
+RUN cp -r .next/static .next/standalone/.next/static && \
+    cp -r public .next/standalone/public
+
+# Start Next.js in standalone mode
+WORKDIR /app/.next/standalone
+CMD ["node", "server.js"]
 
