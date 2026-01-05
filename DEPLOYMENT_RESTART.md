@@ -45,16 +45,22 @@
 - [x] فایل .env ایجاد شده
 - [x] همه متغیرها تنظیم شده
 
-### مرحله 6: Build Docker
-- [ ] Images build شده‌اند
+### مرحله 6: Build Docker ✅
+- [x] Images build شده‌اند
+- [x] Frontend dependencies نصب شده‌اند
 
-### مرحله 7: Run Services
-- [ ] Services اجرا شده‌اند
-- [ ] Migrations اجرا شده
-- [ ] Superuser ایجاد شده
+### مرحله 7: Run Services ✅
+- [x] Services اجرا شده‌اند
+- [x] Frontend در حال اجرا است
+- [x] Backend در حال اجرا است
+- [x] Database درست است (gold_trading با user postgres)
+- [x] Migrations اجرا شده
+- [x] Superuser ایجاد شده
 
-### مرحله 8: تنظیم Nginx
-- [ ] Nginx با HTTP کار می‌کند
+### مرحله 8: تنظیم Nginx ✅
+- [x] Nginx با HTTPS کار می‌کند
+- [x] SSL Certificate تنظیم شده
+- [x] Frontend در دسترس است (172.18.0.6:3000)
 
 ### مرحله 9: تست
 - [ ] همه چیز کار می‌کند
