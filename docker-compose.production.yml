@@ -82,8 +82,9 @@ services:
       args:
         NEXT_PUBLIC_API_URL: https://irangoldtrader.ir/api
     container_name: gold_trading_frontend
+    # Note: No volume mount for /app in production to preserve standalone build
+    # Only mount node_modules and .next if needed for development
     volumes:
-      - ./frontend:/app
       - /app/node_modules
       - /app/.next
     expose:
