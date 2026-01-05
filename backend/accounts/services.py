@@ -21,21 +21,37 @@ def send_message(phone_number, message, template='otp-login'):
     ارسال پیامک از طریق کاوه نگار
     """
     try:
+        # تبدیل اعداد فارسی به انگلیسی در شماره موبایل
+        phone_number = persian_to_english_numbers(str(phone_number))
+        phone_number = phone_number.replace(' ', '').replace('-', '')
+        
+        # بررسی فرمت شماره موبایل
+        if not phone_number.startswith('0'):
+            phone_number = '0' + phone_number
+        
         api = KavenegarAPI(settings.KAVENEGAR_API_KEY)
         params = {
-            'receptor': f'{phone_number}',
+            'receptor': phone_number,
             'template': template,
-            'token': message,
+            'token': str(message),
             'type': 'sms',  # sms vs call
         }
         response = api.verify_lookup(params)
-        print(response)
+        print(f"پیامک OTP با موفقیت ارسال شد به {phone_number} با template {template}: {response}")
         return True
     except APIException as e:
-        print(f"APIException: {e}")
+        print(f"APIException در ارسال پیامک OTP به {phone_number}: {e}")
+        print(f"Template: {template}, Token: {message}")
         return False
     except HTTPException as e:
-        print(f"HTTPException: {e}")
+        print(f"HTTPException در ارسال پیامک OTP به {phone_number}: {e}")
+        print(f"Template: {template}, Token: {message}")
+        return False
+    except Exception as e:
+        print(f"خطای غیرمنتظره در ارسال پیامک OTP به {phone_number}: {e}")
+        print(f"Template: {template}, Token: {message}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
