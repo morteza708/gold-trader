@@ -35,13 +35,6 @@ RUN npm run build
 # Set production environment
 ENV NODE_ENV=production
 
-# Copy standalone files to a clean location for running
-WORKDIR /app/standalone
-RUN cp -r /app/.next/standalone/* . && \
-    cp -r /app/.next/static .next/static && \
-    cp -r /app/public .next/standalone/public || true
-
-# Start Next.js in standalone mode
-WORKDIR /app
+# Start Next.js in standalone mode (standalone output includes everything needed)
 CMD ["node", ".next/standalone/server.js"]
 
