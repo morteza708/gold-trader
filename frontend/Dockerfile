@@ -24,7 +24,12 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Start Next.js in development mode
-# برای production، می‌توانید از multi-stage build استفاده کنید
-CMD ["npm", "run", "dev"]
+# Build and start Next.js in production mode
+RUN npm run build
+
+# Set production environment
+ENV NODE_ENV=production
+
+# Start Next.js in production mode
+CMD ["npm", "start"]
 
