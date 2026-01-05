@@ -21,9 +21,21 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
+    // Debug log برای درخواست‌های OTP
+    if (config.url?.includes('send-otp')) {
+      console.log('[API Client] درخواست ارسال OTP:', {
+        url: config.url,
+        baseURL: config.baseURL,
+        fullURL: `${config.baseURL}${config.url}`,
+        method: config.method,
+        data: config.data,
+      });
+    }
+    
     return config;
   },
   (error: AxiosError) => {
+    console.error('[API Client] خطا در request interceptor:', error);
     return Promise.reject(error);
   }
 );
@@ -31,9 +43,25 @@ apiClient.interceptors.request.use(
 // Response Interceptor - مدیریت خطاها و refresh token
 apiClient.interceptors.response.use(
   (response) => {
+    // Debug log برای پاسخ‌های OTP
+    if (response.config.url?.includes('send-otp')) {
+      console.log('[API Client] پاسخ ارسال OTP:', {
+        status: response.status,
+        data: response.data,
+      });
+    }
     return response;
   },
   async (error: AxiosError) => {
+    // Debug log برای خطاهای OTP
+    if (error.config?.url?.includes('send-otp')) {
+      console.error('[API Client] خطا در ارسال OTP:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+        config: error.config,
+      });
+    }
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
     // اگر خطای 401 بود و قبلا retry نکرده‌ایم
