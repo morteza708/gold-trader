@@ -3,6 +3,9 @@ from django.conf import settings
 from random import randint
 from django.utils import timezone
 from .models import CustomUser, CustomerProfile
+import logging
+
+logger = logging.getLogger('accounts')
 
 
 def persian_to_english_numbers(text):
@@ -20,7 +23,7 @@ def send_message(phone_number, message, template='otp-login'):
     """
     ارسال پیامک از طریق کاوه نگار
     """
-    print(f"[DEBUG send_message] شروع ارسال پیامک - phone: {phone_number}, message: {message}, template: {template}")
+    logger.info(f"[SMS] شروع ارسال پیامک - phone: {phone_number}, message: {message}, template: {template}")
     original_phone = str(phone_number)  # برای استفاده در exception handling
     try:
         # تبدیل اعداد فارسی به انگلیسی در شماره موبایل و اطمینان از string بودن
@@ -36,6 +39,8 @@ def send_message(phone_number, message, template='otp-login'):
         phone_number = str(phone_number)
         message = str(message)
         
+        logger.info(f"[SMS] شماره موبایل فرمت شده: {phone_number}, کد: {message}")
+        
         api = KavenegarAPI(settings.KAVENEGAR_API_KEY)
         params = {
             'receptor': str(phone_number),  # حتماً string
@@ -43,26 +48,21 @@ def send_message(phone_number, message, template='otp-login'):
             'token': str(message),
             'type': 'sms',  # sms vs call
         }
+        logger.info(f"[SMS] در حال ارسال به Kavenegar - params: {params}")
         response = api.verify_lookup(params)
-        print(f"پیامک OTP با موفقیت ارسال شد به {phone_number} با template {template}: {response}")
+        logger.info(f"[SMS] پیامک با موفقیت ارسال شد به {phone_number} - response: {response}")
         return True
     except APIException as e:
-        print(f"APIException در ارسال پیامک OTP به {original_phone}: {e}")
-        print(f"Template: {template}, Token: {message}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"[SMS] APIException در ارسال پیامک OTP به {original_phone}: {e}", exc_info=True)
+        logger.error(f"[SMS] Template: {template}, Token: {message}")
         return False
     except HTTPException as e:
-        print(f"HTTPException در ارسال پیامک OTP به {original_phone}: {e}")
-        print(f"Template: {template}, Token: {message}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"[SMS] HTTPException در ارسال پیامک OTP به {original_phone}: {e}", exc_info=True)
+        logger.error(f"[SMS] Template: {template}, Token: {message}")
         return False
     except Exception as e:
-        print(f"خطای غیرمنتظره در ارسال پیامک OTP به {original_phone}: {e}")
-        print(f"Template: {template}, Token: {message}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"[SMS] خطای غیرمنتظره در ارسال پیامک OTP به {original_phone}: {e}", exc_info=True)
+        logger.error(f"[SMS] Template: {template}, Token: {message}")
         return False
 
 
