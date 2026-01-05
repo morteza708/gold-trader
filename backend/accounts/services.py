@@ -20,6 +20,7 @@ def send_message(phone_number, message, template='otp-login'):
     """
     ارسال پیامک از طریق کاوه نگار
     """
+    print(f"[DEBUG send_message] شروع ارسال پیامک - phone: {phone_number}, message: {message}, template: {template}")
     original_phone = str(phone_number)  # برای استفاده در exception handling
     try:
         # تبدیل اعداد فارسی به انگلیسی در شماره موبایل و اطمینان از string بودن

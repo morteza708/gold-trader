@@ -56,7 +56,14 @@ class SendOTPSerializer(serializers.Serializer):
         user.save()
         
         # ارسال پیامک
-        send_message(phone_number, otp_code)
+        print(f"[DEBUG] در حال ارسال OTP به شماره: {phone_number}, کد: {otp_code}")
+        try:
+            result = send_message(phone_number, otp_code)
+            print(f"[DEBUG] نتیجه ارسال پیامک: {result}")
+        except Exception as e:
+            print(f"[DEBUG] خطا در فراخوانی send_message: {e}")
+            import traceback
+            traceback.print_exc()
         
         return {'message': 'کد OTP با موفقیت ارسال شد'}
 
