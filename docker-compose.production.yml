@@ -79,6 +79,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://irangoldtrader.ir/api
     container_name: gold_trading_frontend
     volumes:
       - ./frontend:/app

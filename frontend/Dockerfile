@@ -24,6 +24,11 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+# Set NEXT_PUBLIC_API_URL before build (must be set at build time)
+# This will be overridden by docker-compose if needed, but we set a default here
+ARG NEXT_PUBLIC_API_URL=https://irangoldtrader.ir/api
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
 # Build and start Next.js in production mode
 RUN npm run build
 
