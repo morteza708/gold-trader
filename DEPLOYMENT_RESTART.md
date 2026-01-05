@@ -1,17 +1,15 @@
-# 🚀 مراحل Deployment - مرحله به مرحله
+# 🔄 راهنمای Deployment از ابتدا - مرحله به مرحله
 
-این فایل برای ردیابی پیشرفت deployment است.
+این راهنما برای deployment کامل پروژه از ابتدا است.
 
 ---
 
-## 📋 اطلاعات سرور و دامنه
+## 📋 پیش‌نیازها
 
-- **دامنه:** irangoldtrader.ir
-- **سرور:** پارس پک (Linux)
-- **Hostname:** srv3589904203
-- **نوع سیستم عامل:** Ubuntu 24.04.3 LTS (Noble Numbat)
-- **Kernel:** 6.8.0-35-generic
-- **دسترسی:** root
+- ✅ سرور لینوکس از پارس پک
+- ✅ دامنه `irangoldtrader.ir` خریداری شده
+- ✅ دسترسی SSH به سرور
+- ✅ Repository در GitHub
 
 ---
 
@@ -21,13 +19,15 @@
 - [x] اتصال SSH برقرار شده
 - [x] دسترسی root تایید شده
 - [x] سیستم عامل: Ubuntu 24.04.3 LTS مشخص شده
+- [x] IP سرور: 217.114.40.119
 
 ### مرحله 2: به‌روزرسانی سیستم ✅
 - [x] `apt update` اجرا شده
 - [x] `apt upgrade` اجرا شده
-- [x] Docker 29.1.3 نصب شده
-- [x] Docker Compose v5.0.1 نصب شده
+- [x] Docker 28.2.2 نصب شده
+- [x] Docker Compose 1.29.2 نصب شده
 - [x] Docker Service فعال و در حال اجرا
+- [x] Registry Mirrors تنظیم شده
 
 ### مرحله 3: تنظیم Firewall ✅
 - [x] UFW 0.36.2 نصب شده
@@ -36,33 +36,27 @@
 - [x] پورت 443 (HTTPS) باز شده
 - [x] Firewall فعال شده و در startup فعال است
 
-### مرحله 4: تنظیم DNS
-- [ ] A Record تنظیم شده
-- [ ] CNAME (اختیاری) تنظیم شده
-- [ ] DNS propagation بررسی شده
-
-### مرحله 5: آپلود پروژه ✅
+### مرحله 4: Clone پروژه ✅
+- [x] SSH key تنظیم شده
 - [x] Repository از GitHub clone شده
 - [x] همه فایل‌ها در `/var/www/gold-trading` قرار دارند
-- [x] SSH key برای GitHub تنظیم شده
 
-### مرحله 6: تنظیم .env ✅
+### مرحله 5: تنظیم .env ✅
 - [x] فایل .env ایجاد شده
 - [x] همه متغیرها تنظیم شده
 
-### مرحله 7: تنظیم SSL
-- [ ] Certbot نصب شده
-- [ ] Certificate دریافت شده
+### مرحله 6: Build Docker
+- [ ] Images build شده‌اند
 
-### مرحله 8: Build و Run ✅
-- [x] Images build شده‌اند
+### مرحله 7: Run Services
 - [ ] Services اجرا شده‌اند
-
-### مرحله 9: Database
 - [ ] Migrations اجرا شده
 - [ ] Superuser ایجاد شده
 
-### مرحله 10: تست
+### مرحله 8: تنظیم Nginx
+- [ ] Nginx با HTTP کار می‌کند
+
+### مرحله 9: تست
 - [ ] همه چیز کار می‌کند
 
 ---

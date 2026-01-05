@@ -11,9 +11,9 @@ COPY package*.json ./
 COPY scripts/ ./scripts/
 
 # Install dependencies (با استفاده از npm registry ایرانی)
-RUN npm config set registry https://registry.npm.ir && \
-    npm ci --timeout=600000 --maxsockets=1 || \
-    (npm config set registry https://registry.npmjs.org && npm ci --timeout=600000 --maxsockets=1)
+RUN npm config set registry https://mirror-npm.runflare.com && \
+    npm install --legacy-peer-deps --timeout=600000 --maxsockets=1 || \
+    (npm config set registry https://registry.npmjs.org && npm install --legacy-peer-deps --timeout=600000 --maxsockets=1)
 
 # Copy project files
 COPY . .
