@@ -8,8 +8,8 @@ const STATIC_ASSETS = [
   '/',
   '/dashboard',
   '/manifest.json',
-  '/icons/web-app-manifest-192x192.png',
-  '/icons/web-app-manifest-512x512.png',
+  '/icons/android/android-launchericon-192-192.png',
+  '/icons/android/android-launchericon-512-512.png',
 ];
 
 // Install event - Cache static assets
@@ -156,8 +156,8 @@ self.addEventListener('push', (event) => {
   let     notificationData = {
       title: 'گلد تریدر',
       body: 'شما یک اعلان جدید دارید',
-      icon: '/icons/web-app-manifest-192x192.png',
-      badge: '/icons/web-app-manifest-192x192.png',
+      icon: '/icons/android/android-launchericon-192-192.png',
+      badge: '/icons/android/android-launchericon-192-192.png',
       tag: 'notification',
       requireInteraction: false,
       data: {},

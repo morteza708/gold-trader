@@ -6,8 +6,7 @@ export default function ServiceWorkerRegistration() {
   useEffect(() => {
     if (
       typeof window !== "undefined" &&
-      "serviceWorker" in navigator &&
-      window.workbox !== undefined
+      "serviceWorker" in navigator
     ) {
       // Service Worker registration will be handled by Next.js PWA plugin if installed
       // For now, we'll register manually
