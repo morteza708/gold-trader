@@ -44,24 +44,30 @@ class SendOTPSerializer(serializers.Serializer):
         return attrs
     
     def create(self, validated_data):
+        print(f"[DEBUG SendOTPSerializer.create] شروع - validated_data: {validated_data}")
         phone_number = validated_data['phone_number']
+        print(f"[DEBUG SendOTPSerializer.create] phone_number: {phone_number}")
+        
         user = CustomUser.objects.get(phone_number=phone_number)
+        print(f"[DEBUG SendOTPSerializer.create] کاربر پیدا شد: {user.phone_number}")
         
         # تولید کد OTP
         otp_code = str(get_random_otp())
+        print(f"[DEBUG SendOTPSerializer.create] کد OTP تولید شد: {otp_code}")
         
         # ذخیره کد OTP در دیتابیس
         user.otp_code = otp_code
         user.otp_code_created = timezone.now()
         user.save()
+        print(f"[DEBUG SendOTPSerializer.create] کد OTP در دیتابیس ذخیره شد")
         
         # ارسال پیامک
-        print(f"[DEBUG] در حال ارسال OTP به شماره: {phone_number}, کد: {otp_code}")
+        print(f"[DEBUG SendOTPSerializer.create] در حال فراخوانی send_message...")
         try:
             result = send_message(phone_number, otp_code)
-            print(f"[DEBUG] نتیجه ارسال پیامک: {result}")
+            print(f"[DEBUG SendOTPSerializer.create] نتیجه ارسال پیامک: {result}")
         except Exception as e:
-            print(f"[DEBUG] خطا در فراخوانی send_message: {e}")
+            print(f"[DEBUG SendOTPSerializer.create] خطا در فراخوانی send_message: {e}")
             import traceback
             traceback.print_exc()
         

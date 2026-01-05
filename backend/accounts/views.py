@@ -39,13 +39,22 @@ def send_otp(request):
     ارسال کد OTP به شماره موبایل
     Rate Limit: 5 requests per minute per IP
     """
+    print(f"[DEBUG send_otp] درخواست دریافت شد - data: {request.data}")
     serializer = SendOTPSerializer(data=request.data)
     if serializer.is_valid():
-        serializer.create(serializer.validated_data)
+        print(f"[DEBUG send_otp] Serializer معتبر است - validated_data: {serializer.validated_data}")
+        try:
+            result = serializer.create(serializer.validated_data)
+            print(f"[DEBUG send_otp] create() اجرا شد - result: {result}")
+        except Exception as e:
+            print(f"[DEBUG send_otp] خطا در create(): {e}")
+            import traceback
+            traceback.print_exc()
         return Response(
             {'message': 'کد OTP با موفقیت ارسال شد'},
             status=status.HTTP_200_OK
         )
+    print(f"[DEBUG send_otp] Serializer نامعتبر - errors: {serializer.errors}")
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
