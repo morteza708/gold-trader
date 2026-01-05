@@ -322,7 +322,8 @@ CELERY_BEAT_SCHEDULE = {
 # Security Settings (فقط برای production)
 if not DEBUG:
     # HTTPS Settings
-    SECURE_SSL_REDIRECT = True
+    # SECURE_SSL_REDIRECT = True  # غیرفعال شده چون nginx خودش SSL را handle می‌کند
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # برای تشخیص HTTPS از nginx
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     
