@@ -256,6 +256,19 @@ export const adminAPI = {
     });
     return response.data;
   },
+
+  // دریافت آمار dashboard
+  getDashboardStats: async (): Promise<{
+    total_users: number;
+    new_users_today: number;
+    trades_today_count: number;
+    trades_today_volume: number;
+    revenue_today: number;
+    pending_requests: number;
+  }> => {
+    const response = await apiClient.get('/admin/dashboard/stats/');
+    return response.data;
+  },
 };
 
 // ==================== Wallet API Types ====================

@@ -3,13 +3,14 @@
 import { useState, useEffect } from "react";
 import { 
   Power, Users, Activity, Lock, TrendingUp, Loader2, AlertCircle,
-  X, AlertTriangle, CheckCircle2
+  X, AlertTriangle, CheckCircle2, UserPlus, DollarSign
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import LiveClock from "@/components/dashboard/LiveClock";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
 import { adminTradesAPI } from "@/lib/api/trades";
+import { adminAPI } from "@/lib/api/auth";
 import { useGoldPrice } from "@/hooks/useGoldPrice";
 import { useTradesStatus } from "@/hooks/useTradesStatus";
 
@@ -19,10 +20,42 @@ export default function AdminDashboard() {
   const [isToggling, setIsToggling] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<boolean | null>(null);
+  
+  // آمار dashboard
+  const [stats, setStats] = useState({
+    total_users: 0,
+    new_users_today: 0,
+    trades_today_count: 0,
+    trades_today_volume: 0,
+    revenue_today: 0,
+    pending_requests: 0,
+  });
+  const [statsLoading, setStatsLoading] = useState(true);
 
   // تنظیم title صفحه
   useEffect(() => {
     document.title = "اتاق فرمان | پنل مدیریت";
+  }, []);
+
+  // دریافت آمار dashboard
+  const fetchDashboardStats = async () => {
+    try {
+      setStatsLoading(true);
+      const data = await adminAPI.getDashboardStats();
+      setStats(data);
+    } catch (error: any) {
+      console.error("خطا در دریافت آمار dashboard:", error);
+      // در صورت خطا، آمار قبلی حفظ می‌شود
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  // بارگذاری اولیه و auto-refresh هر 30 ثانیه
+  useEffect(() => {
+    fetchDashboardStats();
+    const interval = setInterval(fetchDashboardStats, 30000); // هر 30 ثانیه
+    return () => clearInterval(interval);
   }, []);
 
   const handleToggleClick = () => {
@@ -180,19 +213,55 @@ export default function AdminDashboard() {
       </div>
 
       {/* آمار زنده */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
          {[
-            { title: "کاربران کل", value: "1,240", icon: Users, color: "text-blue-400" },
-            { title: "معاملات امروز", value: "2.5 KG", icon: TrendingUp, color: "text-green-400" },
-            { title: "سود خالص", value: "150 M", icon: Activity, color: "text-gold-400" },
-            { title: "منتظر تایید", value: "8", icon: Lock, color: "text-orange-400" },
+            { 
+               title: "کاربران کل", 
+               value: statsLoading ? "..." : toPersianDigits(stats.total_users.toLocaleString()), 
+               icon: Users, 
+               color: "text-blue-400" 
+            },
+            { 
+               title: "کاربران جدید امروز", 
+               value: statsLoading ? "..." : toPersianDigits(stats.new_users_today.toString()), 
+               icon: UserPlus, 
+               color: "text-purple-400" 
+            },
+            { 
+               title: "معاملات امروز", 
+               value: statsLoading ? "..." : toPersianDigits(stats.trades_today_count.toString()), 
+               icon: TrendingUp, 
+               color: "text-green-400" 
+            },
+            { 
+               title: "حجم معاملات امروز", 
+               value: statsLoading ? "..." : `${toPersianDigits(stats.trades_today_volume.toFixed(2))} گرم`, 
+               icon: Activity, 
+               color: "text-gold-400" 
+            },
+            { 
+               title: "درآمد امروز", 
+               value: statsLoading ? "..." : `${toPersianDigits(stats.revenue_today.toLocaleString())} ریال`, 
+               icon: DollarSign, 
+               color: "text-emerald-400" 
+            },
+            { 
+               title: "منتظر تایید", 
+               value: statsLoading ? "..." : toPersianDigits(stats.pending_requests.toString()), 
+               icon: Lock, 
+               color: "text-orange-400" 
+            },
          ].map((stat, idx) => (
             <div key={idx} className="bg-slate-800 p-5 rounded-2xl border border-slate-700">
                <div className="flex justify-between items-start mb-2">
                   <span className="text-xs text-slate-400 font-bold">{stat.title}</span>
-                  <stat.icon size={18} className={stat.color} />
+                  {statsLoading ? (
+                     <Loader2 size={18} className="text-slate-500 animate-spin" />
+                  ) : (
+                     <stat.icon size={18} className={stat.color} />
+                  )}
                </div>
-               <h4 className="text-2xl font-black text-white">{toPersianDigits(stat.value)}</h4>
+               <h4 className="text-2xl font-black text-white">{stat.value}</h4>
             </div>
          ))}
       </div>
@@ -200,7 +269,7 @@ export default function AdminDashboard() {
       {/* مودال تایید تغییر وضعیت معاملات */}
       <AnimatePresence>
         {showConfirmModal && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             {/* Overlay */}
             <motion.div
               initial={{ opacity: 0 }}

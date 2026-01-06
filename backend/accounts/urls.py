@@ -19,5 +19,8 @@ urlpatterns = [
     path('admin/register-phone/', views.admin_register_phone, name='admin-register-phone'),
     path('admin/verify-phone/', views.admin_verify_phone, name='admin-verify-phone'),
     path('admin/register-or-verify-phone/', views.admin_register_or_verify_phone, name='admin-register-or-verify-phone'),
+    
+    # Admin - Dashboard Stats
+    path('admin/dashboard/stats/', views.admin_dashboard_stats, name='admin-dashboard-stats'),
 ]
 

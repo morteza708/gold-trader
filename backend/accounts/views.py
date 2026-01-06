@@ -24,8 +24,10 @@ from .services import send_message, persian_to_english_numbers, send_double_toke
 from django.db.models import Q, Count, Sum
 from jalali_date import datetime2jalali
 import re
-from wallet.models import Wallet
+from wallet.models import Wallet, DepositRequest, WithdrawalRequest
 from trades.models import Trade
+from django.utils import timezone
+from datetime import timedelta
 
 User = get_user_model()
 logger = logging.getLogger('accounts')
@@ -592,6 +594,80 @@ def admin_user_toggle_status(request, user_id):
         import traceback
         print(f"خطا در admin_user_toggle_status: {e}")
         print(traceback.format_exc())
+        return Response(
+            {'error': f'خطای سرور: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_dashboard_stats(request):
+    """
+    دریافت آمار کلی برای dashboard مدیریت
+    فقط برای SITE_ADMIN و SUPER_ADMIN
+    """
+    try:
+        # بررسی دسترسی
+        if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
+            return Response(
+                {'error': 'شما دسترسی به این بخش ندارید'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # تاریخ امروز (شروع و پایان)
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+        
+        # 1. کاربران کل
+        total_users = CustomUser.objects.count()
+        
+        # 2. کاربران جدید امروز
+        new_users_today = CustomUser.objects.filter(
+            date_joined__gte=today_start,
+            date_joined__lt=today_end
+        ).count()
+        
+        # 3. معاملات امروز (تعداد - فقط موفق)
+        trades_today_count = Trade.objects.filter(
+            created_at__gte=today_start,
+            created_at__lt=today_end,
+            status='SUCCESS'
+        ).count()
+        
+        # 4. حجم معاملات امروز (گرم - فقط موفق)
+        trades_today_volume = Trade.objects.filter(
+            created_at__gte=today_start,
+            created_at__lt=today_end,
+            status='SUCCESS'
+        ).aggregate(total_volume=Sum('amount'))
+        total_volume_grams = float(trades_today_volume['total_volume'] or 0.0)
+        
+        # 5. درآمد امروز (کارمزد - فقط موفق)
+        revenue_today = Trade.objects.filter(
+            created_at__gte=today_start,
+            created_at__lt=today_end,
+            status='SUCCESS'
+        ).aggregate(total_fee=Sum('fee'))
+        total_revenue = int(revenue_today['total_fee'] or 0)
+        
+        # 6. منتظر تایید (واریز + برداشت)
+        pending_deposits = DepositRequest.objects.filter(status='PENDING').count()
+        pending_withdrawals = WithdrawalRequest.objects.filter(status='PENDING').count()
+        pending_requests = pending_deposits + pending_withdrawals
+        
+        return Response({
+            'total_users': total_users,
+            'new_users_today': new_users_today,
+            'trades_today_count': trades_today_count,
+            'trades_today_volume': total_volume_grams,
+            'revenue_today': total_revenue,
+            'pending_requests': pending_requests,
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        import traceback
+        logger.error(f"خطا در admin_dashboard_stats: {e}", exc_info=True)
         return Response(
             {'error': f'خطای سرور: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
