@@ -1,5 +1,7 @@
 "use client";
 
+import { pageTitle } from "@/lib/brand";
+
 import { useState, useEffect } from "react";
 import { 
   ArrowUpRight, ArrowDownRight, Filter, Search, 
@@ -26,7 +28,7 @@ export default function HistoryPage() {
 
   // تنظیم title صفحه
   useEffect(() => {
-    document.title = "تاریخچه معاملات | پلتفرم معاملات طلا";
+    document.title = pageTitle("تاریخچه معاملات");
   }, []);
   const [isLoading, setIsLoading] = useState(true);
 

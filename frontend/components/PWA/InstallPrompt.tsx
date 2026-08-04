@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Download, X, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
+import { brand } from "@/lib/brand";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -264,15 +265,15 @@ export default function InstallPrompt() {
                     <p className="text-sm text-gray-600 leading-relaxed">
                       {isSafari || isIOS ? (
                         <>
-                          برای نصب اپلیکیشن <span className="font-bold text-gold-600">گلد تریدر</span> در Safari/iOS، از دکمه Share (اشتراک‌گذاری) و سپس "Add to Home Screen" استفاده کنید.
+                          برای نصب اپلیکیشن <span className="font-bold text-gold-600">{brand.name}</span> در Safari/iOS، از دکمه Share (اشتراک‌گذاری) و سپس "Add to Home Screen" استفاده کنید.
                         </>
                       ) : isFirefox ? (
                         <>
-                          برای نصب اپلیکیشن <span className="font-bold text-gold-600">گلد تریدر</span> در Firefox، از منوی مرورگر (☰) گزینه "نصب" را انتخاب کنید.
+                          برای نصب اپلیکیشن <span className="font-bold text-gold-600">{brand.name}</span> در Firefox، از منوی مرورگر (☰) گزینه "نصب" را انتخاب کنید.
                         </>
                       ) : (
                         <>
-                          برای دسترسی سریع‌تر و تجربه بهتر، اپلیکیشن <span className="font-bold text-gold-600">گلد تریدر</span> را نصب کنید
+                          برای دسترسی سریع‌تر و تجربه بهتر، اپلیکیشن <span className="font-bold text-gold-600">{brand.name}</span> را نصب کنید
                         </>
                       )}
                     </p>

@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/fix-nextjs-links.js && next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "node scripts/fix-nextjs-links.js"
+    "postinstall": "node -e \"const fs=require('fs'); if (fs.existsSync('scripts/fix-nextjs-links.js')) { require('child_process').execSync('node scripts/fix-nextjs-links.js', {stdio:'inherit'}); } else { console.log('skip postinstall: scripts/ not present yet'); }\""
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",

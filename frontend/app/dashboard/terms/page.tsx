@@ -2,17 +2,16 @@
 
 import { useEffect } from "react";
 import { ShieldCheck, Scale, AlertTriangle, FileText } from "lucide-react";
+import { brand, pageTitle } from "@/lib/brand";
 
 export default function TermsPage() {
-  // تنظیم title صفحه
   useEffect(() => {
-    document.title = "قوانین و مقررات | پلتفرم معاملات طلا";
+    document.title = pageTitle("قوانین و مقررات");
   }, []);
 
   return (
     <div className="max-w-4xl mx-auto pb-20 md:pb-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* هدر صفحه */}
       <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm mb-8 text-center relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-gold-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
         <div className="relative z-10">
@@ -21,7 +20,7 @@ export default function TermsPage() {
            </div>
            <h1 className="text-2xl font-black text-gray-800 mb-2">قوانین و مقررات استفاده</h1>
            <p className="text-gray-500 text-sm max-w-lg mx-auto">
-             لطفاً جهت استفاده از خدمات گلد تریدر، قوانین زیر را به دقت مطالعه فرمایید. ثبت‌نام شما به منزله پذیرش تمامی این قوانین است.
+             لطفاً جهت استفاده از خدمات {brand.name}، قوانین زیر را به دقت مطالعه فرمایید. ثبت‌نام شما به منزله پذیرش تمامی این قوانین است.
            </p>
            <p className="text-xs text-gray-400 mt-4 font-bold">آخرین بروزرسانی: ۲۰ آذر ۱۴۰۳</p>
         </div>
@@ -64,7 +63,7 @@ export default function TermsPage() {
            </h3>
            <div className="space-y-3 text-sm text-gray-600 leading-7 text-justify">
               <p>۳-۱. بازار طلا دارای نوسانات ذاتی است. کاربر با آگاهی کامل از ریسک کاهش یا افزایش قیمت اقدام به معامله می‌کند.</p>
-              <p>۳-۲. در صورت بروز اختلال در شبکه بانکی یا اینترنت کشور، گلد تریدر مسئولیتی در قبال تاخیر در تراکنش‌ها ندارد، هرچند تمام تلاش خود را برای پیگیری انجام می‌دهد.</p>
+              <p>۳-۲. در صورت بروز اختلال در شبکه بانکی یا اینترنت کشور، {brand.name} مسئولیتی در قبال تاخیر در تراکنش‌ها ندارد، هرچند تمام تلاش خود را برای پیگیری انجام می‌دهد.</p>
            </div>
         </div>
 

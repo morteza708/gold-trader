@@ -154,7 +154,7 @@ self.addEventListener('push', (event) => {
   console.log('[Service Worker] Push notification received');
   
   let     notificationData = {
-      title: 'گلد تریدر',
+      title: 'اپال‌باکس',
       body: 'شما یک اعلان جدید دارید',
       icon: '/icons/android/android-launchericon-192-192.png',
       badge: '/icons/android/android-launchericon-192-192.png',

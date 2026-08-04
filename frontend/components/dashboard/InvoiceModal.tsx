@@ -4,6 +4,8 @@ import { X, Download } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
 import { Trade, tradesAPI, adminTradesAPI } from "@/lib/api/trades";
+import { brand } from "@/lib/brand";
+import BrandLogo from "@/components/brand/BrandLogo";
 import toast from "react-hot-toast";
 
 interface InvoiceModalProps {
@@ -106,10 +108,10 @@ export default function InvoiceModal({ data, isOpen, onClose, isAdmin = false }:
             {/* هدر فاکتور */}
             <div className="flex justify-between items-start border-b-2 border-gray-800 pb-4 mb-6">
                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-gold-500 text-white flex items-center justify-center rounded-lg font-black text-2xl print:bg-gold-500 print:print-color-adjust-exact">G</div>
+                  <BrandLogo variant="mark" size={48} showName={false} />
                   <div>
-                     <h1 className="font-black text-xl text-gray-900">گلد تریدر</h1>
-                     <p className="text-xs text-gray-500 mt-1">سامانه هوشمند معاملات طلا</p>
+                     <h1 className="font-black text-xl text-gray-900">{brand.name}</h1>
+                     <p className="text-xs text-gray-500 mt-1">{brand.tagline}</p>
                   </div>
                </div>
                <div className="text-left text-sm space-y-1">
@@ -123,7 +125,7 @@ export default function InvoiceModal({ data, isOpen, onClose, isAdmin = false }:
             <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
                <div className="border border-gray-200 rounded-xl p-3">
                   <p className="font-bold text-gray-400 text-xs mb-2">{isBuy ? 'فروشنده:' : 'خریدار:'}</p>
-                  <p className="font-bold">شرکت گلد تریدر</p>
+                  <p className="font-bold">{brand.companyName}</p>
                   <p className="text-xs mt-1">شناسه ملی: ۱۰۱۰۱۲۳۴۵۶۷</p>
                </div>
                <div className="border border-gray-200 rounded-xl p-3">

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Bell, BellOff } from "lucide-react";
 import toast from "react-hot-toast";
+import { brand } from "@/lib/brand";
 
 export default function NotificationPermission() {
   const [permission, setPermission] = useState<NotificationPermission | null>(null);
@@ -31,10 +32,10 @@ export default function NotificationPermission() {
         // نمایش یک اعلان تست
         if ("serviceWorker" in navigator) {
           navigator.serviceWorker.ready.then((registration) => {
-            registration.showNotification("گلد تریدر", {
+            registration.showNotification(brand.name, {
               body: "اعلان‌ها با موفقیت فعال شد",
-              icon: "/icons/web-app-manifest-192x192.png",
-              badge: "/icons/web-app-manifest-192x192.png",
+              icon: "/web-app-manifest-192x192.png",
+              badge: "/web-app-manifest-192x192.png",
               tag: "notification-permission",
             });
           });

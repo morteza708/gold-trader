@@ -1,5 +1,7 @@
 "use client";
 
+import { pageTitle } from "@/lib/brand";
+
 import { useState, useEffect } from "react";
 import { 
   TrendingUp, TrendingDown, Clock, X, 
@@ -26,7 +28,7 @@ export default function TradePage() {
 
   // تنظیم title صفحه
   useEffect(() => {
-    document.title = "معامله هوشمند | پلتفرم معاملات طلا";
+    document.title = pageTitle("معامله هوشمند");
   }, []);
   
   // فرم ایجاد سفارش

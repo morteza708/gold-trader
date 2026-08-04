@@ -2,25 +2,26 @@
 
 import { useEffect } from "react";
 import { MapPin, Phone, Mail, Award, Users, Building } from "lucide-react";
+import { brand, pageTitle } from "@/lib/brand";
+import BrandLogo from "@/components/brand/BrandLogo";
 
 export default function AboutPage() {
-  // تنظیم title صفحه
   useEffect(() => {
-    document.title = "درباره ما | پلتفرم معاملات طلا";
+    document.title = pageTitle("درباره ما");
   }, []);
 
   return (
     <div className="max-w-4xl mx-auto pb-24 md:pb-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* بنر معرفی */}
       <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl p-6 md:p-12 text-center text-white relative overflow-hidden shadow-xl mb-8">
          <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
          <div className="relative z-10">
-            <div className="w-16 h-16 md:w-20 md:h-20 bg-gold-500 rounded-2xl flex items-center justify-center text-2xl md:text-3xl font-black mx-auto mb-4 md:mb-6 shadow-lg shadow-gold-500/30">G</div>
+            <div className="flex justify-center mb-4 md:mb-6">
+              <BrandLogo variant="mark" size={80} showName={false} />
+            </div>
             
-            {/* اصلاح سایز فونت برای موبایل (text-xl) */}
             <h1 className="text-xl sm:text-2xl md:text-4xl font-black mb-4 leading-tight">
-              گلد تریدر؛ سرمایه‌گذاری امن در طلا
+              {brand.name}؛ سرمایه‌گذاری امن در طلا
             </h1>
             
             <p className="text-gray-300 text-sm md:text-base max-w-2xl mx-auto leading-relaxed px-2">
@@ -45,7 +46,7 @@ export default function AboutPage() {
             <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center mb-4"><Users size={20}/></div>
             <h3 className="font-bold text-gray-800 mb-2">تیم متخصص</h3>
             <p className="text-sm text-gray-500 leading-6 text-justify">
-               تیم گلد تریدر متشکل از کارشناسان بازار طلا، توسعه‌دهندگان نرم‌افزار و متخصصان امنیت سایبری است تا تجربه‌ای بی‌نقص را رقم بزنند.
+               تیم {brand.name} متشکل از کارشناسان بازار طلا، توسعه‌دهندگان نرم‌افزار و متخصصان امنیت سایبری است تا تجربه‌ای بی‌نقص را رقم بزنند.
             </p>
          </div>
       </div>

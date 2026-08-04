@@ -1,14 +1,14 @@
-"use client"; // این خط برای استفاده از state اجباری است
+"use client";
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu, X, User, LogIn, ShieldCheck } from "lucide-react"; // ایمپورت آیکون‌ها
+import { Menu, X, User, LogIn, ShieldCheck } from "lucide-react";
 import Button from "../ui/Button";
+import BrandLogo from "@/components/brand/BrandLogo";
 
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // لیست لینک‌های منو
   const navLinks = [
     { name: "خانه", href: "/" },
     { name: "قیمت‌ها", href: "/prices" },
@@ -22,7 +22,6 @@ export default function Navbar() {
       <nav className="w-full py-4 bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-gray-100/50">
         <div className="container-custom flex items-center justify-between h-14">
           
-          {/* --- بخش موبایل (همبرگری - راست) --- */}
           <div className="flex md:hidden flex-1 justify-start">
             <button 
               onClick={() => setIsMobileMenuOpen(true)}
@@ -32,14 +31,9 @@ export default function Navbar() {
             </button>
           </div>
 
-          {/* --- لوگو (مشترک) --- */}
-          {/* در موبایل وسط، در دسکتاپ سمت راست */}
           <div className="flex-1 md:flex-none flex justify-center md:justify-start">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-9 h-9 bg-gold-500 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-gold-500/40">
-                G
-              </div>
-              <span className="text-xl font-black text-gray-800 tracking-tight">گلد تریدر</span>
+            <Link href="/" className="flex items-center">
+              <BrandLogo variant="mark" size={40} showName priority />
             </Link>
           </div>
 

@@ -1,5 +1,7 @@
 "use client";
 
+import { pageTitle } from "@/lib/brand";
+
 import { useState, useEffect } from "react";
 import { 
   ArrowUpRight, ArrowDownRight, TrendingUp, 
@@ -25,7 +27,7 @@ export default function DashboardPage() {
 
   // تنظیم title صفحه
   useEffect(() => {
-    document.title = "داشبورد | پلتفرم معاملات طلا";
+    document.title = pageTitle("داشبورد");
   }, []);
 
   // دریافت موجودی کیف پول

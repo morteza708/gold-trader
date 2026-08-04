@@ -1,5 +1,7 @@
 "use client";
 
+import { pageTitle } from "@/lib/brand";
+
 import { useState, useRef, useEffect } from "react";
 import { 
   User, Shield, Smartphone, CreditCard, Camera, Trash2,
@@ -25,7 +27,7 @@ export default function ProfilePage() {
 
   // تنظیم title صفحه
   useEffect(() => {
-    document.title = "پروفایل | پلتفرم معاملات طلا";
+    document.title = pageTitle("پروفایل");
   }, []);
   
   // استیت‌های فرم

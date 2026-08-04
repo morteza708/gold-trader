@@ -1,5 +1,7 @@
 "use client";
 
+import { pageTitle } from "@/lib/brand";
+
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { 
@@ -33,7 +35,7 @@ function WalletContent() {
 
   // تنظیم title صفحه
   useEffect(() => {
-    document.title = "کیف پول | پلتفرم معاملات طلا";
+    document.title = pageTitle("کیف پول");
   }, []);
   const [amount, setAmount] = useState("");
   const [goldAmount, setGoldAmount] = useState("");
