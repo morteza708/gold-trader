@@ -12,7 +12,10 @@ class GoldPrice(models.Model):
     - تحلیل روند قیمت‌ها
     - گزارش‌گیری
     
-    قیمت نهایی = قیمت پایه + حاشیه سود
+    قیمت نهایی خرید = قیمت پایه خرید + حاشیه خرید
+    قیمت نهایی فروش = قیمت پایه فروش − حاشیه فروش
+    (حاشیه فروش به‌صورت عدد مثبت ذخیره می‌شود و از پایه کم می‌گردد؛
+     همان مقدار به‌عنوان سود خالص مدیر در معاملات لحاظ می‌شود.)
     """
     SOURCE_CHOICES = [
         ('MANUAL', 'دستی'),
@@ -33,20 +36,20 @@ class GoldPrice(models.Model):
         help_text='قیمت پایه فروش هر گرم طلا به ریال'
     )
     
-    # حاشیه سود (ریالی)
+    # حاشیه سود (ریالی — همیشه عدد مثبت یا صفر)
     buy_margin = models.DecimalField(
         max_digits=15,
         decimal_places=0,
         default=0,
         verbose_name='حاشیه سود خرید (ریال)',
-        help_text='حاشیه سود خرید به ریال (اضافه می‌شود به قیمت پایه)'
+        help_text='عدد مثبت یا صفر؛ به قیمت پایه خرید اضافه می‌شود'
     )
     sell_margin = models.DecimalField(
         max_digits=15,
         decimal_places=0,
         default=0,
         verbose_name='حاشیه سود فروش (ریال)',
-        help_text='حاشیه سود فروش به ریال (اضافه می‌شود به قیمت پایه)'
+        help_text='عدد مثبت یا صفر؛ از قیمت پایه فروش کم می‌شود (در گزارش سود همان مقدار مثبت لحاظ می‌شود)'
     )
     
     # قیمت‌های نهایی (محاسبه شده)
@@ -54,13 +57,13 @@ class GoldPrice(models.Model):
         max_digits=15,
         decimal_places=0,
         verbose_name='قیمت نهایی خرید (ریال)',
-        help_text='قیمت نهایی خرید = قیمت پایه + حاشیه سود'
+        help_text='قیمت نهایی خرید = قیمت پایه + حاشیه سود خرید'
     )
     sell_final_price = models.DecimalField(
         max_digits=15,
         decimal_places=0,
         verbose_name='قیمت نهایی فروش (ریال)',
-        help_text='قیمت نهایی فروش = قیمت پایه + حاشیه سود'
+        help_text='قیمت نهایی فروش = قیمت پایه − حاشیه سود فروش'
     )
     
     # وضعیت
@@ -109,7 +112,7 @@ class GoldPrice(models.Model):
     def save(self, *args, **kwargs):
         """محاسبه خودکار قیمت‌های نهایی"""
         self.buy_final_price = self.buy_base_price + self.buy_margin
-        self.sell_final_price = self.sell_base_price + self.sell_margin
+        self.sell_final_price = self.sell_base_price - self.sell_margin
         super().save(*args, **kwargs)
     
     @classmethod

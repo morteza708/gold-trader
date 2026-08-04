@@ -41,7 +41,8 @@ class TradeService:
             trade_type: 'BUY' برای قیمت خرید، 'SELL' برای قیمت فروش
         
         Returns:
-            Decimal: قیمت نهایی (قیمت پایه + حاشیه سود)
+            Decimal: قیمت نهایی نمایش‌داده‌شده به کاربر
+                (خرید: پایه + حاشیه | فروش: پایه − حاشیه)
         """
         price_obj = GoldPrice.get_current_price()
         if not price_obj:

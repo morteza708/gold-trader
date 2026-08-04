@@ -80,7 +80,14 @@ class CreateGoldPriceSerializer(serializers.Serializer):
         if data['buy_base_price'] <= 0 or data['sell_base_price'] <= 0:
             raise serializers.ValidationError("قیمت‌های پایه باید بیشتر از صفر باشند")
         if data['buy_margin'] < 0 or data['sell_margin'] < 0:
-            raise serializers.ValidationError("حاشیه سود نمی‌تواند منفی باشد")
+            raise serializers.ValidationError("حاشیه سود نمی‌تواند منفی باشد؛ عدد مثبت یا صفر وارد کنید")
+        if data['sell_margin'] > data['sell_base_price']:
+            raise serializers.ValidationError(
+                "حاشیه سود فروش نمی‌تواند از قیمت پایه فروش بیشتر باشد"
+            )
+        sell_final = data['sell_base_price'] - data['sell_margin']
+        if sell_final <= 0:
+            raise serializers.ValidationError("قیمت نهایی فروش باید بیشتر از صفر باشد")
         return data
 
 
