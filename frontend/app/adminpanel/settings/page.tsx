@@ -102,7 +102,15 @@ export default function SystemSettingsPage() {
     }
 
     if (priceSettings.buyMargin < 0 || priceSettings.sellMargin < 0) {
-      return toast.error("حاشیه سود نمی‌تواند منفی باشد");
+      return toast.error("حاشیه سود نمی‌تواند منفی باشد؛ عدد مثبت یا صفر وارد کنید");
+    }
+
+    if (priceSettings.sellMargin > priceSettings.sellBasePrice) {
+      return toast.error("حاشیه سود فروش نمی‌تواند از قیمت پایه فروش بیشتر باشد");
+    }
+
+    if (priceSettings.sellBasePrice - priceSettings.sellMargin <= 0) {
+      return toast.error("قیمت نهایی فروش باید بیشتر از صفر باشد");
     }
 
     setIsUpdatingPrice(true);
@@ -429,7 +437,7 @@ export default function SystemSettingsPage() {
                         {toPersianDigits(Number(currentPrice.sell_final_price).toLocaleString())} ریال
                       </p>
                       <p className="text-xs text-slate-500 mt-1">
-                        پایه: {toPersianDigits(Number(currentPrice.sell_base_price).toLocaleString())} + 
+                        پایه: {toPersianDigits(Number(currentPrice.sell_base_price).toLocaleString())} − 
                         حاشیه: {toPersianDigits(Number(currentPrice.sell_margin).toLocaleString())}
                       </p>
                     </div>
@@ -491,7 +499,13 @@ export default function SystemSettingsPage() {
 
               {/* فرم به‌روزرسانی قیمت */}
               <div className="bg-slate-900 p-6 rounded-xl border border-slate-700">
-                <h3 className="text-lg font-bold text-white mb-4">به‌روزرسانی قیمت</h3>
+                <h3 className="text-lg font-bold text-white mb-2">به‌روزرسانی قیمت</h3>
+                <div className="mb-4 p-3 rounded-lg bg-slate-800/80 border border-slate-700 text-xs text-slate-300 leading-6 space-y-1">
+                  <p className="font-bold text-gold-400">نحوه محاسبه حاشیه سود:</p>
+                  <p>• <span className="text-green-400 font-bold">حاشیه خرید:</span> عدد مثبت یا صفر — به قیمت پایه خرید <span className="font-bold">اضافه</span> می‌شود.</p>
+                  <p>• <span className="text-red-400 font-bold">حاشیه فروش:</span> عدد مثبت یا صفر — از قیمت پایه فروش <span className="font-bold">کم</span> می‌شود.</p>
+                  <p>• در گزارش سود خالص معاملات، مقدار حاشیه فروش همچنان به‌صورت عدد مثبت محاسبه و جمع می‌شود.</p>
+                </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -510,7 +524,7 @@ export default function SystemSettingsPage() {
                       className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white font-bold focus:outline-none focus:border-gold-500"
                       placeholder="قیمت پایه خرید"
                     />
-                    <p className="text-xs text-slate-500 mt-1">قیمت پایه خرید هر گرم طلا</p>
+                    <p className="text-xs text-slate-500 mt-1">قیمت پایه خرید هر گرم طلا (معمولاً از API)</p>
                   </div>
 
                   <div>
@@ -529,7 +543,7 @@ export default function SystemSettingsPage() {
                       className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white font-bold focus:outline-none focus:border-gold-500"
                       placeholder="قیمت پایه فروش"
                     />
-                    <p className="text-xs text-slate-500 mt-1">قیمت پایه فروش هر گرم طلا</p>
+                    <p className="text-xs text-slate-500 mt-1">قیمت پایه فروش هر گرم طلا (معمولاً از API)</p>
                   </div>
 
                   <div>
@@ -546,9 +560,11 @@ export default function SystemSettingsPage() {
                         }
                       }}
                       className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white font-bold focus:outline-none focus:border-gold-500"
-                      placeholder="حاشیه سود خرید"
+                      placeholder="مثلاً ۱۰۰۰۰۰"
                     />
-                    <p className="text-xs text-slate-500 mt-1">حاشیه سود که به قیمت پایه خرید اضافه می‌شود</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      فقط عدد مثبت یا صفر. به قیمت پایه خرید <span className="text-green-400">اضافه</span> می‌شود.
+                    </p>
                   </div>
 
                   <div>
@@ -565,9 +581,11 @@ export default function SystemSettingsPage() {
                         }
                       }}
                       className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white font-bold focus:outline-none focus:border-gold-500"
-                      placeholder="حاشیه سود فروش"
+                      placeholder="مثلاً ۱۰۰۰۰۰"
                     />
-                    <p className="text-xs text-slate-500 mt-1">حاشیه سود که به قیمت پایه فروش اضافه می‌شود</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      فقط عدد مثبت یا صفر (منفی وارد نکنید). از قیمت پایه فروش <span className="text-red-400">کم</span> می‌شود؛ همین مقدار در سود خالص مثبت ثبت می‌شود.
+                    </p>
                   </div>
                 </div>
 
@@ -576,15 +594,15 @@ export default function SystemSettingsPage() {
                   <p className="text-sm font-bold text-slate-400 mb-2">قیمت نهایی (محاسبه خودکار)</p>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-xs text-slate-500 mb-1">قیمت نهایی خرید:</p>
+                      <p className="text-xs text-slate-500 mb-1">قیمت نهایی خرید (پایه + حاشیه):</p>
                       <p className="text-lg font-black text-green-400">
                         {toPersianDigits((priceSettings.buyBasePrice + priceSettings.buyMargin).toLocaleString())} ریال
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500 mb-1">قیمت نهایی فروش:</p>
+                      <p className="text-xs text-slate-500 mb-1">قیمت نهایی فروش (پایه − حاشیه):</p>
                       <p className="text-lg font-black text-red-400">
-                        {toPersianDigits((priceSettings.sellBasePrice + priceSettings.sellMargin).toLocaleString())} ریال
+                        {toPersianDigits(Math.max(0, priceSettings.sellBasePrice - priceSettings.sellMargin).toLocaleString())} ریال
                       </p>
                     </div>
                   </div>
