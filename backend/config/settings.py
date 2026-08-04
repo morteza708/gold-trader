@@ -72,6 +72,7 @@ REST_FRAMEWORK = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -147,18 +148,30 @@ USE_I18N = True
 USE_TZ = False
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
-
-STATIC_URL = '/static/'
+# Static / Media
+# Runflare edge nginx intercepts /static/ and /media/ before Django.
+# Override with STATIC_URL=/static/ and MEDIA_URL=/media/ for local Docker+Nginx if needed.
+STATIC_URL = env.str('STATIC_URL', default='/django-static/')
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
 ]
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
+    },
+}
 
-# Media files
-MEDIA_URL = '/media/'
+MEDIA_URL = env.str('MEDIA_URL', default='/django-media/')
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Branding (per-tenant deploy)
+BRAND_NAME = env.str('BRAND_NAME', default='گلد تریدر')
+BRAND_NAME_EN = env.str('BRAND_NAME_EN', default='Gold Trader')
+BRAND_COMPANY_NAME = env.str('BRAND_COMPANY_NAME', default=f'شرکت {BRAND_NAME}')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -210,6 +223,14 @@ else:
     ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+# CSRF trusted origins (required for Django Admin on api subdomain)
+CSRF_TRUSTED_ORIGINS_STR = env.str('CSRF_TRUSTED_ORIGINS', default='')
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in CSRF_TRUSTED_ORIGINS_STR.split(',')
+    if origin.strip()
+]
 
 # JWT Settings
 from datetime import timedelta
@@ -296,8 +317,9 @@ if not os.path.exists(LOGS_DIR):
     os.makedirs(LOGS_DIR)
 
 # Celery Configuration
-CELERY_BROKER_URL = env.str('CELERY_BROKER_URL', default='redis://redis:6379/0')
-CELERY_RESULT_BACKEND = env.str('CELERY_RESULT_BACKEND', default='redis://redis:6379/0')
+_redis_url = env.str('REDIS_URL', default='redis://redis:6379/0')
+CELERY_BROKER_URL = env.str('CELERY_BROKER_URL', default=_redis_url)
+CELERY_RESULT_BACKEND = env.str('CELERY_RESULT_BACKEND', default=_redis_url)
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -320,32 +342,28 @@ CELERY_BEAT_SCHEDULE = {
 }
 
 # Security Settings (فقط برای production)
+# SECURE_SSL_REDIRECT must stay off on Runflare (TLS terminates at edge).
+SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=False)
+
 if not DEBUG:
-    # HTTPS Settings
-    # SECURE_SSL_REDIRECT = True  # غیرفعال شده چون nginx خودش SSL را handle می‌کند
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # برای تشخیص HTTPS از nginx
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    
-    # Security Headers
+
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
-    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    
-    # CSRF Settings
+
     CSRF_COOKIE_HTTPONLY = True
-    CSRF_COOKIE_SAMESITE = 'Strict'
-    
-    # Session Settings
+    CSRF_COOKIE_SAMESITE = 'Lax'
+
     SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = 'Strict'
-    SESSION_COOKIE_AGE = 86400  # 24 hours
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_AGE = 86400
 else:
-    # Development settings
-    SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
-    X_FRAME_OPTIONS = 'SAMEORIGIN'  # برای development (Django Admin)
+    X_FRAME_OPTIONS = 'SAMEORIGIN'

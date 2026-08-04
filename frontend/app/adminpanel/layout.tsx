@@ -11,7 +11,6 @@ import MobileHeader from "@/components/admin/MobileHeader";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
 import NotificationBell from "@/components/dashboard/NotificationBell";
-import { brand } from "@/lib/brand";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -54,7 +53,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       `}>
         <div className="h-16 flex items-center justify-between px-6 border-b border-slate-800">
            <div className="flex items-center gap-2 font-black text-gold-500 text-xl">
-              <ShieldCheck /> {brand.name}
+              <ShieldCheck /> پنل مدیریت
            </div>
            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-400"><X /></button>
         </div>
