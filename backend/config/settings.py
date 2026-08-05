@@ -172,6 +172,9 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 BRAND_NAME = env.str('BRAND_NAME', default='گلد تریدر')
 BRAND_NAME_EN = env.str('BRAND_NAME_EN', default='Gold Trader')
 BRAND_COMPANY_NAME = env.str('BRAND_COMPANY_NAME', default=f'شرکت {BRAND_NAME}')
+# Invoice PDF mark: path relative to backend/static/, or absolute path.
+# File must exist inside the backend service (Runflare has no frontend/ tree).
+BRAND_INVOICE_LOGO = env.str('BRAND_INVOICE_LOGO', default='brand/OpalBox-mark.png')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

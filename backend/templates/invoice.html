@@ -71,6 +71,14 @@
             margin-bottom: 15px;
         }
 
+        .logo-img {
+            height: 36px;
+            width: auto;
+            max-width: 48px;
+            vertical-align: middle;
+            display: inline-block;
+        }
+
         .logo-placeholder {
             font-size: 24px;
             font-weight: 900;
@@ -78,6 +86,7 @@
             padding: 5px 15px;
             display: inline-block;
             border-radius: 5px;
+            vertical-align: middle;
         }
 
         .company-name { font-size: 16px; font-weight: 900; margin-top: 5px;}
@@ -203,7 +212,11 @@
             <table class="header-section">
                 <tr>
                     <td style="width: 60%;">
-                        <div class="logo-placeholder">G</div>
+                        {% if logo_base64 %}
+                        <img class="logo-img" src="data:image/png;base64,{{ logo_base64 }}" alt="{{ brand_name|default:'لوگو' }}" />
+                        {% else %}
+                        <div class="logo-placeholder">{{ brand_initial|default:"G" }}</div>
+                        {% endif %}
                         <div style="display: inline-block; vertical-align: middle; margin-right: 10px;">
                             <div class="company-name">{{ brand_name|default:"گلد تریدر" }}</div>
                             <div class="company-sub">سامانه هوشمند معاملات طلا</div>

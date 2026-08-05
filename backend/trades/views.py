@@ -367,6 +367,29 @@ def download_invoice_pdf(request, trade_id):
             print(f"خطا در خواندن فونت: {font_error}")
             import traceback
             print(traceback.format_exc())
+
+        # لوگوی برند برای PDF (base64) — فقط اگر فایل پیدا شود؛ در غیر این صورت fallback حرف اول
+        logo_base64 = None
+        brand_invoice_logo = getattr(settings, 'BRAND_INVOICE_LOGO', 'brand/OpalBox-mark.png')
+        logo_candidates = []
+        if os.path.isabs(brand_invoice_logo):
+            logo_candidates.append(brand_invoice_logo)
+        else:
+            logo_candidates.append(os.path.join(settings.BASE_DIR, 'static', brand_invoice_logo))
+        # مسیرهای پشتیبان برای توسعه محلی (monorepo)
+        logo_candidates.extend([
+            os.path.join(settings.BASE_DIR, 'static', 'brand', 'OpalBox-mark.png'),
+            os.path.join(settings.BASE_DIR, '..', 'frontend', 'public', 'OpalBox-mark.png'),
+        ])
+        for candidate in logo_candidates:
+            abs_logo = os.path.abspath(candidate)
+            if os.path.isfile(abs_logo):
+                try:
+                    with open(abs_logo, 'rb') as logo_file:
+                        logo_base64 = base64.b64encode(logo_file.read()).decode('utf-8')
+                    break
+                except Exception as logo_error:
+                    print(f"خطا در خواندن لوگو: {logo_error}")
         
         # تابع تبدیل اعداد به فارسی
         def to_persian_digits(text):
@@ -375,6 +398,9 @@ def download_invoice_pdf(request, trade_id):
             for i, digit in enumerate(english_digits):
                 text = str(text).replace(digit, persian_digits[i])
             return text
+
+        brand_name = getattr(settings, 'BRAND_NAME', 'گلد تریدر')
+        brand_initial = (brand_name[:1] if brand_name else 'G')
         
         # آماده‌سازی داده‌ها برای template
         context = {
@@ -383,7 +409,9 @@ def download_invoice_pdf(request, trade_id):
             'time': to_persian_digits(time_str),
             'seller_label': 'فروشنده' if is_buy else 'خریدار',
             'seller_name': getattr(settings, 'BRAND_COMPANY_NAME', 'شرکت گلد تریدر'),
-            'brand_name': getattr(settings, 'BRAND_NAME', 'گلد تریدر'),
+            'brand_name': brand_name,
+            'brand_initial': brand_initial,
+            'logo_base64': logo_base64 or '',
             'seller_national_id': '۱۰۱۰۱۲۳۴۵۶۷',
             'buyer_label': 'خریدار' if is_buy else 'فروشنده',
             'buyer_name': f"{trade.user.first_name} {trade.user.last_name}".strip() or trade.user.phone_number or '-',
