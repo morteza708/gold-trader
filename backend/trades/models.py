@@ -96,6 +96,49 @@ class GoldPrice(models.Model):
         verbose_name='ثبت شده توسط',
         help_text='کاربری که این قیمت را ثبت کرده (برای قیمت‌های دستی)'
     )
+
+    # خلاصه بازار از API ویراگلد (برای نمایش روند، نه مبنای معامله)
+    market_change = models.DecimalField(
+        max_digits=15,
+        decimal_places=0,
+        null=True,
+        blank=True,
+        verbose_name='تغییر بازار (ریال)',
+        help_text='تغییر قیمت نماد بازار نسبت به قبل، به ریال'
+    )
+    market_change_percent = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        verbose_name='درصد تغییر بازار'
+    )
+    market_high = models.DecimalField(
+        max_digits=15,
+        decimal_places=0,
+        null=True,
+        blank=True,
+        verbose_name='بالاترین امروز (ریال)'
+    )
+    market_low = models.DecimalField(
+        max_digits=15,
+        decimal_places=0,
+        null=True,
+        blank=True,
+        verbose_name='پایین‌ترین امروز (ریال)'
+    )
+    market_price_time = models.CharField(
+        max_length=40,
+        blank=True,
+        default='',
+        verbose_name='زمان نرخ بازار'
+    )
+    market_symbol_name = models.CharField(
+        max_length=80,
+        blank=True,
+        default='',
+        verbose_name='نام نماد بازار'
+    )
     
     class Meta:
         verbose_name = 'قیمت طلا'
@@ -132,7 +175,7 @@ class GoldPrice(models.Model):
         ).order_by('created_at')
     
     @classmethod
-    def create_new_price(cls, buy_base, sell_base, buy_margin, sell_margin, user=None, source='MANUAL'):
+    def create_new_price(cls, buy_base, sell_base, buy_margin, sell_margin, user=None, source='MANUAL', market=None):
         """
         ایجاد قیمت جدید و غیرفعال کردن قیمت‌های قبلی
         
@@ -143,8 +186,11 @@ class GoldPrice(models.Model):
             sell_margin: حاشیه سود فروش
             user: کاربر ثبت‌کننده (برای قیمت‌های دستی)
             source: منبع قیمت ('MANUAL' یا 'API')
+            market: دیکشنری اختیاری فیلدهای خلاصه بازار
         """
         from django.db import transaction
+
+        market = market or {}
         
         with transaction.atomic():
             # غیرفعال کردن همه قیمت‌های قبلی
@@ -158,10 +204,46 @@ class GoldPrice(models.Model):
                 sell_margin=sell_margin,
                 is_active=True,
                 source=source,
-                created_by=user
+                created_by=user,
+                market_change=market.get('market_change'),
+                market_change_percent=market.get('market_change_percent'),
+                market_high=market.get('market_high'),
+                market_low=market.get('market_low'),
+                market_price_time=market.get('market_price_time') or '',
+                market_symbol_name=market.get('market_symbol_name') or '',
             )
             
             return new_price
+
+    def apply_market_snapshot(self, market):
+        """به‌روزرسانی خلاصه بازار روی رکورد فعال، بدون ساخت تاریخچه جدید."""
+        if not market:
+            return self
+        self.market_change = market.get('market_change')
+        self.market_change_percent = market.get('market_change_percent')
+        self.market_high = market.get('market_high')
+        self.market_low = market.get('market_low')
+        self.market_price_time = market.get('market_price_time') or ''
+        self.market_symbol_name = market.get('market_symbol_name') or ''
+        self.save(update_fields=[
+            'market_change',
+            'market_change_percent',
+            'market_high',
+            'market_low',
+            'market_price_time',
+            'market_symbol_name',
+        ])
+        return self
+
+    def market_snapshot(self):
+        return {
+            'market_change': self.market_change,
+            'market_change_percent': self.market_change_percent,
+            'market_high': self.market_high,
+            'market_low': self.market_low,
+            'market_price_time': self.market_price_time,
+            'market_symbol_name': self.market_symbol_name,
+        }
 
 
 class Trade(models.Model):

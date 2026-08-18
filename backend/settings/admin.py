@@ -1,6 +1,6 @@
 from django.contrib import admin
 from jalali_date import datetime2jalali
-from .models import SystemSettings, DepositAccount
+from .models import SystemSettings, DepositAccount, SitePage
 
 
 @admin.register(SystemSettings)
@@ -58,3 +58,43 @@ class DepositAccountAdmin(admin.ModelAdmin):
         return '-'
     get_jalali_created_at.short_description = 'تاریخ ایجاد'
 
+
+@admin.register(SitePage)
+class SitePageAdmin(admin.ModelAdmin):
+    list_display = ['slug', 'title', 'is_published', 'get_jalali_updated_at']
+    list_filter = ['is_published', 'slug']
+    search_fields = ['title', 'subtitle', 'body', 'email', 'phone']
+    readonly_fields = ['slug', 'created_at', 'updated_at']
+
+    fieldsets = (
+        ('شناسه', {
+            'fields': ('slug', 'is_published')
+        }),
+        ('محتوا', {
+            'fields': (
+                'title', 'subtitle', 'body',
+                'hero_image', 'extra_image',
+                'section_one_title', 'section_one_body',
+                'section_two_title', 'section_two_body',
+            )
+        }),
+        ('اطلاعات تماس', {
+            'fields': ('address', 'phone', 'email')
+        }),
+        ('زمان', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_jalali_updated_at(self, obj):
+        if obj.updated_at:
+            jalali_date = datetime2jalali(obj.updated_at)
+            return jalali_date.strftime('%Y/%m/%d %H:%M')
+        return '-'
+    get_jalali_updated_at.short_description = 'به‌روزرسانی'

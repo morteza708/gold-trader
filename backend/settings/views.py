@@ -1,11 +1,15 @@
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from accounts.models import UserRole
-from .models import SystemSettings, DepositAccount
-from .serializers import SystemSettingsSerializer, DepositAccountSerializer
+from .models import SystemSettings, DepositAccount, SitePage
+from .serializers import SystemSettingsSerializer, DepositAccountSerializer, SitePageSerializer
+
+
+def _is_admin(user):
+    return getattr(user, 'role', None) in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]
 
 
 @api_view(['GET', 'PUT'])
@@ -16,7 +20,7 @@ def system_settings(request):
     """
     try:
         # بررسی دسترسی
-        if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
+        if not _is_admin(request.user):
             return Response(
                 {'error': 'شما دسترسی به این بخش ندارید'},
                 status=status.HTTP_403_FORBIDDEN
@@ -80,7 +84,7 @@ def admin_deposit_accounts(request):
     """
     try:
         # بررسی دسترسی
-        if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
+        if not _is_admin(request.user):
             return Response(
                 {'error': 'شما دسترسی به این بخش ندارید'},
                 status=status.HTTP_403_FORBIDDEN
@@ -122,7 +126,7 @@ def admin_deposit_account_detail(request, account_id):
     """
     try:
         # بررسی دسترسی
-        if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
+        if not _is_admin(request.user):
             return Response(
                 {'error': 'شما دسترسی به این بخش ندارید'},
                 status=status.HTTP_403_FORBIDDEN
@@ -165,3 +169,100 @@ def admin_deposit_account_detail(request, account_id):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+
+# ==================== Site Pages ====================
+
+VALID_PAGE_SLUGS = {SitePage.SLUG_ABOUT, SitePage.SLUG_CONTACT}
+
+
+def _truthy(value):
+    if value is None:
+        return False
+    if isinstance(value, (list, tuple)):
+        value = value[0] if value else None
+        if value is None:
+            return False
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def public_site_page(request, slug):
+    """دریافت صفحه منتشرشده برای نمایش عمومی"""
+    if slug not in VALID_PAGE_SLUGS:
+        return Response({'error': 'صفحه یافت نشد'}, status=status.HTTP_404_NOT_FOUND)
+
+    SitePage.get_or_create_defaults()
+    try:
+        page = SitePage.objects.get(slug=slug, is_published=True)
+    except SitePage.DoesNotExist:
+        return Response({'error': 'صفحه یافت نشد'}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = SitePageSerializer(page, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_site_pages(request):
+    """لیست صفحات سایت برای ادمین"""
+    if not _is_admin(request.user):
+        return Response({'error': 'شما دسترسی به این بخش ندارید'}, status=status.HTTP_403_FORBIDDEN)
+
+    SitePage.get_or_create_defaults()
+    pages = SitePage.objects.all().order_by('slug')
+    serializer = SitePageSerializer(pages, many=True, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def admin_site_page_detail(request, slug):
+    """دریافت یا به‌روزرسانی یک صفحه سایت (ادمین)"""
+    if not _is_admin(request.user):
+        return Response({'error': 'شما دسترسی به این بخش ندارید'}, status=status.HTTP_403_FORBIDDEN)
+
+    if slug not in VALID_PAGE_SLUGS:
+        return Response({'error': 'صفحه یافت نشد'}, status=status.HTTP_404_NOT_FOUND)
+
+    SitePage.get_or_create_defaults()
+    try:
+        page = SitePage.objects.get(slug=slug)
+    except SitePage.DoesNotExist:
+        return Response({'error': 'صفحه یافت نشد'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'GET':
+        serializer = SitePageSerializer(page, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    data = request.data.copy()
+    # پاک کردن تصویر در صورت درخواست صریح
+    clear_hero = _truthy(data.pop('clear_hero_image', None))
+    clear_extra = _truthy(data.pop('clear_extra_image', None))
+
+    serializer = SitePageSerializer(
+        page,
+        data=data,
+        partial=True,
+        context={'request': request},
+    )
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    page = serializer.save()
+    if clear_hero and page.hero_image:
+        page.hero_image.delete(save=False)
+        page.hero_image = None
+    if clear_extra and page.extra_image:
+        page.extra_image.delete(save=False)
+        page.extra_image = None
+    if clear_hero or clear_extra:
+        page.save()
+
+    out = SitePageSerializer(page, context={'request': request})
+    return Response({
+        'message': 'صفحه با موفقیت به‌روزرسانی شد',
+        'page': out.data,
+    }, status=status.HTTP_200_OK)

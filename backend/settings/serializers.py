@@ -1,6 +1,6 @@
 from rest_framework import serializers
 import re
-from .models import SystemSettings, DepositAccount
+from .models import SystemSettings, DepositAccount, SitePage
 
 
 def persian_to_english_numbers(text):
@@ -87,3 +87,56 @@ class DepositAccountSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('شماره شبا باید 24 رقم باشد (بدون IR)')
         return value
 
+
+class SitePageSerializer(serializers.ModelSerializer):
+    """Serializer برای صفحات عمومی سایت"""
+
+    hero_image_url = serializers.SerializerMethodField()
+    extra_image_url = serializers.SerializerMethodField()
+    slug_display = serializers.CharField(source='get_slug_display', read_only=True)
+
+    class Meta:
+        model = SitePage
+        fields = [
+            'slug',
+            'slug_display',
+            'title',
+            'subtitle',
+            'body',
+            'hero_image',
+            'hero_image_url',
+            'extra_image',
+            'extra_image_url',
+            'section_one_title',
+            'section_one_body',
+            'section_two_title',
+            'section_two_body',
+            'address',
+            'phone',
+            'email',
+            'is_published',
+            'updated_at',
+        ]
+        read_only_fields = ['slug', 'slug_display', 'hero_image_url', 'extra_image_url', 'updated_at']
+        extra_kwargs = {
+            'hero_image': {'write_only': True, 'required': False},
+            'extra_image': {'write_only': True, 'required': False},
+        }
+
+    def _absolute_url(self, file_field):
+        if not file_field:
+            return None
+        request = self.context.get('request')
+        try:
+            url = file_field.url
+        except ValueError:
+            return None
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
+    def get_hero_image_url(self, obj):
+        return self._absolute_url(obj.hero_image)
+
+    def get_extra_image_url(self, obj):
+        return self._absolute_url(obj.extra_image)

@@ -15,6 +15,7 @@ import { useTradesStatus } from "@/hooks/useTradesStatus";
 import { walletAPI, Wallet } from "@/lib/api/auth";
 import NotificationPermission from "@/components/PWA/NotificationPermission";
 import NotificationBell from "@/components/dashboard/NotificationBell";
+import BrandLogo from "@/components/brand/BrandLogo";
 
 // آواتار پیش‌فرض (آیکون کاربر)
 export const DEFAULT_AVATAR =
@@ -208,9 +209,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </h2>
           </div>
 
-          {/* وسط: لوگو */}
+          {/* وسط: علامت برند */}
           <div className="absolute left-1/2 -translate-x-1/2 md:hidden">
-             <div className="w-8 h-8 bg-gold-500 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-gold-500/30">G</div>
+            <Link href="/dashboard" className="flex items-center" aria-label="داشبورد">
+              <BrandLogo variant="mark" size={32} showName={false} priority />
+            </Link>
           </div>
 
           {/* سمت چپ: نوتیفیکیشن و موجودی سریع */}

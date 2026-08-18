@@ -7,6 +7,12 @@ export interface GoldPriceData {
   trades_enabled: boolean;
   updated_at: string;
   created_at_jalali: string;
+  market_change?: number | null;
+  market_change_percent?: number | null;
+  market_high?: number | null;
+  market_low?: number | null;
+  market_price_time?: string | null;
+  market_symbol_name?: string | null;
 }
 
 export function useGoldPrice(interval = 5000) {

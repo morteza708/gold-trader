@@ -2,8 +2,10 @@
 Celery tasks for trades operations
 """
 from celery import shared_task
+from django.conf import settings
 import logging
 from .services import TradeService
+from .viragold import ViragoldError, fetch_symbol_snapshot
 
 logger = logging.getLogger('trades')
 
@@ -43,4 +45,43 @@ def check_and_execute_pending_orders():
             'resumed_count': 0,
             'error': str(e)
         }
+
+
+@shared_task(name='trades.tasks.fetch_viragold_price')
+def fetch_viragold_price():
+    """
+    دریافت قیمت زنده گرم ۱۸ عیار / حواله از ویراگلد و ذخیره در صورت تغییر.
+    این task به‌صورت دوره‌ای توسط Celery Beat اجرا می‌شود.
+    """
+    token = getattr(settings, 'VIRAGOLD_API_TOKEN', '') or ''
+    if not token:
+        logger.debug("VIRAGOLD_API_TOKEN تنظیم نشده؛ دریافت قیمت زنده رد شد")
+        return {'skipped': True, 'reason': 'no_token'}
+
+    try:
+        snapshot = fetch_symbol_snapshot()
+        result = TradeService.sync_live_base_price(
+            snapshot['price_rial'],
+            market={
+                'market_change': snapshot.get('market_change'),
+                'market_change_percent': snapshot.get('market_change_percent'),
+                'market_high': snapshot.get('market_high'),
+                'market_low': snapshot.get('market_low'),
+                'market_price_time': snapshot.get('market_price_time'),
+                'market_symbol_name': snapshot.get('market_symbol_name'),
+            },
+        )
+        price_obj = result['price']
+        return {
+            'ok': True,
+            'changed': result['changed'],
+            'buy_base_price': str(price_obj.buy_base_price),
+            'sell_base_price': str(price_obj.sell_base_price),
+        }
+    except ViragoldError as e:
+        logger.error("خطا در دریافت قیمت ویراگلد: %s", e)
+        return {'ok': False, 'error': str(e)}
+    except Exception as e:
+        logger.error("خطای غیرمنتظره در دریافت قیمت ویراگلد: %s", e, exc_info=True)
+        return {'ok': False, 'error': str(e)}
 

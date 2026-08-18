@@ -8,6 +8,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import LiveClock from "@/components/dashboard/LiveClock";
+import MarketSnapshotBar from "@/components/dashboard/MarketSnapshotBar";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
 import { adminTradesAPI } from "@/lib/api/trades";
 import { adminAPI } from "@/lib/api/auth";
@@ -202,6 +203,15 @@ export default function AdminDashboard() {
                         {toPersianDigits(prices.sell.toLocaleString())}
                      </span>
                   </div>
+                  <MarketSnapshotBar
+                    variant="admin"
+                    market_change={prices.market_change}
+                    market_change_percent={prices.market_change_percent}
+                    market_high={prices.market_high}
+                    market_low={prices.market_low}
+                    market_price_time={prices.market_price_time}
+                    market_symbol_name={prices.market_symbol_name}
+                  />
                </>
             ) : (
                <div className="bg-slate-900 rounded-2xl p-4 flex justify-center items-center border border-slate-700">

@@ -74,6 +74,61 @@ class TradeService:
             'sell_margin': price_obj.sell_margin,
             'price_obj': price_obj
         }
+
+    @staticmethod
+    def sync_live_base_price(rial_price, market=None):
+        """
+        به‌روزرسانی قیمت پایه خرید و فروش از API زنده.
+
+        اگر پایه نسبت به رکورد فعال تغییر نکرده باشد، رکورد جدیدی ساخته نمی‌شود
+        تا تاریخچه فقط نقاط واقعی تغییر قیمت را نگه دارد.
+        حاشیه سود مدیر روی رکورد قبلی حفظ می‌شود.
+        خلاصه بازار (تغییر، سقف/کف، زمان) حتی بدون تغییر پایه به‌روز می‌شود.
+        """
+        rial_price = Decimal(rial_price).quantize(Decimal('1'))
+        if rial_price <= 0:
+            raise ValueError("قیمت پایه دریافتی نامعتبر است")
+
+        market = market or {}
+        current = GoldPrice.get_current_price()
+        if (
+            current
+            and current.buy_base_price == rial_price
+            and current.sell_base_price == rial_price
+        ):
+            current.apply_market_snapshot(market)
+            return {
+                'changed': False,
+                'price': current,
+            }
+
+        buy_margin = current.buy_margin if current else Decimal('0')
+        sell_margin = current.sell_margin if current else Decimal('0')
+        if sell_margin >= rial_price:
+            logger.warning(
+                "حاشیه فروش (%s) از قیمت پایه جدید (%s) بزرگ‌تر است؛ حاشیه فروش صفر شد",
+                sell_margin,
+                rial_price,
+            )
+            sell_margin = Decimal('0')
+
+        new_price = GoldPrice.create_new_price(
+            buy_base=rial_price,
+            sell_base=rial_price,
+            buy_margin=buy_margin,
+            sell_margin=sell_margin,
+            source='API',
+            market=market,
+        )
+        logger.info(
+            "قیمت پایه زنده ذخیره شد: buy=%s sell=%s (ریال)",
+            new_price.buy_base_price,
+            new_price.sell_base_price,
+        )
+        return {
+            'changed': True,
+            'price': new_price,
+        }
     
     @staticmethod
     def calculate_fee(trade_type, amount, price_obj=None):

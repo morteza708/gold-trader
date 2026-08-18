@@ -210,6 +210,16 @@ JALALI_SETTINGS = {
 
 KAVENEGAR_API_KEY = env.str('KAVENEGAR_API_KEY')
 
+# Viragold live gold price feed (prices from API are in Toman; stored as Rial)
+VIRAGOLD_API_URL = env.str(
+    'VIRAGOLD_API_URL',
+    default='https://api.viragold.net/api/v1/price',
+)
+VIRAGOLD_API_TOKEN = env.str('VIRAGOLD_API_TOKEN', default='')
+VIRAGOLD_SYMBOL_ID = env.int('VIRAGOLD_SYMBOL_ID', default=1197)
+VIRAGOLD_TOMAN_TO_RIAL = env.int('VIRAGOLD_TOMAN_TO_RIAL', default=10)
+VIRAGOLD_FETCH_INTERVAL = env.float('VIRAGOLD_FETCH_INTERVAL', default=30)
+
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
 # CORS Settings - در production از env خوانده می‌شود
@@ -341,6 +351,10 @@ CELERY_BEAT_SCHEDULE = {
     'check-and-execute-pending-orders': {
         'task': 'trades.tasks.check_and_execute_pending_orders',
         'schedule': 30.0,  # هر 30 ثانیه
+    },
+    'fetch-viragold-price': {
+        'task': 'trades.tasks.fetch_viragold_price',
+        'schedule': VIRAGOLD_FETCH_INTERVAL,
     },
 }
 

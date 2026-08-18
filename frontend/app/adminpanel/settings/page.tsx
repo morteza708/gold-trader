@@ -6,7 +6,7 @@ import {
   Building2, Globe, Save, RefreshCw, Plus, 
   Trash2, Edit2, CheckCircle2, XCircle, 
   Clock, CreditCard, Lock, 
-  Phone, MapPin,
+  Phone, MapPin, Radio,
   AlertTriangle, X, Loader2, Power, AlertCircle
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -45,6 +45,7 @@ export default function SystemSettingsPage() {
   const [isTogglingTrades, setIsTogglingTrades] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<boolean | null>(null);
+  const [liveFeedEnabled, setLiveFeedEnabled] = useState(false);
 
   // حساب‌های بانکی واریز
   const [depositAccounts, setDepositAccounts] = useState<DepositAccount[]>([]);
@@ -56,11 +57,14 @@ export default function SystemSettingsPage() {
     goldPickupAddress: "",
   });
 
-  // بارگذاری تنظیمات سیستم
+  // بارگذاری تنظیمات سیستم و همگام‌سازی قیمت پایه زنده
   useEffect(() => {
     fetchSystemSettings();
-    fetchCurrentPrice();
     fetchDepositAccounts();
+    fetchCurrentPrice();
+    const intervalId = setInterval(() => fetchCurrentPrice(true), 5000);
+    return () => clearInterval(intervalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchSystemSettings = async () => {
@@ -77,28 +81,38 @@ export default function SystemSettingsPage() {
     }
   };
 
-  const fetchCurrentPrice = async () => {
-    setIsLoadingPrice(true);
+  const fetchCurrentPrice = async (silent = false) => {
+    if (!silent) setIsLoadingPrice(true);
     try {
       const price = await adminTradesAPI.getCurrentPrice();
       setCurrentPrice(price);
-      setPriceSettings({
+      setLiveFeedEnabled(Boolean(price.live_feed_enabled));
+      setPriceSettings((prev) => ({
         buyBasePrice: Number(price.buy_base_price),
         sellBasePrice: Number(price.sell_base_price),
-        buyMargin: Number(price.buy_margin),
-        sellMargin: Number(price.sell_margin),
-      });
+        buyMargin: silent ? prev.buyMargin : Number(price.buy_margin),
+        sellMargin: silent ? prev.sellMargin : Number(price.sell_margin),
+      }));
     } catch (error: any) {
       console.error('Error fetching current price:', error);
-      toast.error("خطا در دریافت قیمت فعلی");
+      if (error.response?.data?.live_feed_enabled) {
+        setLiveFeedEnabled(true);
+      }
+      if (!silent && error.response?.status !== 404) {
+        toast.error(error.response?.data?.error || "خطا در دریافت قیمت فعلی");
+      }
     } finally {
-      setIsLoadingPrice(false);
+      if (!silent) setIsLoadingPrice(false);
     }
   };
 
   const handleUpdatePrice = async () => {
     if (!priceSettings.buyBasePrice || !priceSettings.sellBasePrice) {
-      return toast.error("لطفا قیمت‌های پایه را وارد کنید");
+      return toast.error(
+        liveFeedEnabled
+          ? "قیمت پایه هنوز از API دریافت نشده است"
+          : "لطفا قیمت‌های پایه را وارد کنید"
+      );
     }
 
     if (priceSettings.buyMargin < 0 || priceSettings.sellMargin < 0) {
@@ -115,14 +129,14 @@ export default function SystemSettingsPage() {
 
     setIsUpdatingPrice(true);
     try {
-      await adminTradesAPI.updatePrice({
+      const result = await adminTradesAPI.updatePrice({
         buy_base_price: priceSettings.buyBasePrice,
         sell_base_price: priceSettings.sellBasePrice,
         buy_margin: priceSettings.buyMargin,
         sell_margin: priceSettings.sellMargin,
       });
       
-      toast.success("قیمت با موفقیت به‌روزرسانی شد");
+      toast.success(result.message || "قیمت با موفقیت به‌روزرسانی شد");
       fetchCurrentPrice();
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || "خطا در به‌روزرسانی قیمت";
@@ -402,14 +416,22 @@ export default function SystemSettingsPage() {
                   <DollarSign size={24} />
                   تنظیمات قیمت و بازار
                 </h2>
-                <button
-                  onClick={fetchCurrentPrice}
-                  disabled={isLoadingPrice}
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-bold transition-colors flex items-center gap-2 disabled:opacity-50"
-                >
-                  <RefreshCw size={16} className={isLoadingPrice ? "animate-spin" : ""} />
-                  به‌روزرسانی
-                </button>
+                <div className="flex items-center gap-2">
+                  {liveFeedEnabled && (
+                    <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                      <Radio size={14} className="animate-pulse" />
+                      دریافت زنده از API
+                    </span>
+                  )}
+                  <button
+                    onClick={() => fetchCurrentPrice()}
+                    disabled={isLoadingPrice}
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-bold transition-colors flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <RefreshCw size={16} className={isLoadingPrice ? "animate-spin" : ""} />
+                    به‌روزرسانی
+                  </button>
+                </div>
               </div>
 
               {/* نمایش قیمت فعلی */}
@@ -444,6 +466,7 @@ export default function SystemSettingsPage() {
                   </div>
                   <p className="text-xs text-slate-500">
                     آخرین به‌روزرسانی: {toPersianDigits(currentPrice.created_at_jalali || '-')}
+                    {currentPrice.source === 'API' ? ' — منبع: API ویراگلد' : ' — منبع: دستی'}
                   </p>
                 </div>
               ) : null}
@@ -499,8 +522,16 @@ export default function SystemSettingsPage() {
 
               {/* فرم به‌روزرسانی قیمت */}
               <div className="bg-slate-900 p-6 rounded-xl border border-slate-700">
-                <h3 className="text-lg font-bold text-white mb-2">به‌روزرسانی قیمت</h3>
+                <h3 className="text-lg font-bold text-white mb-2">
+                  {liveFeedEnabled ? "تنظیم حاشیه سود" : "به‌روزرسانی قیمت"}
+                </h3>
                 <div className="mb-4 p-3 rounded-lg bg-slate-800/80 border border-slate-700 text-xs text-slate-300 leading-6 space-y-1">
+                  {liveFeedEnabled && (
+                    <p>
+                      قیمت پایه از نماد <span className="font-bold text-gold-400">{currentPrice?.live_symbol_name || "گرم ۱۸ عیار / حواله"}</span> به‌صورت زنده دریافت می‌شود
+                      (تومان API × ۱۰ = ریال). مدیر فقط حاشیه سود را تنظیم می‌کند.
+                    </p>
+                  )}
                   <p className="font-bold text-gold-400">نحوه محاسبه حاشیه سود:</p>
                   <p>• <span className="text-green-400 font-bold">حاشیه خرید:</span> عدد مثبت یا صفر — به قیمت پایه خرید <span className="font-bold">اضافه</span> می‌شود.</p>
                   <p>• <span className="text-red-400 font-bold">حاشیه فروش:</span> عدد مثبت یا صفر — از قیمت پایه فروش <span className="font-bold">کم</span> می‌شود.</p>
@@ -513,18 +544,26 @@ export default function SystemSettingsPage() {
                     <input
                       type="text"
                       inputMode="numeric"
+                      readOnly={liveFeedEnabled}
                       value={toPersianDigits(priceSettings.buyBasePrice.toLocaleString())}
                       onChange={(e) => {
+                        if (liveFeedEnabled) return;
                         const english = toEnglishDigits(e.target.value);
                         const num = Number(english.replace(/,/g, ""));
                         if (!isNaN(num)) {
                           setPriceSettings({ ...priceSettings, buyBasePrice: num });
                         }
                       }}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white font-bold focus:outline-none focus:border-gold-500"
+                      className={`w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white font-bold focus:outline-none focus:border-gold-500 ${
+                        liveFeedEnabled ? "opacity-70 cursor-not-allowed" : ""
+                      }`}
                       placeholder="قیمت پایه خرید"
                     />
-                    <p className="text-xs text-slate-500 mt-1">قیمت پایه خرید هر گرم طلا (معمولاً از API)</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {liveFeedEnabled
+                        ? "از API ویراگلد (گرم ۱۸ عیار / حواله) به‌صورت ریال"
+                        : "قیمت پایه خرید هر گرم طلا (معمولاً از API)"}
+                    </p>
                   </div>
 
                   <div>
@@ -532,18 +571,26 @@ export default function SystemSettingsPage() {
                     <input
                       type="text"
                       inputMode="numeric"
+                      readOnly={liveFeedEnabled}
                       value={toPersianDigits(priceSettings.sellBasePrice.toLocaleString())}
                       onChange={(e) => {
+                        if (liveFeedEnabled) return;
                         const english = toEnglishDigits(e.target.value);
                         const num = Number(english.replace(/,/g, ""));
                         if (!isNaN(num)) {
                           setPriceSettings({ ...priceSettings, sellBasePrice: num });
                         }
                       }}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white font-bold focus:outline-none focus:border-gold-500"
+                      className={`w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white font-bold focus:outline-none focus:border-gold-500 ${
+                        liveFeedEnabled ? "opacity-70 cursor-not-allowed" : ""
+                      }`}
                       placeholder="قیمت پایه فروش"
                     />
-                    <p className="text-xs text-slate-500 mt-1">قیمت پایه فروش هر گرم طلا (معمولاً از API)</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {liveFeedEnabled
+                        ? "همان قیمت پایه خرید؛ اختلاف خرید/فروش با حاشیه تنظیم می‌شود"
+                        : "قیمت پایه فروش هر گرم طلا (معمولاً از API)"}
+                    </p>
                   </div>
 
                   <div>
@@ -611,7 +658,7 @@ export default function SystemSettingsPage() {
                 {/* دکمه ذخیره */}
                 <button
                   onClick={handleUpdatePrice}
-                  disabled={isUpdatingPrice}
+                  disabled={isUpdatingPrice || (liveFeedEnabled && (!priceSettings.buyBasePrice || !priceSettings.sellBasePrice))}
                   className="mt-6 w-full px-6 py-3 bg-gold-500 hover:bg-gold-600 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isUpdatingPrice ? (
@@ -622,7 +669,7 @@ export default function SystemSettingsPage() {
                   ) : (
                     <>
                       <Save size={18} />
-                      به‌روزرسانی قیمت
+                      {liveFeedEnabled ? "ذخیره حاشیه سود" : "به‌روزرسانی قیمت"}
                     </>
                   )}
                 </button>

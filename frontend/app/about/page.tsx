@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Navbar from "@/components/layout/Navbar";
 import SitePageView from "@/components/site/SitePageView";
 import { pagesAPI, SitePage } from "@/lib/api/pages";
 import { pageTitle } from "@/lib/brand";
 import { Loader2 } from "lucide-react";
 
-export default function AboutPage() {
+export default function AboutPublicPage() {
   const [page, setPage] = useState<SitePage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,21 +30,18 @@ export default function AboutPage() {
     };
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center py-24 text-gray-400">
-        <Loader2 className="animate-spin" size={28} />
-      </div>
-    );
-  }
-
-  if (error || !page) {
-    return (
-      <div className="text-center py-24 text-gray-500 text-sm">
-        {error || "صفحه یافت نشد"}
-      </div>
-    );
-  }
-
-  return <SitePageView page={page} variant="dashboard" showContactBlock />;
+  return (
+    <main className="min-h-screen bg-gray-50">
+      <Navbar />
+      {loading ? (
+        <div className="flex justify-center items-center py-24 text-gray-400">
+          <Loader2 className="animate-spin" size={28} />
+        </div>
+      ) : error || !page ? (
+        <div className="text-center py-24 text-gray-500 text-sm">{error || "صفحه یافت نشد"}</div>
+      ) : (
+        <SitePageView page={page} variant="public" showContactBlock />
+      )}
+    </main>
+  );
 }

@@ -8,6 +8,12 @@ export interface GoldPrice {
   trades_enabled: boolean;
   updated_at: string;
   created_at_jalali: string;
+  market_change?: number | null;
+  market_change_percent?: number | null;
+  market_high?: number | null;
+  market_low?: number | null;
+  market_price_time?: string | null;
+  market_symbol_name?: string | null;
 }
 
 export interface GoldPriceAdmin {
@@ -24,11 +30,17 @@ export interface GoldPriceAdmin {
   created_at_jalali: string;
   created_by: number | null;
   created_by_name: string | null;
+  live_feed_enabled?: boolean;
+  live_symbol_id?: number;
+  live_symbol_name?: string;
 }
 
 export interface GoldPriceHistory {
+  buy_base_price: number;
+  sell_base_price: number;
   buy_final_price: number;
   sell_final_price: number;
+  source: 'MANUAL' | 'API';
   created_at: string;
   created_at_jalali: string;
 }

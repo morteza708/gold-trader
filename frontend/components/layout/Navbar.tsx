@@ -11,8 +11,6 @@ export default function Navbar() {
 
   const navLinks = [
     { name: "خانه", href: "/" },
-    { name: "قیمت‌ها", href: "/prices" },
-    { name: "وبلاگ", href: "/blog" },
     { name: "درباره ما", href: "/about" },
     { name: "تماس با ما", href: "/contact" },
   ];

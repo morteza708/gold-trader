@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from jalali_date import datetime2jalali
+from django.conf import settings
 from .models import GoldPrice, Trade, Order
 
 
@@ -29,13 +30,25 @@ class GoldPriceSerializer(serializers.ModelSerializer):
         from settings.models import SystemSettings
         
         settings = SystemSettings.get_settings()
+
+        def as_int(value):
+            return None if value is None else int(value)
+
+        def as_float(value):
+            return None if value is None else float(value)
         
         return {
             'buy': instance.buy_final_price,
             'sell': instance.sell_final_price,
             'trades_enabled': settings.trades_enabled,
             'updated_at': instance.created_at.isoformat(),
-            'created_at_jalali': self.get_created_at_jalali(instance)
+            'created_at_jalali': self.get_created_at_jalali(instance),
+            'market_change': as_int(instance.market_change),
+            'market_change_percent': as_float(instance.market_change_percent),
+            'market_high': as_int(instance.market_high),
+            'market_low': as_int(instance.market_low),
+            'market_price_time': instance.market_price_time or None,
+            'market_symbol_name': instance.market_symbol_name or None,
         }
 
 
@@ -64,9 +77,17 @@ class GoldPriceAdminSerializer(serializers.ModelSerializer):
             'buy_final_price', 'sell_final_price',
             'is_active', 'source',
             'created_at', 'created_at_jalali',
-            'created_by', 'created_by_name'
+            'created_by', 'created_by_name',
         ]
         read_only_fields = ['buy_final_price', 'sell_final_price', 'created_at']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        token = getattr(settings, 'VIRAGOLD_API_TOKEN', '') or ''
+        data['live_feed_enabled'] = bool(token)
+        data['live_symbol_id'] = int(getattr(settings, 'VIRAGOLD_SYMBOL_ID', 1197))
+        data['live_symbol_name'] = 'گرم ۱۸ عیار / حواله'
+        return data
 
 
 class CreateGoldPriceSerializer(serializers.Serializer):
@@ -77,10 +98,15 @@ class CreateGoldPriceSerializer(serializers.Serializer):
     sell_margin = serializers.DecimalField(max_digits=15, decimal_places=0, default=0)
     
     def validate(self, data):
-        if data['buy_base_price'] <= 0 or data['sell_base_price'] <= 0:
-            raise serializers.ValidationError("قیمت‌های پایه باید بیشتر از صفر باشند")
         if data['buy_margin'] < 0 or data['sell_margin'] < 0:
             raise serializers.ValidationError("حاشیه سود نمی‌تواند منفی باشد؛ عدد مثبت یا صفر وارد کنید")
+
+        live_feed_enabled = bool(getattr(settings, 'VIRAGOLD_API_TOKEN', '') or '')
+        if live_feed_enabled:
+            return data
+
+        if data['buy_base_price'] <= 0 or data['sell_base_price'] <= 0:
+            raise serializers.ValidationError("قیمت‌های پایه باید بیشتر از صفر باشند")
         if data['sell_margin'] > data['sell_base_price']:
             raise serializers.ValidationError(
                 "حاشیه سود فروش نمی‌تواند از قیمت پایه فروش بیشتر باشد"
@@ -104,7 +130,9 @@ class GoldPriceHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = GoldPrice
         fields = [
+            'buy_base_price', 'sell_base_price',
             'buy_final_price', 'sell_final_price',
+            'source',
             'created_at', 'created_at_jalali'
         ]
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
   LayoutDashboard, Users, CreditCard, Banknote, 
-  Settings, LogOut, Menu, X, ShieldCheck, Phone
+  Settings, LogOut, Menu, X, ShieldCheck, Phone, FileText
 } from "lucide-react";
 import MobileHeader from "@/components/admin/MobileHeader";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -30,6 +30,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "تراکنش‌های مالی", href: "/adminpanel/finance", icon: CreditCard },
     { name: "مانیتورینگ معاملات", href: "/adminpanel/trades", icon: Banknote },
     { name: "تایید شماره موبایل", href: "/adminpanel/mobile-verification", icon: Phone },
+    { name: "صفحات سایت", href: "/adminpanel/pages", icon: FileText },
     { name: "تنظیمات سیستم", href: "/adminpanel/settings", icon: Settings },
   ];
 
@@ -60,7 +61,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         <nav className="p-4 space-y-2">
            {menuItems.map((item) => {
-             const isActive = pathname === item.href;
+             const isActive =
+               item.href === "/adminpanel"
+                 ? pathname === "/adminpanel"
+                 : pathname === item.href || pathname.startsWith(item.href + "/");
              return (
                <Link key={item.href} href={item.href} onClick={() => setIsSidebarOpen(false)}>
                  <div className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive ? "bg-gold-600 text-white shadow-lg shadow-gold-500/20" : "text-slate-400 hover:bg-slate-900 hover:text-white"}`}>

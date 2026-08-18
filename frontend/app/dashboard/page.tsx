@@ -11,6 +11,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import LiveClock from "@/components/dashboard/LiveClock";
 import TradeModal from "@/components/dashboard/TradeModal";
+import MarketSnapshotBar from "@/components/dashboard/MarketSnapshotBar";
 import { useGoldPrice } from "@/hooks/useGoldPrice";
 import { useTradesStatus } from "@/hooks/useTradesStatus";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
@@ -132,6 +133,17 @@ export default function DashboardPage() {
               </div>
 
            </div>
+
+           {!priceLoading && prices && (
+             <MarketSnapshotBar
+               variant="user"
+               market_change={prices.market_change}
+               market_change_percent={prices.market_change_percent}
+               market_high={prices.market_high}
+               market_low={prices.market_low}
+               market_price_time={prices.market_price_time}
+             />
+           )}
         </div>
       </div>
 

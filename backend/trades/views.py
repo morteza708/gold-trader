@@ -596,8 +596,14 @@ def admin_get_current_price(request):
         
         price_obj = GoldPrice.get_current_price()
         if not price_obj:
+            live_token = getattr(settings, 'VIRAGOLD_API_TOKEN', '') or ''
             return Response(
-                {'error': 'قیمت طلا تعریف نشده است'},
+                {
+                    'error': 'قیمت طلا تعریف نشده است',
+                    'live_feed_enabled': bool(live_token),
+                    'live_symbol_id': int(getattr(settings, 'VIRAGOLD_SYMBOL_ID', 1197)),
+                    'live_symbol_name': 'گرم ۱۸ عیار / حواله',
+                },
                 status=status.HTTP_404_NOT_FOUND
             )
         
@@ -629,14 +635,59 @@ def admin_update_price(request):
         serializer = CreateGoldPriceSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
+        live_feed_enabled = bool(getattr(settings, 'VIRAGOLD_API_TOKEN', '') or '')
+        current = GoldPrice.get_current_price()
+
+        if live_feed_enabled:
+            if not current:
+                return Response(
+                    {'error': 'قیمت پایه هنوز از API دریافت نشده است. چند لحظه صبر کنید و دوباره تلاش کنید.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            buy_base = current.buy_base_price
+            sell_base = current.sell_base_price
+            source = 'API'
+        else:
+            buy_base = serializer.validated_data['buy_base_price']
+            sell_base = serializer.validated_data['sell_base_price']
+            source = 'MANUAL'
+
+        buy_margin = serializer.validated_data['buy_margin']
+        sell_margin = serializer.validated_data['sell_margin']
+
+        if sell_margin > sell_base:
+            return Response(
+                {'error': 'حاشیه سود فروش نمی‌تواند از قیمت پایه فروش بیشتر باشد'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if sell_base - sell_margin <= 0:
+            return Response(
+                {'error': 'قیمت نهایی فروش باید بیشتر از صفر باشد'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if (
+            current
+            and current.buy_base_price == buy_base
+            and current.sell_base_price == sell_base
+            and current.buy_margin == buy_margin
+            and current.sell_margin == sell_margin
+        ):
+            price_serializer = GoldPriceAdminSerializer(current)
+            return Response({
+                'message': 'تغییری در قیمت اعمال نشد',
+                'price': price_serializer.data
+            }, status=status.HTTP_200_OK)
+
         new_price = GoldPrice.create_new_price(
-            buy_base=serializer.validated_data['buy_base_price'],
-            sell_base=serializer.validated_data['sell_base_price'],
-            buy_margin=serializer.validated_data['buy_margin'],
-            sell_margin=serializer.validated_data['sell_margin'],
+            buy_base=buy_base,
+            sell_base=sell_base,
+            buy_margin=buy_margin,
+            sell_margin=sell_margin,
             user=request.user,
-            source='MANUAL'
+            source=source,
+            market=current.market_snapshot() if current and source == 'API' else None,
         )
         
         price_serializer = GoldPriceAdminSerializer(new_price)
