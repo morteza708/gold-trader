@@ -169,8 +169,8 @@ MEDIA_URL = env.str('MEDIA_URL', default='/django-media/')
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Branding (per-tenant deploy)
-BRAND_NAME = env.str('BRAND_NAME', default='گلد تریدر')
-BRAND_NAME_EN = env.str('BRAND_NAME_EN', default='Gold Trader')
+BRAND_NAME = env.str('BRAND_NAME', default='اپال‌باکس')
+BRAND_NAME_EN = env.str('BRAND_NAME_EN', default='OpalBox')
 BRAND_COMPANY_NAME = env.str('BRAND_COMPANY_NAME', default=f'شرکت {BRAND_NAME}')
 # Invoice PDF mark: path relative to backend/static/, or absolute path.
 # File must exist inside the backend service (Runflare has no frontend/ tree).

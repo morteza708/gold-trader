@@ -90,10 +90,7 @@ services:
         NEXT_PUBLIC_BRAND_LOGO_MARK: ${NEXT_PUBLIC_BRAND_LOGO_MARK:-/OpalBox-mark.png}
         NEXT_PUBLIC_THEME_COLOR: ${NEXT_PUBLIC_THEME_COLOR:-#D4AF37}
     container_name: gold_trading_frontend
-    # Note: No volume mount for /app in production to preserve standalone build
-    volumes:
-      - /app/node_modules
-      - /app/.next
+    # Production: no source/.next mounts — image build is the source of truth
     expose:
       - "3000"
     env_file:
