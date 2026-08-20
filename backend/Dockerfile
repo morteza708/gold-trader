@@ -33,12 +33,10 @@ COPY . .
 # Create directories for media and static files
 RUN mkdir -p /app/media /app/staticfiles
 
-# Collect static files (will be run during container startup)
-# RUN python manage.py collectstatic --noinput
-
 # Expose port
 EXPOSE 8000
 
-# Run gunicorn
+# Runflare manages Gunicorn and Celery via its built-in supervisord
+# Default CMD for local development only
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120", "config.wsgi:application"]
 

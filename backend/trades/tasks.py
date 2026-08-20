@@ -1,8 +1,10 @@
 """
 Celery tasks for trades operations
 """
+from datetime import timedelta
 from celery import shared_task
 from django.conf import settings
+from django.utils import timezone
 import logging
 from .services import TradeService
 from .viragold import ViragoldError, fetch_symbol_snapshot
@@ -51,8 +53,10 @@ def check_and_execute_pending_orders():
 def fetch_viragold_price():
     """
     دریافت قیمت زنده گرم ۱۸ عیار / حواله از ویراگلد و ذخیره در صورت تغییر.
-    این task به‌صورت دوره‌ای توسط Celery Beat اجرا می‌شود.
+    این task هر 2 دقیقه توسط Celery Beat اجرا می‌شود.
     """
+    logger.info("=== شروع fetch_viragold_price ===")
+    
     token = getattr(settings, 'VIRAGOLD_API_TOKEN', '') or ''
     if not token:
         logger.debug("VIRAGOLD_API_TOKEN تنظیم نشده؛ دریافت قیمت زنده رد شد")
@@ -72,6 +76,11 @@ def fetch_viragold_price():
             },
         )
         price_obj = result['price']
+        logger.info(
+            "قیمت دریافت شد: buy=%s, changed=%s",
+            price_obj.buy_base_price,
+            result['changed'],
+        )
         return {
             'ok': True,
             'changed': result['changed'],
@@ -84,4 +93,50 @@ def fetch_viragold_price():
     except Exception as e:
         logger.error("خطای غیرمنتظره در دریافت قیمت ویراگلد: %s", e, exc_info=True)
         return {'ok': False, 'error': str(e)}
+
+
+@shared_task(name='trades.tasks.price_health_watchdog')
+def price_health_watchdog():
+    """
+    بررسی سلامت قیمت و دریافت دستی در صورت قدیمی بودن.
+    
+    این task هر 5 دقیقه اجرا می‌شود و اگر قیمت بیش از 10 دقیقه
+    قدیمی باشد، مستقیماً قیمت جدید دریافت می‌کند.
+    """
+    from .models import GoldPrice
+    
+    logger.info("=== شروع price_health_watchdog ===")
+    
+    current_price = GoldPrice.get_current_price()
+    if not current_price:
+        logger.warning("هیچ قیمتی در دیتابیس نیست، دریافت قیمت اولیه...")
+        fetch_viragold_price.delay()
+        return {'action': 'triggered_fetch', 'reason': 'no_price'}
+    
+    now = timezone.now()
+    age = now - current_price.created_at
+    age_minutes = age.total_seconds() / 60
+    
+    max_age_minutes = 10  # حداکثر سن مجاز قیمت
+    
+    if age_minutes > max_age_minutes:
+        logger.warning(
+            "قیمت قدیمی است (سن: %.1f دقیقه)، دریافت مستقیم قیمت...",
+            age_minutes,
+        )
+        # اجرای مستقیم (نه async) برای اطمینان از دریافت
+        result = fetch_viragold_price()
+        return {
+            'action': 'direct_fetch',
+            'reason': 'stale_price',
+            'age_minutes': round(age_minutes, 1),
+            'fetch_result': result,
+        }
+    
+    logger.info("قیمت سالم است (سن: %.1f دقیقه)", age_minutes)
+    return {
+        'action': 'none',
+        'reason': 'price_healthy',
+        'age_minutes': round(age_minutes, 1),
+    }
 

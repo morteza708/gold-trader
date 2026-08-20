@@ -218,7 +218,7 @@ VIRAGOLD_API_URL = env.str(
 VIRAGOLD_API_TOKEN = env.str('VIRAGOLD_API_TOKEN', default='')
 VIRAGOLD_SYMBOL_ID = env.int('VIRAGOLD_SYMBOL_ID', default=1197)
 VIRAGOLD_TOMAN_TO_RIAL = env.int('VIRAGOLD_TOMAN_TO_RIAL', default=10)
-VIRAGOLD_FETCH_INTERVAL = env.float('VIRAGOLD_FETCH_INTERVAL', default=30)
+VIRAGOLD_FETCH_INTERVAL = env.float('VIRAGOLD_FETCH_INTERVAL', default=120)  # هر 2 دقیقه (درخواست ویراگلد)
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
@@ -354,7 +354,11 @@ CELERY_BEAT_SCHEDULE = {
     },
     'fetch-viragold-price': {
         'task': 'trades.tasks.fetch_viragold_price',
-        'schedule': VIRAGOLD_FETCH_INTERVAL,
+        'schedule': VIRAGOLD_FETCH_INTERVAL,  # هر 2 دقیقه (120 ثانیه)
+    },
+    'price-health-watchdog': {
+        'task': 'trades.tasks.price_health_watchdog',
+        'schedule': 300.0,  # هر 5 دقیقه
     },
 }
 
