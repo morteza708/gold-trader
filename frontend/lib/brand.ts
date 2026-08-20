@@ -1,12 +1,13 @@
 /**
  * Brand / tenant config — set via env per deploy (e.g. OpalBox).
+ * Fallbacks default to OpalBox for this product.
  */
 export const brand = {
-  name: process.env.NEXT_PUBLIC_BRAND_NAME || "گلد تریدر",
-  nameEn: process.env.NEXT_PUBLIC_BRAND_NAME_EN || "Gold Trader",
+  name: process.env.NEXT_PUBLIC_BRAND_NAME || "اپال‌باکس",
+  nameEn: process.env.NEXT_PUBLIC_BRAND_NAME_EN || "OpalBox",
   companyName:
     process.env.NEXT_PUBLIC_BRAND_COMPANY_NAME ||
-    `شرکت ${process.env.NEXT_PUBLIC_BRAND_NAME || "گلد تریدر"}`,
+    `شرکت ${process.env.NEXT_PUBLIC_BRAND_NAME || "اپال‌باکس"}`,
   tagline:
     process.env.NEXT_PUBLIC_BRAND_TAGLINE ||
     "سامانه امن خرید و فروش طلای آب‌شده",

@@ -80,10 +80,17 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: https://opalbox.ir/api
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://opalbox.ir/api}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://opalbox.ir}
+        NEXT_PUBLIC_BRAND_NAME: ${NEXT_PUBLIC_BRAND_NAME:-اپال‌باکس}
+        NEXT_PUBLIC_BRAND_NAME_EN: ${NEXT_PUBLIC_BRAND_NAME_EN:-OpalBox}
+        NEXT_PUBLIC_BRAND_COMPANY_NAME: ${NEXT_PUBLIC_BRAND_COMPANY_NAME:-شرکت اپال‌باکس}
+        NEXT_PUBLIC_BRAND_TAGLINE: ${NEXT_PUBLIC_BRAND_TAGLINE:-سامانه امن خرید و فروش طلای آب‌شده}
+        NEXT_PUBLIC_BRAND_LOGO: ${NEXT_PUBLIC_BRAND_LOGO:-/OpalBox.png}
+        NEXT_PUBLIC_BRAND_LOGO_MARK: ${NEXT_PUBLIC_BRAND_LOGO_MARK:-/OpalBox-mark.png}
+        NEXT_PUBLIC_THEME_COLOR: ${NEXT_PUBLIC_THEME_COLOR:-#D4AF37}
     container_name: gold_trading_frontend
     # Note: No volume mount for /app in production to preserve standalone build
-    # Only mount node_modules and .next if needed for development
     volumes:
       - /app/node_modules
       - /app/.next
@@ -92,7 +99,8 @@ services:
     env_file:
       - .env
     environment:
-      - NEXT_PUBLIC_API_URL=https://opalbox.ir/api
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://opalbox.ir/api}
+      - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-https://opalbox.ir}
       - NODE_ENV=production
     depends_on:
       - backend
