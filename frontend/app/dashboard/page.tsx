@@ -142,6 +142,7 @@ export default function DashboardPage() {
                market_high={prices.market_high}
                market_low={prices.market_low}
                market_price_time={prices.market_price_time}
+               last_synced_at_jalali={prices.last_synced_at_jalali}
              />
            )}
         </div>

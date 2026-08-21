@@ -13,6 +13,12 @@ class GoldPriceSerializer(serializers.ModelSerializer):
             jalali_date = datetime2jalali(obj.created_at)
             return jalali_date.strftime('%Y/%m/%d %H:%M')
         return None
+
+    def get_last_synced_at_jalali(self, obj):
+        synced = obj.last_synced_at or obj.created_at
+        if synced:
+            return datetime2jalali(synced).strftime('%Y/%m/%d %H:%M:%S')
+        return None
     
     class Meta:
         model = GoldPrice
@@ -36,6 +42,8 @@ class GoldPriceSerializer(serializers.ModelSerializer):
 
         def as_float(value):
             return None if value is None else float(value)
+
+        synced = instance.last_synced_at or instance.created_at
         
         return {
             'buy': instance.buy_final_price,
@@ -43,6 +51,8 @@ class GoldPriceSerializer(serializers.ModelSerializer):
             'trades_enabled': settings.trades_enabled,
             'updated_at': instance.created_at.isoformat(),
             'created_at_jalali': self.get_created_at_jalali(instance),
+            'last_synced_at': synced.isoformat() if synced else None,
+            'last_synced_at_jalali': self.get_last_synced_at_jalali(instance),
             'market_change': as_int(instance.market_change),
             'market_change_percent': as_float(instance.market_change_percent),
             'market_high': as_int(instance.market_high),

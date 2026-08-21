@@ -114,29 +114,30 @@ def price_health_watchdog():
         return {'action': 'triggered_fetch', 'reason': 'no_price'}
     
     now = timezone.now()
-    age = now - current_price.created_at
+    synced_at = current_price.last_synced_at or current_price.created_at
+    age = now - synced_at
     age_minutes = age.total_seconds() / 60
     
-    max_age_minutes = 10  # حداکثر سن مجاز قیمت
+    max_age_minutes = 10  # حداکثر سن مجاز همگام‌سازی
     
     if age_minutes > max_age_minutes:
         logger.warning(
-            "قیمت قدیمی است (سن: %.1f دقیقه)، دریافت مستقیم قیمت...",
+            "همگام‌سازی قدیمی است (سن: %.1f دقیقه)، دریافت مستقیم قیمت...",
             age_minutes,
         )
         # اجرای مستقیم (نه async) برای اطمینان از دریافت
         result = fetch_viragold_price()
         return {
             'action': 'direct_fetch',
-            'reason': 'stale_price',
+            'reason': 'stale_sync',
             'age_minutes': round(age_minutes, 1),
             'fetch_result': result,
         }
     
-    logger.info("قیمت سالم است (سن: %.1f دقیقه)", age_minutes)
+    logger.info("همگام‌سازی سالم است (سن: %.1f دقیقه)", age_minutes)
     return {
         'action': 'none',
-        'reason': 'price_healthy',
+        'reason': 'sync_healthy',
         'age_minutes': round(age_minutes, 1),
     }
 

@@ -14,6 +14,8 @@ export interface GoldPrice {
   market_low?: number | null;
   market_price_time?: string | null;
   market_symbol_name?: string | null;
+  last_synced_at?: string | null;
+  last_synced_at_jalali?: string | null;
 }
 
 export interface GoldPriceAdmin {

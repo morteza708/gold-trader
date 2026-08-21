@@ -13,6 +13,8 @@ export interface GoldPriceData {
   market_low?: number | null;
   market_price_time?: string | null;
   market_symbol_name?: string | null;
+  last_synced_at?: string | null;
+  last_synced_at_jalali?: string | null;
 }
 
 export function useGoldPrice(interval = 5000) {

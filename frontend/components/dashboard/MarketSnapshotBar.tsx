@@ -8,6 +8,7 @@ export type MarketSnapshotValues = {
   market_low?: number | string | null;
   market_price_time?: string | null;
   market_symbol_name?: string | null;
+  last_synced_at_jalali?: string | null;
 };
 
 type MarketSnapshotBarProps = MarketSnapshotValues & {
@@ -50,17 +51,21 @@ export default function MarketSnapshotBar({
   market_low,
   market_price_time,
   market_symbol_name,
+  last_synced_at_jalali,
   variant = "user",
 }: MarketSnapshotBarProps) {
   const change = toNum(market_change);
   const percent = toNum(market_change_percent);
   const high = toNum(market_high);
   const low = toNum(market_low);
-  const time = formatMarketTime(market_price_time, variant === "admin");
+  const time = formatMarketTime(market_price_time, true);
+  const synced = last_synced_at_jalali
+    ? toPersianDigits(last_synced_at_jalali)
+    : null;
 
   const hasChange = change !== null || percent !== null;
   const hasRange = high !== null && low !== null;
-  if (!hasChange && !hasRange && !time) return null;
+  if (!hasChange && !hasRange && !time && !synced) return null;
 
   const direction = (percent ?? change ?? 0) > 0 ? "up" : (percent ?? change ?? 0) < 0 ? "down" : "flat";
   const tone =
@@ -91,12 +96,8 @@ export default function MarketSnapshotBar({
           بازه امروز: {formatAmount(low!)} تا {formatAmount(high!)}
         </span>
       )}
-      {time && (
-        <span>
-          {variant === "admin" ? "زمان نرخ: " : "به‌روزرسانی: "}
-          {time}
-        </span>
-      )}
+      {time && <span>زمان نرخ: {time}</span>}
+      {synced && <span className="text-slate-500">همگام‌سازی: {synced}</span>}
       {variant === "admin" && market_symbol_name && (
         <span className="text-slate-500">{market_symbol_name}</span>
       )}

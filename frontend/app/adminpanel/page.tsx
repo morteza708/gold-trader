@@ -211,6 +211,7 @@ export default function AdminDashboard() {
                     market_low={prices.market_low}
                     market_price_time={prices.market_price_time}
                     market_symbol_name={prices.market_symbol_name}
+                    last_synced_at_jalali={prices.last_synced_at_jalali}
                   />
                </>
             ) : (

@@ -139,6 +139,14 @@ class GoldPrice(models.Model):
         default='',
         verbose_name='نام نماد بازار'
     )
+    # آخرین دریافت موفق از API (حتی اگر قیمت پایه عوض نشده باشد)
+    last_synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='آخرین همگام‌سازی',
+        help_text='زمان آخرین دریافت موفق از API زنده؛ برای تشخیص سلامت Celery'
+    )
     
     class Meta:
         verbose_name = 'قیمت طلا'
@@ -189,8 +197,10 @@ class GoldPrice(models.Model):
             market: دیکشنری اختیاری فیلدهای خلاصه بازار
         """
         from django.db import transaction
+        from django.utils import timezone
 
         market = market or {}
+        now = timezone.now()
         
         with transaction.atomic():
             # غیرفعال کردن همه قیمت‌های قبلی
@@ -211,28 +221,42 @@ class GoldPrice(models.Model):
                 market_low=market.get('market_low'),
                 market_price_time=market.get('market_price_time') or '',
                 market_symbol_name=market.get('market_symbol_name') or '',
+                last_synced_at=now if source == 'API' else None,
             )
             
             return new_price
 
+    def touch_synced_at(self):
+        """ثبت زمان آخرین دریافت موفق از API، بدون ساخت تاریخچه جدید."""
+        from django.utils import timezone
+        self.last_synced_at = timezone.now()
+        self.save(update_fields=['last_synced_at'])
+        return self
+
     def apply_market_snapshot(self, market):
-        """به‌روزرسانی خلاصه بازار روی رکورد فعال، بدون ساخت تاریخچه جدید."""
-        if not market:
-            return self
-        self.market_change = market.get('market_change')
-        self.market_change_percent = market.get('market_change_percent')
-        self.market_high = market.get('market_high')
-        self.market_low = market.get('market_low')
-        self.market_price_time = market.get('market_price_time') or ''
-        self.market_symbol_name = market.get('market_symbol_name') or ''
-        self.save(update_fields=[
-            'market_change',
-            'market_change_percent',
-            'market_high',
-            'market_low',
-            'market_price_time',
-            'market_symbol_name',
-        ])
+        """به‌روزرسانی خلاصه بازار + زمان همگام‌سازی روی رکورد فعال."""
+        from django.utils import timezone
+
+        self.last_synced_at = timezone.now()
+        update_fields = ['last_synced_at']
+
+        if market:
+            self.market_change = market.get('market_change')
+            self.market_change_percent = market.get('market_change_percent')
+            self.market_high = market.get('market_high')
+            self.market_low = market.get('market_low')
+            self.market_price_time = market.get('market_price_time') or ''
+            self.market_symbol_name = market.get('market_symbol_name') or ''
+            update_fields.extend([
+                'market_change',
+                'market_change_percent',
+                'market_high',
+                'market_low',
+                'market_price_time',
+                'market_symbol_name',
+            ])
+
+        self.save(update_fields=update_fields)
         return self
 
     def market_snapshot(self):
