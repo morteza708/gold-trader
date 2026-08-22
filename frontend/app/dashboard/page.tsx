@@ -5,7 +5,7 @@ import { pageTitle } from "@/lib/brand";
 import { useState, useEffect } from "react";
 import { 
   ArrowUpRight, ArrowDownRight, TrendingUp, 
-  Plus, Minus, CreditCard, History, X, Wallet, AlertCircle
+  Plus, Minus, CreditCard, History, X, Wallet as WalletIcon, AlertCircle
 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -83,7 +83,7 @@ export default function DashboardPage() {
             href="/dashboard/wallet?tab=deposit"
             className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-colors shrink-0 w-full sm:w-auto justify-center"
           >
-            <Wallet size={14} />
+            <WalletIcon size={14} />
             شارژ کیف پول
           </Link>
         </div>
