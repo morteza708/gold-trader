@@ -14,6 +14,7 @@ import Input from "@/components/ui/Input";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import AddCardModal from "@/components/dashboard/AddCardModal";
+import WalletTabGuide from "@/components/dashboard/WalletTabGuide";
 import { formatNumber, toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
 import { walletAPI, Wallet, BankCard, WithdrawalRequest, DepositRequest, DepositAccountAssignment, DepositReceipt } from "@/lib/api/auth";
 import { useAuth } from "@/contexts/AuthContext";
@@ -380,6 +381,16 @@ function WalletContent() {
                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                    className="space-y-6"
                  >
+                    <WalletTabGuide
+                      storageKey="opalbox_wallet_guide_deposit"
+                      steps={[
+                        "مبلغ واریز را به ریال وارد کنید و درخواست را ثبت کنید.",
+                        "پس از ثبت، حساب‌های مقصد برای شما نمایش داده می‌شود.",
+                        "مبلغ را به یکی از حساب‌ها واریز کنید و فیش را آپلود نمایید.",
+                        "پس از تایید مدیر، موجودی ریالی کیف پول شما افزایش می‌یابد.",
+                      ]}
+                    />
+
                     <div className="text-center">
                        <h3 className="font-black text-gray-800 text-lg">ثبت فیش واریزی</h3>
                        <p className="text-gray-400 text-xs mt-1">لطفا مبلغ را وارد کنید و درخواست واریز را ثبت کنید</p>
@@ -649,11 +660,21 @@ function WalletContent() {
 
                {/* 2. تب برداشت وجه */}
                {activeTab === "withdraw" && (
-                 <motion.div 
+                 <motion.div
                    key="withdraw"
                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                    className="space-y-6"
                  >
+                    <WalletTabGuide
+                      storageKey="opalbox_wallet_guide_withdraw"
+                      steps={[
+                        "ابتدا یک کارت بانکی در تب «کارت‌های بانکی» ثبت کنید.",
+                        "مبلغ برداشت را وارد کنید (حداکثر تا موجودی ریالی شما).",
+                        "درخواست برداشت ثبت می‌شود و توسط مدیر بررسی می‌گردد.",
+                        "پس از تایید، مبلغ به حساب بانکی شما واریز می‌شود.",
+                      ]}
+                    />
+
                     <div className="text-center">
                        <h3 className="font-black text-gray-800 text-lg">برداشت از کیف پول</h3>
                        <p className="text-gray-400 text-xs mt-1">واریز به حساب بانکی شما (پایا/ساتنا)</p>
@@ -713,11 +734,20 @@ function WalletContent() {
 
                {/* 3. تب برداشت طلا */}
                {activeTab === "withdraw-gold" && (
-                 <motion.div 
+                 <motion.div
                    key="withdraw-gold"
                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                    className="space-y-6"
                  >
+                    <WalletTabGuide
+                      storageKey="opalbox_wallet_guide_withdraw_gold"
+                      steps={[
+                        "مقدار طلا (گرم) را وارد کنید؛ حداکثر تا موجودی طلای شما.",
+                        "درخواست برداشت حضوری ثبت می‌شود.",
+                        "پس از تایید مدیر، برای دریافت طلا با پشتیبانی هماهنگ کنید.",
+                      ]}
+                    />
+
                     <div className="text-center">
                        <h3 className="font-black text-gray-800 text-lg">برداشت طلا</h3>
                        <p className="text-gray-400 text-xs mt-1">درخواست دریافت طلا به صورت حضوری</p>
@@ -776,11 +806,20 @@ function WalletContent() {
 
                {/* 4. تب کارت‌ها */}
                {activeTab === "cards" && (
-                 <motion.div 
+                 <motion.div
                    key="cards"
                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                    className="space-y-6"
                  >
+                    <WalletTabGuide
+                      storageKey="opalbox_wallet_guide_cards"
+                      steps={[
+                        "برای برداشت وجه، حداقل یک کارت بانکی به نام خودتان ثبت کنید.",
+                        "شماره کارت ۱۶ رقمی و نام بانک را وارد نمایید.",
+                        "کارت تایید شده در درخواست‌های برداشت قابل انتخاب است.",
+                      ]}
+                    />
+
                     <div className="flex justify-between items-center">
                        <h3 className="font-black text-gray-800 text-lg">مدیریت حساب‌ها</h3>
                        <button onClick={() => setIsAddCardOpen(true)} className="flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">
@@ -828,11 +867,20 @@ function WalletContent() {
 
                {/* 5. تب تاریخچه */}
                {activeTab === "history" && (
-                 <motion.div 
+                 <motion.div
                    key="history"
                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                    className="space-y-4"
                  >
+                    <WalletTabGuide
+                      storageKey="opalbox_wallet_guide_history"
+                      steps={[
+                        "تمام درخواست‌های واریز و برداشت شما در اینجا نمایش داده می‌شود.",
+                        "وضعیت هر درخواست: در انتظار، تایید شده یا رد شده.",
+                        "برای جزئیات بیشتر روی هر مورد کلیک کنید.",
+                      ]}
+                    />
+
                     <div className="text-center mb-4">
                        <h3 className="font-black text-gray-800 text-lg">تاریخچه تراکنش‌ها</h3>
                     </div>

@@ -5,13 +5,14 @@ import { pageTitle } from "@/lib/brand";
 import { useState, useEffect } from "react";
 import { 
   ArrowUpRight, ArrowDownRight, TrendingUp, 
-  Plus, Minus, CreditCard, History, X
+  Plus, Minus, CreditCard, History, X, Wallet, AlertCircle
 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import LiveClock from "@/components/dashboard/LiveClock";
 import TradeModal from "@/components/dashboard/TradeModal";
 import MarketSnapshotBar from "@/components/dashboard/MarketSnapshotBar";
+import WelcomeOnboardingModal from "@/components/dashboard/WelcomeOnboardingModal";
 import { useGoldPrice } from "@/hooks/useGoldPrice";
 import { useTradesStatus } from "@/hooks/useTradesStatus";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
@@ -61,6 +62,32 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 md:pb-0">
+      
+      <WelcomeOnboardingModal />
+
+      {/* بنر موجودی صفر */}
+      {wallet && Number(wallet.rial_balance || 0) === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+              <AlertCircle size={20} />
+            </div>
+            <div>
+              <p className="font-bold text-amber-900 text-sm">موجودی کیف پول شما صفر است</p>
+              <p className="text-amber-700/80 text-xs mt-0.5">
+                برای خرید طلا، ابتدا کیف پول خود را شارژ کنید.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/wallet?tab=deposit"
+            className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-colors shrink-0 w-full sm:w-auto justify-center"
+          >
+            <Wallet size={14} />
+            شارژ کیف پول
+          </Link>
+        </div>
+      )}
       
       {/* --- بخش ۱: هدر قیمت‌ها و ساعت --- */}
       <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl p-6 text-white shadow-2xl relative overflow-hidden border border-slate-700">

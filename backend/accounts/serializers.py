@@ -122,26 +122,68 @@ class VerifyOTPSerializer(serializers.Serializer):
 
 class CompleteProfileSerializer(serializers.ModelSerializer):
     birth_date = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    ALLOWED_IMAGE_TYPES = ('image/jpeg', 'image/jpg', 'image/png')
+    MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
     
     class Meta:
         model = CustomUser
         fields = ['first_name', 'last_name', 'national_id', 'national_card_image', 'birth_date']
     
+    def validate_first_name(self, value):
+        if not value or not str(value).strip():
+            raise serializers.ValidationError('نام الزامی است')
+        return str(value).strip()
+    
+    def validate_last_name(self, value):
+        if not value or not str(value).strip():
+            raise serializers.ValidationError('نام خانوادگی الزامی است')
+        return str(value).strip()
+    
     def validate_national_id(self, value):
         """اعتبارسنجی کد ملی"""
-        if value:
-            # تبدیل اعداد فارسی به انگلیسی
-            value = persian_to_english_numbers(value)
-            if len(value) != 10:
-                raise serializers.ValidationError('کد ملی باید 10 رقم باشد')
-            if not value.isdigit():
-                raise serializers.ValidationError('کد ملی باید فقط شامل اعداد باشد')
+        if not value:
+            raise serializers.ValidationError('کد ملی الزامی است')
+        # تبدیل اعداد فارسی به انگلیسی
+        value = persian_to_english_numbers(value)
+        if len(value) != 10:
+            raise serializers.ValidationError('کد ملی باید 10 رقم باشد')
+        if not value.isdigit():
+            raise serializers.ValidationError('کد ملی باید فقط شامل اعداد باشد')
         return value
+    
+    def validate_national_card_image(self, value):
+        if value is None:
+            return value
+        if value.size > self.MAX_IMAGE_SIZE:
+            raise serializers.ValidationError('حجم تصویر باید کمتر از ۵ مگابایت باشد')
+        content_type = getattr(value, 'content_type', '') or ''
+        if content_type not in self.ALLOWED_IMAGE_TYPES:
+            raise serializers.ValidationError('فرمت مجاز: JPG یا PNG')
+        return value
+    
+    def validate(self, attrs):
+        instance = self.instance
+        errors = {}
+        
+        birth_date = attrs.get('birth_date')
+        if birth_date is None and 'birth_date' not in attrs:
+            birth_date = None
+        has_birth_date = bool(birth_date) or (instance and instance.birth_date)
+        
+        has_image = attrs.get('national_card_image') or (instance and instance.national_card_image)
+        if not has_image:
+            errors['national_card_image'] = 'آپلود تصویر کارت ملی الزامی است'
+        if not has_birth_date:
+            errors['birth_date'] = 'تاریخ تولد الزامی است'
+        
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
     
     def validate_birth_date(self, value):
         """اعتبارسنجی تاریخ تولد (فرمت: YYYY-MM-DD شمسی)"""
         if not value:
-            return None
+            raise serializers.ValidationError('تاریخ تولد الزامی است')
         
         # تبدیل اعداد فارسی به انگلیسی
         value = persian_to_english_numbers(value)
@@ -182,11 +224,20 @@ class CompleteProfileSerializer(serializers.ModelSerializer):
             day = int(parts[2])
             instance.birth_date = jdatetime.date(year, month, day)
         elif birth_date_str is None and 'birth_date' in validated_data:
-            # اگر خالی ارسال شده باشد
             instance.birth_date = None
         
-        instance.profile_completed = True
         instance.save()
+        
+        if (
+            instance.first_name and
+            instance.last_name and
+            instance.national_id and
+            instance.national_card_image and
+            instance.birth_date
+        ):
+            instance.profile_completed = True
+            instance.save(update_fields=['profile_completed'])
+        
         return instance
 
 

@@ -108,16 +108,23 @@ def complete_profile(request):
     """
     تکمیل پروفایل کاربر
     """
+    if request.user.profile_completed:
+        return Response(
+            {'detail': 'پروفایل قبلاً تکمیل شده است.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
     serializer = CompleteProfileSerializer(
         request.user,
         data=request.data,
-        partial=True
+        partial=False
     )
     if serializer.is_valid():
         serializer.save()
+        request.user.refresh_from_db()
         return Response({
             'message': 'پروفایل با موفقیت تکمیل شد',
-            'user': UserSerializer(request.user).data
+            'user': UserSerializer(request.user, context={'request': request}).data
         }, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
