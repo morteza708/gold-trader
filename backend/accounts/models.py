@@ -79,11 +79,13 @@ class CustomUser(AbstractUser):
         blank=True,
         verbose_name='کد ملی'
     )
-    national_card_image = models.ImageField(
+    # FileField: آیفون اغلب HEIC می‌فرستد؛ ImageField/Pillow بدون وابستگی اضافه آن را رد می‌کند
+    national_card_image = models.FileField(
         upload_to='national_cards/',
         null=True,
         blank=True,
-        verbose_name='عکس کارت ملی'
+        verbose_name='عکس کارت ملی',
+        help_text='JPG، PNG، WebP، HEIC/HEIF — حداکثر ۱۰ مگابایت'
     )
     avatar = models.ImageField(
         upload_to='avatars/',

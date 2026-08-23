@@ -2,7 +2,17 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { User, CreditCard, Calendar as CalendarIcon, UploadCloud, CheckCircle2, X } from "lucide-react";
+import {
+  User,
+  CreditCard,
+  Calendar as CalendarIcon,
+  UploadCloud,
+  CheckCircle2,
+  X,
+  Info,
+  ExternalLink,
+  AlertTriangle,
+} from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import toast from "react-hot-toast";
@@ -13,8 +23,51 @@ import DatePicker, { DateObject } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 
-const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png"];
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "image/heic-sequence",
+  "image/heif-sequence",
+]);
+
+const ALLOWED_EXTENSIONS = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".heic",
+  ".heif",
+]);
+
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_IMAGE_SIZE_LABEL = "۱۰ مگابایت";
+
+const COMPRESS_TOOLS = [
+  {
+    name: "iLoveIMG",
+    url: "https://www.iloveimg.com/compress-image",
+    note: "فشرده‌سازی آنلاین — مناسب آیفون و اندروید",
+  },
+  {
+    name: "TinyPNG",
+    url: "https://tinypng.com/",
+    note: "کاهش حجم JPG و PNG با کیفیت خوب",
+  },
+  {
+    name: "Compress JPEG",
+    url: "https://compressjpeg.com/",
+    note: "تبدیل و فشرده‌سازی سریع به JPG",
+  },
+  {
+    name: "Img2Go",
+    url: "https://www.img2go.com/compress-image",
+    note: "پشتیبانی از فرمت‌های مختلف از جمله HEIC",
+  },
+] as const;
 
 type FieldErrors = {
   firstName?: string;
@@ -24,11 +77,97 @@ type FieldErrors = {
   nationalCard?: string;
 };
 
+function getFileExtension(fileName: string): string {
+  const idx = fileName.lastIndexOf(".");
+  if (idx < 0) return "";
+  return fileName.slice(idx).toLowerCase();
+}
+
+function isAllowedImageFile(file: File): boolean {
+  const mime = (file.type || "").toLowerCase().trim();
+  const ext = getFileExtension(file.name);
+
+  if (ALLOWED_IMAGE_TYPES.has(mime)) return true;
+  if (ALLOWED_EXTENSIONS.has(ext)) {
+    // Safari/iOS گاهی MIME خالی یا octet-stream می‌فرستد
+    if (!mime || mime === "application/octet-stream" || mime === "binary/octet-stream") {
+      return true;
+    }
+    if (mime.startsWith("image/")) return true;
+  }
+  return false;
+}
+
+function ImageCompressHelp({ reason }: { reason?: "size" | "format" | "general" }) {
+  return (
+    <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-right space-y-3">
+      <div className="flex items-start gap-2">
+        <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <p className="text-sm font-bold text-amber-900">
+            {reason === "size"
+              ? "حجم عکس بیشتر از حد مجاز است"
+              : reason === "format"
+                ? "فرمت عکس پشتیبانی نمی‌شود"
+                : "راهنمای آماده‌سازی عکس کارت ملی"}
+          </p>
+          <p className="text-xs text-amber-800/90 leading-relaxed">
+            نگران نباشید — از سیستم خارج نمی‌شوید. همین صفحه را باز نگه دارید،
+            حجم/فرمت عکس را اصلاح کنید و دوباره آپلود کنید.
+          </p>
+        </div>
+      </div>
+
+      <ul className="text-xs text-amber-900/90 space-y-1.5 list-disc pr-5 leading-relaxed">
+        <li>
+          فرمت‌های مجاز: <strong>JPG، PNG، WebP، HEIC/HEIF (عکس آیفون)</strong>
+        </li>
+        <li>
+          حداکثر حجم: <strong>{MAX_IMAGE_SIZE_LABEL}</strong>
+        </li>
+        <li>
+          در آیفون: Settings → Camera → Formats → گزینه{" "}
+          <strong>Most Compatible</strong> را انتخاب کنید تا عکس‌ها JPG شوند
+        </li>
+        <li>
+          یا در Photos روی عکس بزنید → Share → Save to Files / Duplicate و در صورت امکان به JPG ذخیره کنید
+        </li>
+      </ul>
+
+      <div>
+        <p className="text-xs font-bold text-amber-900 mb-2">
+          سایت‌های معتبر برای کاهش حجم عکس:
+        </p>
+        <div className="space-y-2">
+          {COMPRESS_TOOLS.map((tool) => (
+            <a
+              key={tool.url}
+              href={tool.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between gap-2 rounded-xl bg-white border border-amber-200 px-3 py-2.5 hover:border-amber-400 hover:bg-amber-50 transition-colors"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-gray-800">{tool.name}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">{tool.note}</p>
+              </div>
+              <ExternalLink size={14} className="text-amber-600 shrink-0" />
+            </a>
+          ))}
+        </div>
+        <p className="text-[11px] text-amber-700/80 mt-2 leading-relaxed">
+          پس از کاهش حجم، فایل را از Downloads ذخیره کنید و در همین فرم دوباره انتخاب کنید.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const router = useRouter();
   const { user, completeProfile, isLoading: authLoading } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [formData, setFormData] = useState<{
     firstName: string;
     lastName: string;
@@ -40,17 +179,25 @@ export default function ProfilePage() {
     nationalCode: "",
     birthDate: null,
   });
-  
+
   const [nationalCard, setNationalCard] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [uploadHelpReason, setUploadHelpReason] = useState<"size" | "format" | "general" | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/auth/login');
+      router.push("/auth/login");
     }
   }, [user, authLoading, router]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const clearFieldError = (field: keyof FieldErrors) => {
     setFieldErrors((prev) => {
@@ -79,24 +226,39 @@ export default function ProfilePage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    // فقط فایل نامعتبر را رد می‌کنیم؛ فرم و نشست کاربر دست‌نخورده می‌ماند
+    if (!isAllowedImageFile(file)) {
+      setNationalCard(null);
+      setPreviewUrl(null);
+      setPreviewFailed(false);
+      setUploadHelpReason("format");
       setFieldErrors((prev) => ({
         ...prev,
-        nationalCard: "فرمت مجاز: JPG یا PNG",
+        nationalCard:
+          "فرمت این فایل مجاز نیست. JPG، PNG، WebP یا HEIC/HEIF (آیفون) را انتخاب کنید.",
       }));
       if (fileInputRef.current) fileInputRef.current.value = "";
+      toast.error("فرمت عکس پشتیبانی نمی‌شود — راهنما را پایین ببینید", { duration: 5000 });
       return;
     }
+
     if (file.size > MAX_IMAGE_SIZE) {
+      setNationalCard(null);
+      setPreviewUrl(null);
+      setPreviewFailed(false);
+      setUploadHelpReason("size");
       setFieldErrors((prev) => ({
         ...prev,
-        nationalCard: "حجم تصویر باید کمتر از ۵ مگابایت باشد",
+        nationalCard: `حجم این عکس بیش از ${MAX_IMAGE_SIZE_LABEL} است. با یکی از ابزارهای زیر حجم را کم کنید و دوباره آپلود کنید.`,
       }));
       if (fileInputRef.current) fileInputRef.current.value = "";
+      toast.error("حجم عکس زیاد است — لینک کاهش حجم را ببینید", { duration: 6000 });
       return;
     }
 
     clearFieldError("nationalCard");
+    setUploadHelpReason(null);
+    setPreviewFailed(false);
     setNationalCard(file);
     setPreviewUrl(URL.createObjectURL(file));
   };
@@ -104,6 +266,8 @@ export default function ProfilePage() {
   const removeImage = () => {
     setNationalCard(null);
     setPreviewUrl(null);
+    setPreviewFailed(false);
+    setUploadHelpReason(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -124,6 +288,7 @@ export default function ProfilePage() {
     }
     if (!nationalCard) {
       errors.nationalCard = "آپلود تصویر کارت ملی الزامی است";
+      if (!uploadHelpReason) setUploadHelpReason("general");
     }
 
     return errors;
@@ -144,6 +309,15 @@ export default function ProfilePage() {
       const message = Array.isArray(value) ? String(value[0]) : String(value);
       if (frontendKey) {
         mapped[frontendKey] = message;
+        if (frontendKey === "nationalCard") {
+          if (message.includes("حجم") || message.includes("مگابایت")) {
+            setUploadHelpReason("size");
+          } else if (message.includes("فرمت")) {
+            setUploadHelpReason("format");
+          } else {
+            setUploadHelpReason("general");
+          }
+        }
       }
     }
     return mapped;
@@ -155,14 +329,20 @@ export default function ProfilePage() {
     if (formData.birthDate instanceof DateObject) {
       const year = formData.birthDate.year;
       let month: number;
-      if (typeof formData.birthDate.month === 'number') {
+      if (typeof formData.birthDate.month === "number") {
         month = formData.birthDate.month;
-      } else if (formData.birthDate.month && typeof formData.birthDate.month === 'object' && 'number' in formData.birthDate.month) {
+      } else if (
+        formData.birthDate.month &&
+        typeof formData.birthDate.month === "object" &&
+        "number" in formData.birthDate.month
+      ) {
         month = (formData.birthDate.month as { number: number }).number;
       } else {
-        month = (formData.birthDate as DateObject & { monthIndex?: number }).monthIndex !== undefined
-          ? (formData.birthDate as DateObject & { monthIndex?: number }).monthIndex! + 1
-          : 1;
+        month =
+          (formData.birthDate as DateObject & { monthIndex?: number }).monthIndex !==
+          undefined
+            ? (formData.birthDate as DateObject & { monthIndex?: number }).monthIndex! + 1
+            : 1;
       }
       const day = formData.birthDate.day;
 
@@ -172,16 +352,25 @@ export default function ProfilePage() {
       const monthNum = parseInt(String(month), 10);
       const dayNum = parseInt(String(day), 10);
 
-      if (isNaN(yearNum) || isNaN(monthNum) || isNaN(dayNum) || yearNum <= 0 || monthNum <= 0 || monthNum > 12 || dayNum <= 0 || dayNum > 31) {
+      if (
+        isNaN(yearNum) ||
+        isNaN(monthNum) ||
+        isNaN(dayNum) ||
+        yearNum <= 0 ||
+        monthNum <= 0 ||
+        monthNum > 12 ||
+        dayNum <= 0 ||
+        dayNum > 31
+      ) {
         return null;
       }
 
-      return `${yearNum}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+      return `${yearNum}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
     }
 
-    if (typeof formData.birthDate === 'string' && formData.birthDate.trim()) {
-      const dateStr = formData.birthDate.replace(/\//g, '-').trim();
-      const parts = dateStr.split('-').filter((p) => p.trim());
+    if (typeof formData.birthDate === "string" && formData.birthDate.trim()) {
+      const dateStr = formData.birthDate.replace(/\//g, "-").trim();
+      const parts = dateStr.split("-").filter((p) => p.trim());
       if (parts.length !== 3) return null;
 
       const year = toEnglishDigits(parts[0].trim());
@@ -189,7 +378,7 @@ export default function ProfilePage() {
       const day = toEnglishDigits(parts[2].trim());
 
       if (!/^\d+$/.test(year) || !/^\d+$/.test(month) || !/^\d+$/.test(day)) return null;
-      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
     }
 
     return null;
@@ -232,14 +421,14 @@ export default function ProfilePage() {
         }
         const firstError = Object.values(err.response.data)[0];
         if (Array.isArray(firstError)) {
-          toast.error(String(firstError[0]));
-        } else if (typeof firstError === 'string') {
-          toast.error(firstError);
+          toast.error(String(firstError[0]), { duration: 6000 });
+        } else if (typeof firstError === "string") {
+          toast.error(firstError, { duration: 6000 });
         } else {
           toast.error("خطا در ثبت اطلاعات. لطفا فیلدها را بررسی کنید.");
         }
       } else {
-        toast.error("خطا در ثبت اطلاعات. لطفا دوباره تلاش کنید.");
+        toast.error("خطا در ثبت اطلاعات. لطفا دوباره تلاش کنید. نشست شما همچنان فعال است.");
       }
     } finally {
       setIsLoading(false);
@@ -248,7 +437,6 @@ export default function ProfilePage() {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full max-w-lg mx-auto">
-      
       <div className="text-center mb-8">
         <h1 className="text-2xl font-black text-gray-800 mb-2">تکمیل مشخصات کاربری</h1>
         <p className="text-gray-500 text-sm">
@@ -257,11 +445,10 @@ export default function ProfilePage() {
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
-        
         <div className="bg-gold-50/50 border border-gold-200 rounded-xl p-3 flex justify-between items-center px-4">
           <span className="text-sm text-gray-500">شماره موبایل شما:</span>
           <span className="font-bold text-gray-800 dir-ltr font-mono text-lg">
-            {user ? toPersianDigits(user.phone_number) : ''}
+            {user ? toPersianDigits(user.phone_number) : ""}
           </span>
         </div>
 
@@ -307,14 +494,14 @@ export default function ProfilePage() {
               locale={persian_fa}
               value={formData.birthDate}
               onChange={(date: DateObject | DateObject[] | null) => {
-                 clearFieldError("birthDate");
-                 if (date && !Array.isArray(date)) {
-                   setFormData(prev => ({ ...prev, birthDate: date }));
-                 } else if (date && Array.isArray(date) && date.length > 0) {
-                   setFormData(prev => ({ ...prev, birthDate: date[0] }));
-                 } else {
-                   setFormData(prev => ({ ...prev, birthDate: null }));
-                 }
+                clearFieldError("birthDate");
+                if (date && !Array.isArray(date)) {
+                  setFormData((prev) => ({ ...prev, birthDate: date }));
+                } else if (date && Array.isArray(date) && date.length > 0) {
+                  setFormData((prev) => ({ ...prev, birthDate: date[0] }));
+                } else {
+                  setFormData((prev) => ({ ...prev, birthDate: null }));
+                }
               }}
               calendarPosition="bottom-right"
               containerClassName="w-full"
@@ -325,7 +512,11 @@ export default function ProfilePage() {
               }`}
               placeholder="انتخاب کنید"
             />
-            <div className={`absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none ${fieldErrors.birthDate ? "text-red-400" : "text-gray-400"}`}>
+            <div
+              className={`absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none ${
+                fieldErrors.birthDate ? "text-red-400" : "text-gray-400"
+              }`}
+            >
               <CalendarIcon size={18} />
             </div>
           </div>
@@ -336,9 +527,18 @@ export default function ProfilePage() {
 
         <div className="w-full">
           <label className="block text-sm font-bold text-gray-700 mb-2">تصویر کارت ملی</label>
-          
+
+          <div className="mb-3 flex items-start gap-2 rounded-xl bg-blue-50 border border-blue-100 p-3">
+            <Info size={16} className="text-blue-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-blue-800 leading-relaxed">
+              عکس واضح از کارت ملی (روی کارت). فرمت‌های مجاز: JPG، PNG، WebP و{" "}
+              <strong>HEIC آیفون</strong>. حداکثر حجم: {MAX_IMAGE_SIZE_LABEL}. اگر حجم زیاد بود،
+              صفحه را نبندید؛ از ابزارهای کاهش حجم استفاده کنید و دوباره آپلود کنید.
+            </p>
+          </div>
+
           {!previewUrl ? (
-            <div 
+            <div
               onClick={() => fileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group text-center ${
                 fieldErrors.nationalCard
@@ -350,23 +550,40 @@ export default function ProfilePage() {
                 <UploadCloud size={24} />
               </div>
               <p className="text-gray-700 font-bold text-sm">کلیک کنید یا تصویر را اینجا رها کنید</p>
-              <p className="text-gray-400 text-xs mt-1">حداکثر حجم: ۵ مگابایت (JPG, PNG)</p>
+              <p className="text-gray-400 text-xs mt-1">
+                حداکثر {MAX_IMAGE_SIZE_LABEL} — JPG، PNG، WebP، HEIC
+              </p>
             </div>
           ) : (
-            <div className={`relative border-2 rounded-xl overflow-hidden p-1 bg-white shadow-md ${
-              fieldErrors.nationalCard ? "border-red-400" : "border-gold-500"
-            }`}>
-              <img src={previewUrl} alt="Preview" className="w-full h-48 object-cover rounded-lg" />
-              
-              <button 
+            <div
+              className={`relative border-2 rounded-xl overflow-hidden p-1 bg-white shadow-md ${
+                fieldErrors.nationalCard ? "border-red-400" : "border-gold-500"
+              }`}
+            >
+              {previewFailed ? (
+                <div className="w-full h-48 rounded-lg bg-gray-50 flex items-center justify-center text-xs text-gray-500 px-4 text-center">
+                  فایل انتخاب شد: {nationalCard?.name || "عکس کارت ملی"}
+                  <br />
+                  (پیش‌نمایش در این مرورگر در دسترس نیست؛ آپلود مشکلی ندارد)
+                </div>
+              ) : (
+                <img
+                  src={previewUrl}
+                  alt="Preview"
+                  className="w-full h-48 object-cover rounded-lg bg-gray-50"
+                  onError={() => setPreviewFailed(true)}
+                />
+              )}
+
+              <button
                 type="button"
                 onClick={removeImage}
-                className="absolute top-3 left-3 bg-red-500 text-white p-1.5 rounded-full hover:bg-red-600 transition-colors shadow-lg"
+                className="absolute top-3 left-3 bg-red-500 text-white p-1.5 rounded-full hover:bg-red-600 transition-colors shadow-lg z-10"
               >
                 <X size={16} />
               </button>
-              
-              <div className="absolute bottom-3 right-3 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
+
+              <div className="absolute bottom-3 right-3 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg z-10">
                 <CheckCircle2 size={12} />
                 آماده آپلود
               </div>
@@ -374,27 +591,30 @@ export default function ProfilePage() {
           )}
 
           {fieldErrors.nationalCard && (
-            <p className="text-xs text-red-500 mt-1 font-medium">{fieldErrors.nationalCard}</p>
+            <p className="text-xs text-red-500 mt-2 font-medium">{fieldErrors.nationalCard}</p>
           )}
 
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleFileChange} 
-            className="hidden" 
-            accept="image/png, image/jpeg, image/jpg"
+          {(uploadHelpReason || fieldErrors.nationalCard) && (
+            <ImageCompressHelp reason={uploadHelpReason || "general"} />
+          )}
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            accept="image/*,.heic,.heif,.jpg,.jpeg,.png,.webp"
           />
         </div>
 
-        <Button 
-          variant="primary" 
+        <Button
+          variant="primary"
           type="submit"
           className="w-full justify-center mt-4"
           disabled={isLoading}
         >
           {isLoading ? "در حال ثبت اطلاعات..." : "تکمیل ثبت‌نام و ورود"}
         </Button>
-
       </form>
     </div>
   );

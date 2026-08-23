@@ -122,8 +122,18 @@ class VerifyOTPSerializer(serializers.Serializer):
 
 class CompleteProfileSerializer(serializers.ModelSerializer):
     birth_date = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    ALLOWED_IMAGE_TYPES = ('image/jpeg', 'image/jpg', 'image/png')
-    MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
+    ALLOWED_IMAGE_TYPES = (
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+        'image/heic',
+        'image/heif',
+        'image/heic-sequence',
+        'image/heif-sequence',
+    )
+    ALLOWED_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif')
+    MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB
     
     class Meta:
         model = CustomUser
@@ -155,11 +165,29 @@ class CompleteProfileSerializer(serializers.ModelSerializer):
         if value is None:
             return value
         if value.size > self.MAX_IMAGE_SIZE:
-            raise serializers.ValidationError('حجم تصویر باید کمتر از ۵ مگابایت باشد')
-        content_type = getattr(value, 'content_type', '') or ''
-        if content_type not in self.ALLOWED_IMAGE_TYPES:
-            raise serializers.ValidationError('فرمت مجاز: JPG یا PNG')
-        return value
+            raise serializers.ValidationError(
+                'حجم تصویر بیش از ۱۰ مگابایت است. لطفاً حجم را کاهش دهید و دوباره آپلود کنید.'
+            )
+        content_type = (getattr(value, 'content_type', '') or '').lower().strip()
+        name = (getattr(value, 'name', '') or '').lower()
+        ext = ''
+        if '.' in name:
+            ext = '.' + name.rsplit('.', 1)[-1]
+
+        mime_ok = content_type in self.ALLOWED_IMAGE_TYPES
+        # Safari گاهی MIME خالی یا application/octet-stream می‌فرستد
+        mime_unknown = content_type in ('', 'application/octet-stream', 'binary/octet-stream')
+        ext_ok = ext in self.ALLOWED_EXTENSIONS
+
+        if mime_ok or (mime_unknown and ext_ok) or (not content_type and ext_ok):
+            return value
+
+        if ext_ok and content_type.startswith('image/'):
+            return value
+
+        raise serializers.ValidationError(
+            'فرمت مجاز نیست. JPG، PNG، WebP یا HEIC/HEIF (آیفون) را آپلود کنید.'
+        )
     
     def validate(self, attrs):
         instance = self.instance
