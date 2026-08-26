@@ -14,6 +14,13 @@ urlpatterns = [
     path('trades/', views.get_trades, name='get-trades'),
     path('trades/<int:trade_id>/', views.get_trade_detail, name='get-trade-detail'),
     path('trades/<int:trade_id>/invoice/', views.download_invoice_pdf, name='download-invoice-pdf'),
+
+    # Pending purchase (خرید با تسویه بعدی)
+    path('trades/pending-purchases/', views.get_active_pending_purchase, name='pending-purchase-active'),
+    path('trades/pending-purchases/create/', views.create_pending_purchase, name='pending-purchase-create'),
+    path('trades/pending-purchases/<int:pending_id>/', views.get_pending_purchase_detail, name='pending-purchase-detail'),
+    path('trades/pending-purchases/<int:pending_id>/cancel/', views.cancel_pending_purchase, name='pending-purchase-cancel'),
+    path('admin/trades/pending-purchases/', views.admin_list_pending_purchases, name='admin-pending-purchases'),
     
     # Admin Endpoints
     path('admin/trades/status/', views.admin_get_trades_status, name='admin-get-trades-status'),

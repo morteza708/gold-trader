@@ -7,7 +7,8 @@ import { useSearchParams } from "next/navigation";
 import { 
   CreditCard, ArrowUpCircle, ArrowDownCircle, Plus, 
   Wallet as WalletIcon, History, Copy, CheckCircle2, Trash2, Building2,
-  Calendar as CalendarIcon, UploadCloud, X, AlertTriangle, RefreshCw, Coins, Eye
+  Calendar as CalendarIcon, UploadCloud, X, AlertTriangle, RefreshCw, Coins, Eye,
+  Clock
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -19,6 +20,7 @@ import ImageCompressHelp from "@/components/ui/ImageCompressHelp";
 import { formatNumber, toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
 import { IMAGE_FILE_ACCEPT, MAX_IMAGE_SIZE_LABEL, validateImageFile } from "@/lib/utils/imageUpload";
 import { walletAPI, Wallet, BankCard, WithdrawalRequest, DepositRequest, DepositAccountAssignment, DepositReceipt } from "@/lib/api/auth";
+import { tradesAPI, PendingPurchase } from "@/lib/api/trades";
 import { useAuth } from "@/contexts/AuthContext";
 
 // تقویم شمسی
@@ -30,6 +32,7 @@ function WalletContent() {
   const { refreshUser } = useAuth();
   const searchParams = useSearchParams();
   const tabFromUrl = searchParams.get('tab') as "deposit" | "withdraw" | "withdraw-gold" | "cards" | "history" | null;
+  const pendingPurchaseIdFromUrl = searchParams.get('pending_purchase');
   const [activeTab, setActiveTab] = useState<"deposit" | "withdraw" | "withdraw-gold" | "cards" | "history">(
     tabFromUrl && ["deposit", "withdraw", "withdraw-gold", "cards", "history"].includes(tabFromUrl) 
       ? tabFromUrl 
@@ -69,11 +72,37 @@ function WalletContent() {
     receipt_file: File | null;
     receipt_image: string | null;
   }>>({});
+  const [activePendingPurchase, setActivePendingPurchase] = useState<PendingPurchase | null>(null);
 
   // بارگذاری داده‌ها
   useEffect(() => {
     fetchWalletData();
+    loadPendingPurchase();
   }, []);
+
+  const loadPendingPurchase = async () => {
+    try {
+      if (pendingPurchaseIdFromUrl) {
+        const detail = await tradesAPI.getPendingPurchase(Number(pendingPurchaseIdFromUrl));
+        setActivePendingPurchase(detail);
+        const minAmount = Number(detail.deposit_min_amount || 0);
+        if (minAmount > 0 && !amount) {
+          setAmount(formatNumber(String(minAmount)));
+        }
+        return;
+      }
+      const res = await tradesAPI.getActivePendingPurchase();
+      setActivePendingPurchase(res.pending_purchase);
+      if (res.pending_purchase?.status === "AWAITING_DEPOSIT") {
+        const minAmount = Number(res.pending_purchase.deposit_min_amount || 0);
+        if (minAmount > 0) {
+          setAmount(formatNumber(String(minAmount)));
+        }
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   // تغییر تب بر اساس URL parameter
   useEffect(() => {
@@ -142,21 +171,25 @@ function WalletContent() {
   };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // تبدیل اعداد فارسی به انگلیسی
     const englishValue = toEnglishDigits(e.target.value);
-    // فرمت کردن با کاما
     const formatted = formatNumber(englishValue);
+    const numeric = parseFloat(englishValue.replace(/,/g, "")) || 0;
+    const minDeposit = activePendingPurchase
+      ? Number(activePendingPurchase.deposit_min_amount || 0)
+      : 0;
+
+    if (activePendingPurchase?.status === "AWAITING_DEPOSIT" && minDeposit > 0 && numeric < minDeposit) {
+      // اجازه تایپ آزاد؛ هنگام blur/submit کنترل می‌کنیم — اما اگر خالی شد به کف برنگردان
+      setAmount(formatted);
+      return;
+    }
     setAmount(formatted);
   };
 
   const handleGoldAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // تبدیل اعداد فارسی به انگلیسی
     let englishValue = toEnglishDigits(e.target.value);
-    // تبدیل نقطه اعشار فارسی (٫) به انگلیسی (.)
     englishValue = englishValue.replace(/٫/g, '.');
-    // حذف کاماها
     const value = englishValue.replace(/,/g, '');
-    // بررسی اینکه فقط عدد و نقطه اعشار باشد
     if (/^\d*\.?\d*$/.test(value)) {
       setGoldAmount(value);
     }
@@ -174,19 +207,38 @@ function WalletContent() {
       return;
     }
 
+    const minDeposit = activePendingPurchase
+      ? Number(activePendingPurchase.deposit_min_amount || 0)
+      : 0;
+
+    if (
+      activePendingPurchase?.status === "AWAITING_DEPOSIT" &&
+      minDeposit > 0 &&
+      amountValue < minDeposit
+    ) {
+      toast.error(
+        `مبلغ واریز نمی‌تواند کمتر از ${toPersianDigits(minDeposit.toLocaleString())} ریال باشد`,
+        { duration: 5000 }
+      );
+      setAmount(formatNumber(String(minDeposit)));
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      // فقط مبلغ را می‌فرستیم (بدون tracking_number, deposit_date, receipt_image)
       await walletAPI.createDepositRequest({
         amount: amountValue,
+        pending_purchase_id:
+          activePendingPurchase?.status === "AWAITING_DEPOSIT"
+            ? activePendingPurchase.id
+            : undefined,
       });
       
       toast.success("درخواست واریز با موفقیت ثبت شد. منتظر تخصیص حساب‌ها باشید.");
       
-      // پاک کردن فرم
       setAmount("");
-      
       await fetchWalletData();
+      await loadPendingPurchase();
     } catch (error: any) {
       console.error('Error creating deposit request:', error);
       toast.error(error.response?.data?.error || "خطا در ثبت درخواست واریز");
@@ -383,22 +435,88 @@ function WalletContent() {
                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                    className="space-y-6"
                  >
+                    {activePendingPurchase && (
+                      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 space-y-3 text-sm text-blue-950">
+                        <div className="flex items-start gap-2">
+                          <Clock size={18} className="text-blue-600 shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <p className="font-black">خرید در انتظار تسویه — {activePendingPurchase.request_code}</p>
+                            <p className="text-xs text-blue-800/90 leading-relaxed">
+                              {toPersianDigits(String(activePendingPurchase.gold_amount))} گرم با قیمت قفل‌شده{" "}
+                              {toPersianDigits(Number(activePendingPurchase.locked_unit_price).toLocaleString())} ریال.
+                              مبلغ کل: {toPersianDigits(Number(activePendingPurchase.locked_total).toLocaleString())} ریال.
+                              سهم کیف: {toPersianDigits(Number(activePendingPurchase.wallet_applied).toLocaleString())} ریال.
+                            </p>
+                            <p className="text-xs font-bold text-blue-700">
+                              وضعیت: {activePendingPurchase.status_display}
+                              {activePendingPurchase.expires_at_jalali
+                                ? ` — مهلت تا ${toPersianDigits(activePendingPurchase.expires_at_jalali)}`
+                                : ""}
+                            </p>
+                          </div>
+                        </div>
+                        {activePendingPurchase.status === "AWAITING_DEPOSIT" && (
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await tradesAPI.cancelPendingPurchase(activePendingPurchase.id);
+                                  toast.success("خرید معلق لغو شد");
+                                  setActivePendingPurchase(null);
+                                  setAmount("");
+                                  await fetchWalletData();
+                                } catch (error: any) {
+                                  toast.error(error.response?.data?.error || "خطا در لغو");
+                                }
+                              }}
+                              className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2 hover:bg-red-100"
+                            >
+                              لغو خرید معلق
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <WalletTabGuide
-                      storageKey="opalbox_wallet_guide_deposit"
-                      steps={[
-                        "مبلغ واریز را به ریال وارد کنید و درخواست را ثبت کنید.",
-                        "پس از ثبت، حساب‌های مقصد برای شما نمایش داده می‌شود.",
-                        "مبلغ را به یکی از حساب‌ها واریز کنید و فیش را آپلود نمایید.",
-                        "پس از تایید مدیر، موجودی ریالی کیف پول شما افزایش می‌یابد.",
-                      ]}
+                      storageKey={
+                        activePendingPurchase
+                          ? "opalbox_wallet_guide_deposit_pending"
+                          : "opalbox_wallet_guide_deposit"
+                      }
+                      steps={
+                        activePendingPurchase
+                          ? [
+                              "مبلغ واریز حداقل برابر کسری خرید معلق است؛ می‌توانید بیشتر واریز کنید ولی کمتر نه.",
+                              "پس از ثبت درخواست، حساب مقصد توسط مدیر ارسال می‌شود.",
+                              "واریز کنید و فیش + شماره پیگیری را آپلود کنید.",
+                              "پس از تأیید مدیر، خرید با قیمت قفل‌شده قطعی و طلا به کیف اضافه می‌شود.",
+                            ]
+                          : [
+                              "مبلغ واریز را به ریال وارد کنید و درخواست را ثبت کنید.",
+                              "پس از ثبت، حساب‌های مقصد برای شما نمایش داده می‌شود.",
+                              "مبلغ را به یکی از حساب‌ها واریز کنید و فیش را آپلود نمایید.",
+                              "پس از تایید مدیر، موجودی ریالی کیف پول شما افزایش می‌یابد.",
+                            ]
+                      }
                     />
 
                     <div className="text-center">
-                       <h3 className="font-black text-gray-800 text-lg">ثبت فیش واریزی</h3>
-                       <p className="text-gray-400 text-xs mt-1">لطفا مبلغ را وارد کنید و درخواست واریز را ثبت کنید</p>
+                       <h3 className="font-black text-gray-800 text-lg">
+                         {activePendingPurchase?.status === "AWAITING_DEPOSIT"
+                           ? "واریز برای تسویه خرید"
+                           : "ثبت درخواست واریز"}
+                       </h3>
+                       <p className="text-gray-400 text-xs mt-1">
+                         {activePendingPurchase?.status === "AWAITING_DEPOSIT"
+                           ? `حداقل مبلغ: ${toPersianDigits(Number(activePendingPurchase.deposit_min_amount).toLocaleString())} ریال (قابل افزایش)`
+                           : "لطفا مبلغ را وارد کنید و درخواست واریز را ثبت کنید"}
+                       </p>
                     </div>
 
-                    {/* فرم واریز (فقط مبلغ) */}
+                    {/* فرم واریز (فقط مبلغ) — برای خرید معلق فقط تا قبل از ثبت واریز */}
+                    {(!activePendingPurchase || activePendingPurchase.status === "AWAITING_DEPOSIT") && (
                     <div className="space-y-4 pt-2">
                        <div className="relative">
                           <Input 
@@ -406,16 +524,29 @@ function WalletContent() {
                             placeholder="۰"
                             value={toPersianDigits(amount)}
                             onChange={handleAmountChange}
+                            onBlur={() => {
+                              if (!activePendingPurchase || activePendingPurchase.status !== "AWAITING_DEPOSIT") return;
+                              const minDeposit = Number(activePendingPurchase.deposit_min_amount || 0);
+                              const current = parseFloat((amount || "0").replace(/,/g, "")) || 0;
+                              if (current < minDeposit) {
+                                setAmount(formatNumber(String(minDeposit)));
+                                toast.error("مبلغ به حداقل لازم برگردانده شد");
+                              }
+                            }}
                             className="text-center text-xl font-black text-gray-800 dir-ltr"
                             dir="ltr"
                           />
                           <span className="absolute left-4 top-[42px] text-gray-400 text-xs font-bold bg-white px-1">ریال</span>
                        </div>
                        <p className="text-xs text-gray-500 text-center">
-                         پس از ثبت درخواست، حساب‌های مقصد برای شما ارسال می‌شود
+                         {activePendingPurchase?.status === "AWAITING_DEPOSIT"
+                           ? "می‌توانید مبلغ را افزایش دهید؛ کاهش زیر کف مجاز نیست."
+                           : "پس از ثبت درخواست، حساب‌های مقصد برای شما ارسال می‌شود"}
                        </p>
                     </div>
+                    )}
 
+                    {(!activePendingPurchase || activePendingPurchase.status === "AWAITING_DEPOSIT") && (
                     <Button 
                       variant="primary" 
                       className="w-full justify-center !bg-gray-900 hover:!bg-black shadow-lg"
@@ -431,6 +562,7 @@ function WalletContent() {
                         "ثبت درخواست واریز"
                       )}
                     </Button>
+                    )}
 
                     {/* نمایش فیش‌های آپلود شده برای درخواست‌های در انتظار تایید */}
                     {depositRequests.filter(r => r.status === 'PENDING' && r.receipts && r.receipts.length > 0).length > 0 && (

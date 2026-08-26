@@ -79,6 +79,30 @@ export interface Order {
   created_at_jalali: string;
 }
 
+export interface PendingPurchase {
+  id: number;
+  request_code: string;
+  status: string;
+  status_display: string;
+  gold_amount: number | string;
+  locked_unit_price: number | string;
+  locked_total: number | string;
+  wallet_applied: number | string;
+  deposit_min_amount: number | string;
+  deposit_requested_amount: number | string | null;
+  deposit_request_id: number | null;
+  deposit_request_code: string | null;
+  trade_id: number | null;
+  expires_at: string;
+  expires_at_jalali: string | null;
+  remaining_seconds: number;
+  created_at: string;
+  created_at_jalali: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  user_phone?: string;
+}
+
 export interface TradesStatus {
   trades_enabled: boolean;
   message: string;
@@ -110,6 +134,45 @@ export const tradesAPI = {
   buyGold: async (amount: number): Promise<{ message: string; trade: Trade }> => {
     const response = await apiClient.post<{ message: string; trade: Trade }>('/trades/buy/', {
       amount,
+    });
+    return response.data;
+  },
+
+  createPendingPurchase: async (amount: number): Promise<{
+    message: string;
+    pending_purchase: PendingPurchase;
+    redirect_to: string;
+  }> => {
+    const response = await apiClient.post<{
+      message: string;
+      pending_purchase: PendingPurchase;
+      redirect_to: string;
+    }>('/trades/pending-purchases/create/', { amount });
+    return response.data;
+  },
+
+  getActivePendingPurchase: async (): Promise<{ pending_purchase: PendingPurchase | null }> => {
+    const response = await apiClient.get<{ pending_purchase: PendingPurchase | null }>(
+      '/trades/pending-purchases/'
+    );
+    return response.data;
+  },
+
+  getPendingPurchase: async (id: number): Promise<PendingPurchase> => {
+    const response = await apiClient.get<PendingPurchase>(`/trades/pending-purchases/${id}/`);
+    return response.data;
+  },
+
+  cancelPendingPurchase: async (id: number): Promise<{ message: string; pending_purchase: PendingPurchase }> => {
+    const response = await apiClient.post<{ message: string; pending_purchase: PendingPurchase }>(
+      `/trades/pending-purchases/${id}/cancel/`
+    );
+    return response.data;
+  },
+
+  adminListPendingPurchases: async (status: string = 'active'): Promise<PendingPurchase[]> => {
+    const response = await apiClient.get<PendingPurchase[]>('/admin/trades/pending-purchases/', {
+      params: { status },
     });
     return response.data;
   },

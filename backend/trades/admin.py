@@ -1,6 +1,17 @@
 from django.contrib import admin
 from jalali_date import datetime2jalali
-from .models import GoldPrice, Trade, Order
+from .models import GoldPrice, Trade, Order, PendingPurchase
+
+
+@admin.register(PendingPurchase)
+class PendingPurchaseAdmin(admin.ModelAdmin):
+    list_display = [
+        'request_code', 'user', 'gold_amount', 'locked_total',
+        'deposit_min_amount', 'status', 'expires_at', 'created_at',
+    ]
+    list_filter = ['status', 'created_at']
+    search_fields = ['request_code', 'user__phone_number']
+    readonly_fields = ['created_at', 'updated_at', 'completed_at', 'cancelled_at']
 
 
 @admin.register(GoldPrice)

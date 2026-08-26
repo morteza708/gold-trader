@@ -5,7 +5,7 @@ import { pageTitle } from "@/lib/brand";
 import { useState, useEffect } from "react";
 import { 
   ArrowUpRight, ArrowDownRight, TrendingUp, 
-  Plus, Minus, CreditCard, History, X, Wallet as WalletIcon, AlertCircle
+  Plus, Minus, CreditCard, History, X, Wallet as WalletIcon, AlertCircle, Clock
 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -17,7 +17,7 @@ import { useGoldPrice } from "@/hooks/useGoldPrice";
 import { useTradesStatus } from "@/hooks/useTradesStatus";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
 import { walletAPI, Wallet } from "@/lib/api/auth";
-import { tradesAPI, Trade } from "@/lib/api/trades";
+import { tradesAPI, Trade, PendingPurchase } from "@/lib/api/trades";
 
 export default function DashboardPage() {
   const [modalType, setModalType] = useState<"buy" | "sell" | null>(null);
@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [recentTrades, setRecentTrades] = useState<Trade[]>([]);
   const [isLoadingTrades, setIsLoadingTrades] = useState(true);
+  const [pendingPurchase, setPendingPurchase] = useState<PendingPurchase | null>(null);
 
   // تنظیم title صفحه
   useEffect(() => {
@@ -37,6 +38,9 @@ export default function DashboardPage() {
     walletAPI.getWallet().then(setWallet).catch(() => {
       // خطا را نادیده می‌گیریم
     });
+    tradesAPI.getActivePendingPurchase().then((res) => {
+      setPendingPurchase(res.pending_purchase);
+    }).catch(() => {});
   }, []);
 
   // دریافت تراکنش‌های اخیر
@@ -65,8 +69,31 @@ export default function DashboardPage() {
       
       <WelcomeOnboardingModal />
 
+      {pendingPurchase && (
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+              <Clock size={20} />
+            </div>
+            <div>
+              <p className="font-bold text-blue-900 text-sm">خرید در انتظار تسویه دارید</p>
+              <p className="text-blue-800/80 text-xs mt-0.5 leading-relaxed">
+                {toPersianDigits(String(pendingPurchase.gold_amount))} گرم — {pendingPurchase.status_display}.
+                تا تکمیل این فرآیند امکان معامله جدید ندارید.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/dashboard/wallet?tab=deposit&pending_purchase=${pendingPurchase.id}`}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-colors shrink-0 w-full sm:w-auto justify-center"
+          >
+            ادامه تسویه
+          </Link>
+        </div>
+      )}
+
       {/* بنر موجودی صفر */}
-      {wallet && Number(wallet.rial_balance || 0) === 0 && (
+      {wallet && Number(wallet.rial_balance || 0) === 0 && !pendingPurchase && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">

@@ -42,12 +42,14 @@ class WalletSerializer(serializers.ModelSerializer):
         fields = [
             'rial_balance', 'gold_balance', 
             'pending_withdrawal_rial', 'pending_withdrawal_gold',
+            'pending_trade_rial',
             'available_rial_balance', 'available_gold_balance',
             'created_at', 'updated_at'
         ]
         read_only_fields = [
             'rial_balance', 'gold_balance', 
             'pending_withdrawal_rial', 'pending_withdrawal_gold',
+            'pending_trade_rial',
             'available_rial_balance', 'available_gold_balance',
             'created_at', 'updated_at'
         ]

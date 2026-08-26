@@ -461,3 +461,126 @@ class Order(models.Model):
     def __str__(self):
         return f"{self.get_order_type_display()} - {self.user.phone_number} - {self.target_price:,} ریال"
 
+
+class PendingPurchase(models.Model):
+    """
+    خرید با تسویه بعدی (حواله معلق)
+    قیمت و مبلغ در لحظه ثبت قفل می‌شود؛ طلا پس از تأیید واریز آزاد می‌گردد.
+    """
+    STATUS_AWAITING_DEPOSIT = 'AWAITING_DEPOSIT'
+    STATUS_AWAITING_ACCOUNTS = 'AWAITING_ACCOUNTS'
+    STATUS_AWAITING_RECEIPTS = 'AWAITING_RECEIPTS'
+    STATUS_AWAITING_APPROVAL = 'AWAITING_APPROVAL'
+    STATUS_COMPLETED = 'COMPLETED'
+    STATUS_CANCELLED = 'CANCELLED'
+    STATUS_EXPIRED = 'EXPIRED'
+
+    STATUS_CHOICES = [
+        (STATUS_AWAITING_DEPOSIT, 'در انتظار ثبت واریز'),
+        (STATUS_AWAITING_ACCOUNTS, 'در انتظار تخصیص حساب'),
+        (STATUS_AWAITING_RECEIPTS, 'در انتظار فیش'),
+        (STATUS_AWAITING_APPROVAL, 'در انتظار تأیید مدیر'),
+        (STATUS_COMPLETED, 'تکمیل شده'),
+        (STATUS_CANCELLED, 'لغو شده'),
+        (STATUS_EXPIRED, 'منقضی شده'),
+    ]
+
+    user = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='pending_purchases',
+        verbose_name='کاربر',
+        db_index=True,
+    )
+    gold_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        verbose_name='مقدار طلا (گرم)',
+    )
+    locked_unit_price = models.DecimalField(
+        max_digits=15,
+        decimal_places=0,
+        verbose_name='قیمت واحد قفل‌شده (ریال)',
+    )
+    locked_total = models.DecimalField(
+        max_digits=15,
+        decimal_places=0,
+        verbose_name='مبلغ کل قفل‌شده (ریال)',
+    )
+    wallet_applied = models.DecimalField(
+        max_digits=15,
+        decimal_places=0,
+        default=0,
+        verbose_name='سهم قفل‌شده از کیف پول (ریال)',
+    )
+    deposit_min_amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=0,
+        verbose_name='حداقل مبلغ واریز (ریال)',
+    )
+    deposit_requested_amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=0,
+        null=True,
+        blank=True,
+        verbose_name='مبلغ درخواست واریز (ریال)',
+    )
+    deposit_request = models.OneToOneField(
+        'wallet.DepositRequest',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pending_purchase',
+        verbose_name='درخواست واریز',
+    )
+    trade = models.OneToOneField(
+        Trade,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pending_purchase_source',
+        verbose_name='معامله نهایی',
+    )
+    status = models.CharField(
+        max_length=30,
+        choices=STATUS_CHOICES,
+        default=STATUS_AWAITING_DEPOSIT,
+        db_index=True,
+        verbose_name='وضعیت',
+    )
+    request_code = models.CharField(
+        max_length=20,
+        unique=True,
+        db_index=True,
+        verbose_name='کد درخواست',
+    )
+    expires_at = models.DateTimeField(
+        db_index=True,
+        verbose_name='مهلت تسویه',
+    )
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name='زمان تکمیل')
+    cancelled_at = models.DateTimeField(null=True, blank=True, verbose_name='زمان لغو/انقضا')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='تاریخ ایجاد')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='تاریخ به‌روزرسانی')
+
+    class Meta:
+        verbose_name = 'خرید معلق'
+        verbose_name_plural = 'خریدهای معلق'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'status', '-created_at']),
+            models.Index(fields=['status', 'expires_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.request_code} - {self.user.phone_number} - {self.gold_amount}g"
+
+    @property
+    def is_active(self):
+        return self.status in {
+            self.STATUS_AWAITING_DEPOSIT,
+            self.STATUS_AWAITING_ACCOUNTS,
+            self.STATUS_AWAITING_RECEIPTS,
+            self.STATUS_AWAITING_APPROVAL,
+        }
+

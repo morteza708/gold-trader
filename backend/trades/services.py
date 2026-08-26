@@ -202,6 +202,12 @@ class TradeService:
         """
         # 0. بررسی فعال بودن معاملات
         TradeService.check_trades_enabled()
+
+        from trades.pending_purchase_service import PendingPurchaseService
+        active = PendingPurchaseService.get_active_for_user(user)
+        if active:
+            PendingPurchaseService.expire_if_needed(active)
+            PendingPurchaseService.assert_user_can_trade(user)
         
         # 1. دریافت قیمت فعلی
         price_obj = GoldPrice.get_current_price()
@@ -217,8 +223,8 @@ class TradeService:
         # 2. محاسبه مبلغ کل بر اساس قیمت نهایی (همان قیمتی که کاربر می‌بیند)
         total = amount * final_price
         
-        # 3. دریافت یا ایجاد کیف پول
-        wallet, _ = Wallet.objects.get_or_create(user=user)
+        # 3. دریافت یا ایجاد کیف پول (با قفل ردیف)
+        wallet, _ = Wallet.objects.select_for_update().get_or_create(user=user)
         
         # 4. بررسی موجودی قابل استفاده (کل - مسدود شده)
         # برای خرید: باید موجودی برای total کافی باشد
@@ -389,6 +395,12 @@ class TradeService:
         """
         # 0. بررسی فعال بودن معاملات
         TradeService.check_trades_enabled()
+
+        from trades.pending_purchase_service import PendingPurchaseService
+        active = PendingPurchaseService.get_active_for_user(user)
+        if active:
+            PendingPurchaseService.expire_if_needed(active)
+            PendingPurchaseService.assert_user_can_trade(user)
         
         # 1. دریافت قیمت فعلی
         price_obj = GoldPrice.get_current_price()
@@ -409,7 +421,7 @@ class TradeService:
                 raise ValueError("قیمت هدف باید بیشتر از قیمت فعلی فروش باشد")
         
         # 2. دریافت یا ایجاد کیف پول
-        wallet, _ = Wallet.objects.get_or_create(user=user)
+        wallet, _ = Wallet.objects.select_for_update().get_or_create(user=user)
         
         # 3. بررسی موجودی قابل استفاده (برای رزرو)
         # total بر اساس قیمت نهایی (بدون کارمزد اضافی)

@@ -135,6 +135,38 @@ def create_deposit_request(request):
         
         # تولید کد درخواست منحصر به فرد
         request_code = f"DR-{uuid.uuid4().hex[:8].upper()}"
+
+        pending_purchase_id = request.data.get('pending_purchase_id')
+        pending = None
+        if pending_purchase_id:
+            from trades.models import PendingPurchase
+            from trades.pending_purchase_service import PendingPurchaseService
+            try:
+                pending = PendingPurchase.objects.get(
+                    id=pending_purchase_id,
+                    user=request.user,
+                    status=PendingPurchase.STATUS_AWAITING_DEPOSIT,
+                )
+            except PendingPurchase.DoesNotExist:
+                return Response(
+                    {'error': 'خرید معلق معتبر یافت نشد یا قبلاً به واریز متصل شده است'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            # انقضا
+            if PendingPurchaseService.expire_if_needed(pending):
+                return Response(
+                    {'error': 'مهلت خرید معلق به پایان رسیده است'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            pending.refresh_from_db()
+            if amount < pending.deposit_min_amount:
+                return Response(
+                    {
+                        'error': f'مبلغ واریز نمی‌تواند کمتر از {int(pending.deposit_min_amount):,} ریال باشد',
+                        'deposit_min_amount': int(pending.deposit_min_amount),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         
         # ایجاد درخواست (فقط با amount)
         deposit_request = DepositRequest.objects.create(
@@ -146,6 +178,10 @@ def create_deposit_request(request):
             request_code=request_code,
             status='PENDING'
         )
+
+        if pending:
+            from trades.pending_purchase_service import PendingPurchaseService
+            PendingPurchaseService.attach_deposit_request(pending, deposit_request, amount)
         
         # ارسال پیامک به مدیران
         settings = SystemSettings.get_settings()
@@ -1182,6 +1218,31 @@ def admin_reject_deposit(request, request_id):
         deposit_request.status = 'REJECTED'
         deposit_request.admin_note = admin_note
         deposit_request.save()
+
+        # اگر به خرید معلق وصل بوده، کاربر بتواند دوباره واریز ثبت کند
+        try:
+            from trades.models import PendingPurchase
+            pending = PendingPurchase.objects.filter(deposit_request=deposit_request).first()
+            if pending and pending.is_active:
+                pending.deposit_request = None
+                pending.deposit_requested_amount = pending.deposit_min_amount
+                pending.status = PendingPurchase.STATUS_AWAITING_DEPOSIT
+                pending.save(update_fields=[
+                    'deposit_request', 'deposit_requested_amount', 'status', 'updated_at'
+                ])
+                create_notification(
+                    user=deposit_request.user,
+                    title='واریز رد شد — خرید معلق فعال است',
+                    message=(
+                        f'درخواست واریز رد شد. خرید معلق {pending.request_code} همچنان فعال است؛ '
+                        f'لطفاً دوباره با حداقل {int(pending.deposit_min_amount):,} ریال واریز ثبت کنید.'
+                    ),
+                    notification_type='DEPOSIT_REJECTED',
+                    related_object_type='pending_purchase',
+                    related_object_id=pending.id,
+                )
+        except Exception as e:
+            logger.error(f"خطا در بازگردانی خرید معلق پس از رد واریز: {e}", exc_info=True)
         
         serializer = DepositRequestSerializer(deposit_request, context={'request': request})
         return Response({
@@ -1341,6 +1402,12 @@ def admin_assign_deposit_accounts(request, request_id):
             logger.info(f"پیامک deposit-accounts-sms به صف ارسال اضافه شد برای کاربر {deposit_request.user.phone_number}")
         except Exception as e:
             logger.error(f"خطا در queue کردن پیامک حساب‌ها به کاربر {deposit_request.user.phone_number}: {e}", exc_info=True)
+        
+        try:
+            from trades.pending_purchase_service import PendingPurchaseService
+            PendingPurchaseService.mark_awaiting_receipts(deposit_request)
+        except Exception as e:
+            logger.error(f"خطا در به‌روزرسانی وضعیت خرید معلق پس از تخصیص حساب: {e}", exc_info=True)
         
         # ایجاد notification برای کاربر
         try:
@@ -1749,6 +1816,12 @@ def user_upload_deposit_receipts_batch(request, request_id):
             traceback.print_exc()
             # خطای پیامک نباید باعث شکست کل عملیات شود
         
+        try:
+            from trades.pending_purchase_service import PendingPurchaseService
+            PendingPurchaseService.mark_awaiting_approval(deposit_request)
+        except Exception as e:
+            logger.error(f"خطا در به‌روزرسانی وضعیت خرید معلق پس از آپلود فیش: {e}", exc_info=True)
+        
         # ایجاد notification برای مدیران
         try:
             account_code = deposit_request.user.customer_profile.account_code if hasattr(deposit_request.user, 'customer_profile') else 'N/A'
@@ -1875,6 +1948,10 @@ def admin_approve_deposit_new_flow(request, request_id):
             # 3. افزودن مبلغ به کیف پول
             wallet.rial_balance += deposit_request.amount
             wallet.save()
+
+            # 3.1 اگر این واریز مربوط به خرید معلق است، خرید را با قیمت قفل‌شده تکمیل کن
+            from trades.pending_purchase_service import PendingPurchaseService
+            PendingPurchaseService.complete_after_deposit_approved(deposit_request)
             
             # 4. پردازش خودکار واریزها به درخواست‌های برداشت
             links_created = []

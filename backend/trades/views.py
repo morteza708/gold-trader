@@ -13,7 +13,7 @@ from django_ratelimit.decorators import ratelimit
 import logging
 
 from accounts.models import UserRole
-from .models import GoldPrice, Trade, Order
+from .models import GoldPrice, Trade, Order, PendingPurchase
 from .serializers import (
     GoldPriceSerializer,
     GoldPriceAdminSerializer,
@@ -22,8 +22,11 @@ from .serializers import (
     TradeSerializer,
     OrderSerializer,
     CreateOrderSerializer,
+    PendingPurchaseSerializer,
+    CreatePendingPurchaseSerializer,
 )
 from .services import TradeService
+from .pending_purchase_service import PendingPurchaseService
 
 logger = logging.getLogger('trades')
 
@@ -833,4 +836,121 @@ def admin_get_orders(request):
             {'error': f'خطای سرور: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+# ==================== Pending Purchase (خرید با تسویه بعدی) ====================
+
+@ratelimit(key='user', rate='10/m', method='POST', block=True)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_pending_purchase(request):
+    """ثبت خرید معلق وقتی موجودی کافی نیست"""
+    try:
+        serializer = CreatePendingPurchaseSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        pending = PendingPurchaseService.create_pending_purchase(
+            user=request.user,
+            gold_amount=serializer.validated_data['amount'],
+        )
+        return Response({
+            'message': 'خرید معلق ثبت شد. لطفاً فرآیند واریز را تکمیل کنید.',
+            'pending_purchase': PendingPurchaseSerializer(pending).data,
+            'redirect_to': f"/dashboard/wallet?tab=deposit&pending_purchase={pending.id}",
+        }, status=status.HTTP_201_CREATED)
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        logger.error(f"خطا در create_pending_purchase: {e}", exc_info=True)
+        return Response(
+            {'error': 'خطا در ثبت خرید معلق. لطفاً دوباره تلاش کنید.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_active_pending_purchase(request):
+    """خرید معلق فعال کاربر (در صورت وجود)"""
+    try:
+        pending = PendingPurchaseService.get_active_for_user(request.user)
+        if pending:
+            PendingPurchaseService.expire_if_needed(pending)
+            pending.refresh_from_db()
+            if not pending.is_active:
+                return Response({'pending_purchase': None}, status=status.HTTP_200_OK)
+        return Response({
+            'pending_purchase': PendingPurchaseSerializer(pending).data if pending else None
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"خطا در get_active_pending_purchase: {e}", exc_info=True)
+        return Response(
+            {'error': 'خطا در دریافت خرید معلق'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_pending_purchase_detail(request, pending_id):
+    try:
+        pending = PendingPurchase.objects.select_related('deposit_request', 'trade').get(
+            id=pending_id, user=request.user
+        )
+        if pending.is_active:
+            PendingPurchaseService.expire_if_needed(pending)
+            pending.refresh_from_db()
+        return Response(PendingPurchaseSerializer(pending).data, status=status.HTTP_200_OK)
+    except PendingPurchase.DoesNotExist:
+        return Response({'error': 'یافت نشد'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"خطا در get_pending_purchase_detail: {e}", exc_info=True)
+        return Response({'error': 'خطای سرور'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def cancel_pending_purchase(request, pending_id):
+    try:
+        pending = PendingPurchaseService.cancel_pending_purchase(
+            user=request.user,
+            pending_id=pending_id,
+            by_admin=False,
+        )
+        return Response({
+            'message': 'خرید معلق لغو شد',
+            'pending_purchase': PendingPurchaseSerializer(pending).data,
+        }, status=status.HTTP_200_OK)
+    except PendingPurchase.DoesNotExist:
+        return Response({'error': 'یافت نشد'}, status=status.HTTP_404_NOT_FOUND)
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        logger.error(f"خطا در cancel_pending_purchase: {e}", exc_info=True)
+        return Response({'error': 'خطای سرور'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_list_pending_purchases(request):
+    try:
+        if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
+            return Response({'error': 'شما دسترسی به این بخش ندارید'}, status=status.HTTP_403_FORBIDDEN)
+
+        qs = PendingPurchase.objects.select_related(
+            'user', 'user__customer_profile', 'deposit_request', 'trade'
+        ).order_by('-created_at')
+
+        status_filter = request.query_params.get('status')
+        if status_filter == 'active':
+            qs = qs.filter(status__in=PendingPurchaseService.ACTIVE_STATUSES)
+        elif status_filter:
+            qs = qs.filter(status=status_filter)
+
+        serializer = PendingPurchaseSerializer(qs[:100], many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"خطا در admin_list_pending_purchases: {e}", exc_info=True)
+        return Response({'error': 'خطای سرور'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

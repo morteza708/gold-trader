@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from jalali_date import datetime2jalali
 from django.conf import settings
-from .models import GoldPrice, Trade, Order
+from .models import GoldPrice, Trade, Order, PendingPurchase, PendingPurchase
 
 
 class GoldPriceSerializer(serializers.ModelSerializer):
@@ -207,5 +207,55 @@ class CreateOrderSerializer(serializers.Serializer):
     def validate_target_price(self, value):
         if value <= 0:
             raise serializers.ValidationError("قیمت هدف باید بیشتر از صفر باشد")
+        return value
+
+
+class PendingPurchaseSerializer(serializers.ModelSerializer):
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    created_at_jalali = serializers.SerializerMethodField()
+    expires_at_jalali = serializers.SerializerMethodField()
+    remaining_seconds = serializers.SerializerMethodField()
+    deposit_request_id = serializers.IntegerField(source='deposit_request.id', read_only=True, allow_null=True)
+    deposit_request_code = serializers.CharField(source='deposit_request.request_code', read_only=True, allow_null=True)
+    trade_id = serializers.IntegerField(source='trade.id', read_only=True, allow_null=True)
+    user_phone = serializers.CharField(source='user.phone_number', read_only=True)
+
+    class Meta:
+        model = PendingPurchase
+        fields = [
+            'id', 'request_code', 'status', 'status_display',
+            'gold_amount', 'locked_unit_price', 'locked_total',
+            'wallet_applied', 'deposit_min_amount', 'deposit_requested_amount',
+            'deposit_request_id', 'deposit_request_code', 'trade_id',
+            'expires_at', 'expires_at_jalali', 'remaining_seconds',
+            'created_at', 'created_at_jalali', 'completed_at', 'cancelled_at',
+            'user_phone',
+        ]
+        read_only_fields = fields
+
+    def get_created_at_jalali(self, obj):
+        if obj.created_at:
+            return datetime2jalali(obj.created_at).strftime('%Y/%m/%d %H:%M')
+        return None
+
+    def get_expires_at_jalali(self, obj):
+        if obj.expires_at:
+            return datetime2jalali(obj.expires_at).strftime('%Y/%m/%d %H:%M')
+        return None
+
+    def get_remaining_seconds(self, obj):
+        from django.utils import timezone
+        if not obj.expires_at or not obj.is_active:
+            return 0
+        delta = obj.expires_at - timezone.now()
+        return max(0, int(delta.total_seconds()))
+
+
+class CreatePendingPurchaseSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(max_digits=10, decimal_places=3)
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("مقدار باید بیشتر از صفر باشد")
         return value
 

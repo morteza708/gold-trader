@@ -39,6 +39,13 @@ class Wallet(models.Model):
         verbose_name='موجودی طلای مسدود شده',
         help_text='موجودی طلا که در انتظار تایید برداشت است'
     )
+    pending_trade_rial = models.DecimalField(
+        max_digits=15,
+        decimal_places=0,
+        default=0,
+        verbose_name='ریال قفل‌شده برای خرید معلق',
+        help_text='سهم کیف پول که برای خرید در انتظار تسویه قفل شده است'
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='تاریخ ایجاد'
@@ -53,8 +60,8 @@ class Wallet(models.Model):
         verbose_name_plural = 'کیف پول‌ها'
     
     def get_available_rial_balance(self):
-        """موجودی ریالی قابل استفاده (کل - مسدود شده)"""
-        return self.rial_balance - self.pending_withdrawal_rial
+        """موجودی ریالی قابل استفاده (کل − مسدود برداشت − قفل خرید معلق)"""
+        return self.rial_balance - self.pending_withdrawal_rial - self.pending_trade_rial
     
     def get_available_gold_balance(self):
         """موجودی طلای قابل استفاده (کل - مسدود شده)"""

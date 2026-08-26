@@ -14,6 +14,7 @@ import { toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
 import { IMAGE_FILE_ACCEPT, MAX_IMAGE_SIZE_LABEL, validateImageFile, type ImageUploadErrorReason } from "@/lib/utils/imageUpload";
 import ImageCompressHelp from "@/components/ui/ImageCompressHelp";
 import { adminWalletAPI, WithdrawalRequest, DepositRequest } from "@/lib/api/auth";
+import { tradesAPI, PendingPurchase } from "@/lib/api/trades";
 import { useDebounce } from "@/hooks/useDebounce";
 import DepositDetailModalNew from "@/components/admin/DepositDetailModalNew";
 
@@ -30,6 +31,7 @@ export default function FinancePage() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptUploadError, setReceiptUploadError] = useState<ImageUploadErrorReason | null>(null);
   const [rejectNote, setRejectNote] = useState("");
+  const [pendingPurchases, setPendingPurchases] = useState<PendingPurchase[]>([]);
 
   // تنظیم title صفحه
   useEffect(() => {
@@ -57,6 +59,12 @@ export default function FinancePage() {
         }
         const data = await adminWalletAPI.getDepositRequests(params);
         setDepositRequests(data);
+        try {
+          const pending = await tradesAPI.adminListPendingPurchases('active');
+          setPendingPurchases(pending);
+        } catch {
+          setPendingPurchases([]);
+        }
       } else {
         const params: any = {
           type: activeTab === 'rial' ? 'RIAL' : 'GOLD',
@@ -311,6 +319,43 @@ export default function FinancePage() {
           <StatsCard key={idx} title={stat.title} value={stat.value} icon={stat.icon} color={stat.color} />
         ))}
       </div>
+
+      {activeTab === 'deposit' && pendingPurchases.length > 0 && (
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 space-y-3">
+          <h3 className="text-sm font-black text-blue-300 flex items-center gap-2">
+            <Clock size={16} />
+            خریدهای در انتظار تسویه ({toPersianDigits(pendingPurchases.length)})
+          </h3>
+          <div className="space-y-2">
+            {pendingPurchases.map((pp) => (
+              <div
+                key={pp.id}
+                className="bg-slate-900/60 border border-slate-700 rounded-xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-2 text-xs"
+              >
+                <div className="space-y-1 text-slate-200">
+                  <p className="font-bold text-white">
+                    {pp.request_code} — {pp.user_phone || "کاربر"}
+                  </p>
+                  <p>
+                    {toPersianDigits(String(pp.gold_amount))} گرم | کل{" "}
+                    {toPersianDigits(Number(pp.locked_total).toLocaleString())} ریال | کف واریز{" "}
+                    {toPersianDigits(Number(pp.deposit_min_amount).toLocaleString())} ریال
+                  </p>
+                  <p className="text-blue-300">{pp.status_display}
+                    {pp.deposit_request_code ? ` — واریز: ${pp.deposit_request_code}` : ""}
+                  </p>
+                </div>
+                <p className="text-slate-400 shrink-0">
+                  مهلت: {pp.expires_at_jalali ? toPersianDigits(pp.expires_at_jalali) : "-"}
+                </p>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            این واریزها اولویت دارند. پس از تخصیص حساب و تأیید فیش، خرید با قیمت قفل‌شده خودکار تکمیل می‌شود.
+          </p>
+        </div>
+      )}
 
       {/* تب‌های نوع درخواست */}
       <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700">

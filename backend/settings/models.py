@@ -19,6 +19,11 @@ class SystemSettings(models.Model):
         verbose_name='فعال بودن معاملات',
         help_text='اگر فعال باشد، کاربران می‌توانند معامله انجام دهند'
     )
+    pending_purchase_expiry_hours = models.PositiveIntegerField(
+        default=4,
+        verbose_name='مهلت تسویه خرید معلق (ساعت)',
+        help_text='پس از ثبت خرید معلق، کاربر چند ساعت فرصت تکمیل واریز دارد'
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='تاریخ ایجاد'

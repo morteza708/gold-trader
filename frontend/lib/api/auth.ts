@@ -276,6 +276,11 @@ export const adminAPI = {
 export interface Wallet {
   rial_balance: number;
   gold_balance: number;
+  pending_withdrawal_rial?: number;
+  pending_withdrawal_gold?: number;
+  pending_trade_rial?: number;
+  available_rial_balance?: number;
+  available_gold_balance?: number;
   created_at: string;
   updated_at: string;
 }
@@ -461,10 +466,15 @@ export const walletAPI = {
   // ایجاد درخواست واریز (فقط مبلغ)
   createDepositRequest: async (data: {
     amount: number;
+    pending_purchase_id?: number;
   }): Promise<DepositRequest> => {
-    const response = await apiClient.post<DepositRequest>('/wallet/deposit/', {
+    const payload: { amount: number; pending_purchase_id?: number } = {
       amount: data.amount,
-    });
+    };
+    if (data.pending_purchase_id) {
+      payload.pending_purchase_id = data.pending_purchase_id;
+    }
+    const response = await apiClient.post<DepositRequest>('/wallet/deposit/', payload);
     return response.data;
   },
 
