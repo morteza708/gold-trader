@@ -360,6 +360,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'trades.tasks.price_health_watchdog',
         'schedule': 300.0,  # هر 5 دقیقه
     },
+    'expire-due-pending-purchases': {
+        'task': 'trades.tasks.expire_due_pending_purchases',
+        'schedule': 300.0,  # هر 5 دقیقه
+    },
 }
 
 # Security Settings (فقط برای production)

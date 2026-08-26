@@ -395,6 +395,9 @@ class DepositAccountAssignmentSerializer(serializers.ModelSerializer):
     account_display = serializers.SerializerMethodField()
     withdrawal_request_info = serializers.SerializerMethodField()
     deposit_account_info = serializers.SerializerMethodField()
+    receipts_total = serializers.SerializerMethodField()
+    remaining_amount = serializers.SerializerMethodField()
+    receipts_count = serializers.SerializerMethodField()
     
     class Meta:
         model = DepositAccountAssignment
@@ -402,13 +405,23 @@ class DepositAccountAssignmentSerializer(serializers.ModelSerializer):
             'id', 'account_type', 'withdrawal_request', 'deposit_account',
             'custom_bank_name', 'custom_owner_name', 'custom_card_number', 'custom_sheba_number',
             'amount', 'order', 'account_display', 'withdrawal_request_info',
-            'deposit_account_info', 'created_at'
+            'deposit_account_info', 'receipts_total', 'remaining_amount', 'receipts_count',
+            'created_at'
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ['id', 'created_at', 'receipts_total', 'remaining_amount', 'receipts_count']
     
     def get_account_display(self, obj):
         """نمایش حساب"""
         return obj.get_account_display()
+
+    def get_receipts_total(self, obj):
+        return str(obj.get_uploaded_receipts_total())
+
+    def get_remaining_amount(self, obj):
+        return str(obj.get_remaining_receipt_amount())
+
+    def get_receipts_count(self, obj):
+        return obj.receipts.count()
     
     def get_withdrawal_request_info(self, obj):
         """اطلاعات درخواست برداشت"""

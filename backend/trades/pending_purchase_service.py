@@ -385,3 +385,31 @@ class PendingPurchaseService:
             related_object_id=pending.id,
         )
         return True
+
+    @staticmethod
+    def expire_due_pending_purchases() -> dict:
+        """انقضای دسته‌ای خریدهای معلقی که مهلتشان گذشته است."""
+        now = timezone.now()
+        due_ids = list(
+            PendingPurchase.objects.filter(
+                status__in=PendingPurchaseService.ACTIVE_STATUSES,
+                expires_at__lte=now,
+            ).values_list('id', flat=True)
+        )
+        expired_count = 0
+        for pending_id in due_ids:
+            try:
+                pending = PendingPurchase.objects.get(pk=pending_id)
+                if PendingPurchaseService.expire_if_needed(pending):
+                    expired_count += 1
+            except Exception as e:
+                logger.error(
+                    "خطا در انقضای خرید معلق %s: %s",
+                    pending_id,
+                    e,
+                    exc_info=True,
+                )
+        return {
+            'checked': len(due_ids),
+            'expired': expired_count,
+        }

@@ -239,13 +239,23 @@ export default function DepositDetailModalNew({
     }
   };
 
-  // بررسی اینکه آیا می‌توان درخواست را تایید کرد
-  const canApprove = request.status === 'PENDING' && 
-                     request.assignments && 
-                     request.assignments.length > 0 &&
-                     request.receipts && 
-                     request.receipts.length > 0 &&
-                     request.receipts.length === request.assignments.length &&
+  // تایید وقتی برای هر تخصیص، جمع فیش‌ها ≥ مبلغ تخصیص باشد
+  const assignmentsCovered = !!(request.assignments && request.assignments.length > 0 &&
+    request.assignments.every((assignment) => {
+      const remaining = Number(assignment.remaining_amount);
+      if (!Number.isNaN(remaining) && assignment.remaining_amount !== undefined && assignment.remaining_amount !== null) {
+        return remaining <= 0;
+      }
+      const assignmentReceipts = (request.receipts || []).filter(
+        (r) => r.account_assignment === assignment.id || (r as any).account_assignment_info?.id === assignment.id
+      );
+      const total = assignmentReceipts.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+      return total >= Number(assignment.amount);
+    }));
+
+  const canApprove = request.status === 'PENDING' &&
+                     assignmentsCovered &&
+                     !!(request.receipts && request.receipts.length > 0) &&
                      request.receipts.every(r => r.status === 'PENDING' || r.status === 'APPROVED');
 
   if (!isOpen) return null;
@@ -643,6 +653,57 @@ export default function DepositDetailModalNew({
               </>
             )}
 
+            {/* نمایش پوشش فیش نسبت به هر تخصیص (وقتی حساب‌ها قبلاً تخصیص شده‌اند) */}
+            {request.status === 'PENDING' && request.assignments && request.assignments.length > 0 && (
+              <div>
+                <h4 className="text-sm font-bold text-slate-400 mb-4 flex items-center gap-2">
+                  <Calculator size={16} />
+                  پوشش فیش‌ها نسبت به تخصیص‌ها
+                </h4>
+                <div className="space-y-2">
+                  {request.assignments.map((assignment) => {
+                    const remaining = Number(assignment.remaining_amount ?? assignment.amount);
+                    const uploaded = Number(assignment.receipts_total ?? 0);
+                    const covered = remaining <= 0;
+                    return (
+                      <div
+                        key={assignment.id}
+                        className={`p-4 rounded-xl border ${
+                          covered
+                            ? 'border-green-500/40 bg-green-500/10'
+                            : 'border-yellow-500/30 bg-yellow-500/5'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start gap-3">
+                          <div>
+                            <p className="text-sm font-bold text-white">
+                              {assignment.account_display || `حساب #${assignment.id}`}
+                            </p>
+                            <p className="text-xs text-slate-400 mt-1">
+                              تخصیص: {toPersianDigits(Number(assignment.amount).toLocaleString())} ریال
+                              {assignment.receipts_count !== undefined && (
+                                <> — {toPersianDigits(String(assignment.receipts_count))} فیش</>
+                              )}
+                            </p>
+                          </div>
+                          <p className={`text-xs font-bold ${covered ? 'text-green-400' : 'text-yellow-300'}`}>
+                            {covered
+                              ? 'کامل'
+                              : `مانده ${toPersianDigits(remaining.toLocaleString())}`}
+                          </p>
+                        </div>
+                        {uploaded > 0 && !covered && (
+                          <p className="text-[11px] text-slate-400 mt-2">
+                            آپلود شده: {toPersianDigits(uploaded.toLocaleString())} ریال
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* نمایش assignments موجود (اگر قبلا ثبت شده) */}
             {request.status !== 'PENDING' && request.assignments && request.assignments.length > 0 && (
               <div>
@@ -862,14 +923,25 @@ export default function DepositDetailModalNew({
               <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-xl">
                 <p className="text-sm text-yellow-400 flex items-center gap-2">
                   <AlertCircle size={16} />
-                  در انتظار آپلود فیش‌های واریزی توسط کاربر...
+                  در انتظار تکمیل فیش‌های واریزی توسط کاربر...
                 </p>
                 <p className="text-xs text-yellow-300 mt-2">
-                  {request.receipts && request.receipts.length > 0 
-                    ? `${request.receipts.length} از ${request.assignments.length} فیش آپلود شده است`
+                  {request.receipts && request.receipts.length > 0
+                    ? `${toPersianDigits(String(request.receipts.length))} فیش آپلود شده — برای تایید، جمع فیش هر حساب باید مبلغ تخصیص را پوشش دهد`
                     : 'هنوز هیچ فیشی آپلود نشده است'
                   }
                 </p>
+                {request.assignments?.some(a => Number(a.remaining_amount ?? a.amount) > 0) && (
+                  <ul className="mt-2 space-y-1">
+                    {request.assignments
+                      .filter(a => Number(a.remaining_amount ?? a.amount) > 0)
+                      .map(a => (
+                        <li key={a.id} className="text-xs text-yellow-200/90">
+                          {a.account_display || `حساب #${a.id}`}: مانده {toPersianDigits(Number(a.remaining_amount ?? a.amount).toLocaleString())} ریال
+                        </li>
+                      ))}
+                  </ul>
+                )}
               </div>
             )}
           </div>

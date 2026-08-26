@@ -141,3 +141,29 @@ def price_health_watchdog():
         'age_minutes': round(age_minutes, 1),
     }
 
+
+@shared_task(name='trades.tasks.expire_due_pending_purchases')
+def expire_due_pending_purchases():
+    """
+    انقضای خودکار خریدهای معلقی که مهلت تسویه‌شان گذشته است.
+    معمولاً هر ۵ دقیقه توسط Celery Beat اجرا می‌شود.
+    """
+    try:
+        from .pending_purchase_service import PendingPurchaseService
+        result = PendingPurchaseService.expire_due_pending_purchases()
+        if result.get('expired', 0) > 0:
+            logger.info(
+                "انقضای خرید معلق: %s مورد از %s بررسی‌شده منقضی شد",
+                result['expired'],
+                result['checked'],
+            )
+        else:
+            logger.debug(
+                "انقضای خرید معلق: موردی برای انقضا نبود (بررسی‌شده: %s)",
+                result.get('checked', 0),
+            )
+        return result
+    except Exception as e:
+        logger.error("خطا در expire_due_pending_purchases: %s", e, exc_info=True)
+        return {'checked': 0, 'expired': 0, 'error': str(e)}
+

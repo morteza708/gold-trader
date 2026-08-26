@@ -413,6 +413,17 @@ class DepositAccountAssignment(models.Model):
             return f"{self.custom_bank_name or 'سفارشی'} - {self.custom_card_number[-4:] if self.custom_card_number else 'N/A'}"
         return "نامشخص"
 
+    def get_uploaded_receipts_total(self):
+        """جمع مبالغ فیش‌های آپلودشده برای این تخصیص"""
+        from django.db.models import Sum
+        total = self.receipts.aggregate(total=Sum('amount'))['total']
+        return total if total is not None else Decimal('0')
+
+    def get_remaining_receipt_amount(self):
+        """مانده مبلغی که هنوز فیش برایش آپلود نشده"""
+        remaining = self.amount - self.get_uploaded_receipts_total()
+        return remaining if remaining > 0 else Decimal('0')
+
 
 class DepositReceipt(models.Model):
     """فیش‌های واریزی کاربر برای هر حساب"""

@@ -64,14 +64,14 @@ function WalletContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedReceiptImage, setSelectedReceiptImage] = useState<string | null>(null);
   const [expandedAssignments, setExpandedAssignments] = useState<Set<number>>(new Set());
-  // State برای نگهداری داده‌های فرم‌های فیش (key: `${requestId}-${assignmentId}`)
-  const [receiptForms, setReceiptForms] = useState<Record<string, {
+  // State برای نگهداری خطوط فیش هر حساب (key: `${requestId}-${assignmentId}`)
+  const [receiptForms, setReceiptForms] = useState<Record<string, Array<{
     amount: string;
     tracking_number: string;
     deposit_date: DateObject | null;
     receipt_file: File | null;
     receipt_image: string | null;
-  }>>({});
+  }>>>({});
   const [activePendingPurchase, setActivePendingPurchase] = useState<PendingPurchase | null>(null);
 
   // بارگذاری داده‌ها
@@ -712,75 +712,112 @@ function WalletContent() {
                               
                               {expandedAssignments.has(request.id) && (
                                 <div className="space-y-3 pt-2">
-                                  {request.filteredAssignments.map((assignment, idx) => (
+                                  {request.filteredAssignments.map((assignment) => {
+                                    const formKey = `${request.id}-${assignment.id}`;
+                                    const remaining = Number(assignment.remaining_amount ?? assignment.amount);
+                                    const uploadedTotal = Number(assignment.receipts_total ?? 0);
+                                    if (remaining <= 0) {
+                                      return (
+                                        <div key={assignment.id} className="bg-green-50 border border-green-300 rounded-xl p-4">
+                                          <p className="font-bold text-sm text-green-800">
+                                            {assignment.account_display || `حساب #${assignment.id}`}
+                                          </p>
+                                          <p className="text-xs text-green-700 mt-1">
+                                            فیش‌ها کامل است ({toPersianDigits(uploadedTotal.toLocaleString())} از {toPersianDigits(Number(assignment.amount).toLocaleString())} ریال)
+                                          </p>
+                                        </div>
+                                      );
+                                    }
+                                    return (
                                     <AssignmentReceiptForm
                                       key={assignment.id}
                                       assignment={assignment}
                                       depositRequestId={request.id}
-                                      formKey={`${request.id}-${assignment.id}`}
-                                      receiptForm={receiptForms[`${request.id}-${assignment.id}`]}
-                                      setReceiptForm={(form) => {
+                                      formKey={formKey}
+                                      receiptLines={receiptForms[formKey] || []}
+                                      setReceiptLines={(lines) => {
                                         setReceiptForms(prev => ({
                                           ...prev,
-                                          [`${request.id}-${assignment.id}`]: form
+                                          [formKey]: lines
                                         }));
                                       }}
                                     />
-                                  ))}
+                                    );
+                                  })}
                                   {/* دکمه ثبت همه فیش‌ها */}
                                   <Button 
                                     variant="primary" 
                                     className="w-full justify-center !bg-blue-600 hover:!bg-blue-700 shadow-lg text-sm py-3 mt-4"
                                     onClick={async () => {
-                                      // بررسی اینکه همه فرم‌ها پر شده‌اند
-                                      const allForms = request.filteredAssignments.map(a => receiptForms[`${request.id}-${a.id}`]);
-                                      const incompleteForms = allForms.filter(f => !f || !f.amount || !f.tracking_number || !f.deposit_date || !f.receipt_file);
-                                      
-                                      if (incompleteForms.length > 0) {
-                                        toast.error(`لطفا تمام فیش‌های واریزی را تکمیل کنید (${incompleteForms.length} فیش ناقص)`);
+                                      const openAssignments = request.filteredAssignments.filter(
+                                        a => Number(a.remaining_amount ?? a.amount) > 0
+                                      );
+                                      if (openAssignments.length === 0) {
+                                        toast.error("برای این درخواست فیش ناقصی باقی نمانده است");
                                         return;
                                       }
 
-                                      const invalidImage = allForms.find(f => f?.receipt_file && !validateImageFile(f.receipt_file).ok);
-                                      if (invalidImage?.receipt_file) {
-                                        const result = validateImageFile(invalidImage.receipt_file);
-                                        toast.error(result.message || "یکی از تصاویر فیش نامعتبر است", { duration: 6000 });
-                                        return;
-                                      }
-                                      
-                                      // آماده کردن داده‌ها برای ارسال
-                                      const receipts = request.filteredAssignments.map(assignment => {
-                                        const form = receiptForms[`${request.id}-${assignment.id}`];
-                                        const gregorianDate = form.deposit_date!.toDate();
-                                        const amount = parseFloat(form.amount.replace(/,/g, ''));
-                                        const maxAmount = Number(assignment.amount);
-                                        
-                                        // بررسی اینکه مبلغ بیشتر از assignment.amount نباشد
-                                        if (amount > maxAmount) {
-                                          throw new Error(`مبلغ برای حساب ${assignment.account_display || assignment.id} نمی‌تواند بیشتر از ${toPersianDigits(maxAmount.toLocaleString())} ریال باشد`);
+                                      // flatten خطوط فیش همه حساب‌ها
+                                      type FlatReceipt = {
+                                        assignment_id: number;
+                                        amount: number;
+                                        tracking_number: string;
+                                        deposit_date: string;
+                                        receipt_image: File;
+                                      };
+                                      const receipts: FlatReceipt[] = [];
+
+                                      for (const assignment of openAssignments) {
+                                        const lines = receiptForms[`${request.id}-${assignment.id}`] || [];
+                                        const remaining = Number(assignment.remaining_amount ?? assignment.amount);
+                                        if (lines.length === 0) {
+                                          toast.error(`لطفاً حداقل یک فیش برای حساب ${assignment.account_display || assignment.id} ثبت کنید`);
+                                          return;
                                         }
-                                        
-                                        return {
-                                          assignment_id: assignment.id,
-                                          amount: amount,
-                                          tracking_number: form.tracking_number,
-                                          deposit_date: gregorianDate.toISOString().split('T')[0],
-                                          receipt_image: form.receipt_file!,
-                                        };
-                                      });
+                                        let linesSum = 0;
+                                        for (const form of lines) {
+                                          if (!form.amount || !form.tracking_number || !form.deposit_date || !form.receipt_file) {
+                                            toast.error("لطفاً تمام فیلدهای فیش‌ها را تکمیل کنید");
+                                            return;
+                                          }
+                                          const imageCheck = validateImageFile(form.receipt_file);
+                                          if (!imageCheck.ok) {
+                                            toast.error(imageCheck.message || "یکی از تصاویر فیش نامعتبر است", { duration: 6000 });
+                                            return;
+                                          }
+                                          const amount = parseFloat(form.amount.replace(/,/g, ''));
+                                          if (!amount || amount <= 0) {
+                                            toast.error("مبلغ هر فیش باید بیشتر از صفر باشد");
+                                            return;
+                                          }
+                                          linesSum += amount;
+                                          const gregorianDate = form.deposit_date.toDate();
+                                          receipts.push({
+                                            assignment_id: assignment.id,
+                                            amount,
+                                            tracking_number: form.tracking_number,
+                                            deposit_date: gregorianDate.toISOString().split('T')[0],
+                                            receipt_image: form.receipt_file,
+                                          });
+                                        }
+                                        if (linesSum > remaining + 0.0001) {
+                                          toast.error(
+                                            `جمع فیش‌های حساب ${assignment.account_display || assignment.id} بیشتر از مانده (${toPersianDigits(remaining.toLocaleString())} ریال) است`
+                                          );
+                                          return;
+                                        }
+                                      }
                                       
                                       try {
                                         await walletAPI.uploadDepositReceiptsBatch(request.id, receipts);
-                                        toast.success(`${receipts.length} فیش واریزی با موفقیت ثبت شد`);
+                                        toast.success(`${toPersianDigits(String(receipts.length))} فیش واریزی با موفقیت ثبت شد`);
                                         
-                                        // پاک کردن فرم‌ها
                                         const newForms = { ...receiptForms };
-                                        request.filteredAssignments.forEach(assignment => {
+                                        openAssignments.forEach(assignment => {
                                           delete newForms[`${request.id}-${assignment.id}`];
                                         });
                                         setReceiptForms(newForms);
                                         
-                                        // به‌روزرسانی داده‌ها
                                         await fetchWalletData();
                                       } catch (error: any) {
                                         console.error('Error uploading receipts:', error);
@@ -796,7 +833,7 @@ function WalletContent() {
                                       }
                                     }}
                                   >
-                                    ثبت همه فیش‌های واریزی ({request.filteredAssignments.length})
+                                    ثبت فیش‌های واریزی
                                   </Button>
                                 </div>
                               )}
@@ -1411,105 +1448,97 @@ function WalletContent() {
 }
 
 // کامپوننت فرم آپلود فیش برای هر assignment
+type ReceiptFormLine = {
+  amount: string;
+  tracking_number: string;
+  deposit_date: DateObject | null;
+  receipt_file: File | null;
+  receipt_image: string | null;
+};
+
+function emptyReceiptLine(defaultAmount = ""): ReceiptFormLine {
+  return {
+    amount: defaultAmount,
+    tracking_number: "",
+    deposit_date: null,
+    receipt_file: null,
+    receipt_image: null,
+  };
+}
+
 function AssignmentReceiptForm({
   assignment,
-  depositRequestId,
-  formKey,
-  receiptForm,
-  setReceiptForm,
+  receiptLines,
+  setReceiptLines,
 }: {
   assignment: DepositAccountAssignment;
   depositRequestId: number;
   formKey: string;
-  receiptForm?: {
-    amount: string;
-    tracking_number: string;
-    deposit_date: DateObject | null;
-    receipt_file: File | null;
-    receipt_image: string | null;
-  };
-  setReceiptForm: (form: {
-    amount: string;
-    tracking_number: string;
-    deposit_date: DateObject | null;
-    receipt_file: File | null;
-    receipt_image: string | null;
-  }) => void;
+  receiptLines: ReceiptFormLine[];
+  setReceiptLines: (lines: ReceiptFormLine[]) => void;
 }) {
-  // مقدار پیش‌فرض مبلغ = assignment.amount
-  const defaultAmount = assignment.amount ? Number(assignment.amount).toString() : "";
-  const amount = receiptForm?.amount || defaultAmount;
-  const trackingNumber = receiptForm?.tracking_number || "";
-  const depositDate = receiptForm?.deposit_date || null;
-  const receiptFile = receiptForm?.receipt_file || null;
-  const receiptImage = receiptForm?.receipt_image || null;
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadHelpReason, setUploadHelpReason] = useState<"size" | "format" | "general" | null>(null);
-  const [previewFailed, setPreviewFailed] = useState(false);
-  
-  // تنظیم مقدار پیش‌فرض در اولین بار
-  useEffect(() => {
-    if (!receiptForm && defaultAmount) {
-      setReceiptForm({
-        amount: defaultAmount,
-        tracking_number: "",
-        deposit_date: null,
-        receipt_file: null,
-        receipt_image: null,
-      });
-    }
-  }, [defaultAmount, receiptForm, setReceiptForm]);
+  const remainingAmount = Number(assignment.remaining_amount ?? assignment.amount);
+  const uploadedTotal = Number(assignment.receipts_total ?? 0);
+  const defaultAmount = remainingAmount > 0 ? remainingAmount.toString() : "";
+  const lines = receiptLines.length > 0 ? receiptLines : [emptyReceiptLine(defaultAmount)];
+  const fileInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const [uploadHelpReasons, setUploadHelpReasons] = useState<Record<number, "size" | "format" | "general" | null>>({});
+  const [previewFailed, setPreviewFailed] = useState<Record<number, boolean>>({});
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    if (receiptLines.length === 0 && defaultAmount) {
+      setReceiptLines([emptyReceiptLine(defaultAmount)]);
+    }
+  }, [defaultAmount, receiptLines.length, setReceiptLines]);
+
+  const linesSum = lines.reduce((sum, line) => {
+    const n = parseFloat((line.amount || "0").replace(/,/g, "")) || 0;
+    return sum + n;
+  }, 0);
+  const leftover = Math.max(0, remainingAmount - linesSum);
+
+  const updateLine = (index: number, patch: Partial<ReceiptFormLine>) => {
+    const next = lines.map((line, i) => (i === index ? { ...line, ...patch } : line));
+    setReceiptLines(next);
+  };
+
+  const handleFileChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const validation = validateImageFile(file);
     if (!validation.ok) {
-      setPreviewFailed(false);
-      setUploadHelpReason(validation.reason || "general");
-      setReceiptForm({
-        amount: receiptForm?.amount || "",
-        tracking_number: receiptForm?.tracking_number || "",
-        deposit_date: receiptForm?.deposit_date || null,
-        receipt_file: null,
-        receipt_image: null,
-      });
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setPreviewFailed(prev => ({ ...prev, [index]: false }));
+      setUploadHelpReasons(prev => ({ ...prev, [index]: validation.reason || "general" }));
+      updateLine(index, { receipt_file: null, receipt_image: null });
+      if (fileInputRefs.current[index]) fileInputRefs.current[index]!.value = "";
       toast.error(validation.message || "فایل نامعتبر است", { duration: 5000 });
       return;
     }
 
-    setUploadHelpReason(null);
-    setPreviewFailed(false);
-    setReceiptForm({
-      amount: receiptForm?.amount || "",
-      tracking_number: receiptForm?.tracking_number || "",
-      deposit_date: receiptForm?.deposit_date || null,
+    setUploadHelpReasons(prev => ({ ...prev, [index]: null }));
+    setPreviewFailed(prev => ({ ...prev, [index]: false }));
+    updateLine(index, {
       receipt_file: file,
       receipt_image: URL.createObjectURL(file),
     });
   };
 
-  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAmountChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const englishValue = toEnglishDigits(e.target.value);
     const value = englishValue.replace(/,/g, '');
-    if (/^\d*\.?\d*$/.test(value)) {
-      const numValue = parseFloat(value) || 0;
-      const maxAmount = Number(assignment.amount);
-      // محدود کردن مبلغ به حداکثر assignment.amount
-      const finalValue = numValue > maxAmount ? maxAmount.toString() : value;
-      setReceiptForm({
-        amount: finalValue,
-        tracking_number: receiptForm?.tracking_number || "",
-        deposit_date: receiptForm?.deposit_date || null,
-        receipt_file: receiptForm?.receipt_file || null,
-        receipt_image: receiptForm?.receipt_image || null,
-      });
-      // نمایش هشدار اگر مبلغ بیشتر از assignment باشد
-      if (numValue > maxAmount) {
-        toast.error(`مبلغ نمی‌تواند بیشتر از ${toPersianDigits(maxAmount.toLocaleString())} ریال باشد`);
-      }
+    if (!/^\d*\.?\d*$/.test(value)) return;
+
+    const numValue = parseFloat(value) || 0;
+    const otherSum = lines.reduce((sum, line, i) => {
+      if (i === index) return sum;
+      return sum + (parseFloat((line.amount || "0").replace(/,/g, "")) || 0);
+    }, 0);
+    const maxForThis = Math.max(0, remainingAmount - otherSum);
+    const finalValue = numValue > maxForThis ? maxForThis.toString() : value;
+    updateLine(index, { amount: finalValue });
+    if (numValue > maxForThis) {
+      toast.error(`مبلغ نمی‌تواند بیشتر از مانده (${toPersianDigits(maxForThis.toLocaleString())} ریال) باشد`);
     }
   };
 
@@ -1542,38 +1571,33 @@ function AssignmentReceiptForm({
     shebaNumber = assignment.custom_sheba_number || '';
   }
 
-  // تابع کپی کردن شماره کارت
   const handleCopyCardNumber = async () => {
     if (!cardNumber) return;
     try {
       await navigator.clipboard.writeText(cardNumber);
       toast.success("شماره کارت کپی شد");
-    } catch (error) {
+    } catch {
       toast.error("خطا در کپی کردن شماره کارت");
     }
   };
 
-  // تابع کپی کردن شماره شبا (فقط قسمت عددی)
   const handleCopyShebaNumber = async () => {
     if (!shebaNumber) return;
-    // حذف IR از ابتدا در صورت وجود
     const shebaDigits = shebaNumber.replace(/^IR/i, '').trim();
     try {
       await navigator.clipboard.writeText(shebaDigits);
       toast.success("شماره شبا کپی شد");
-    } catch (error) {
+    } catch {
       toast.error("خطا در کپی کردن شماره شبا");
     }
   };
 
-  // فرمت کردن شماره کارت برای نمایش (هر 4 رقم با فاصله)
   const formatCardNumber = (card: string) => {
     if (!card) return '';
     const cleaned = card.replace(/\s/g, '');
     return cleaned.match(/.{1,4}/g)?.join(' ') || cleaned;
   };
 
-  // فرمت کردن شماره شبا برای نمایش (IR + اعداد با فاصله)
   const formatShebaNumber = (sheba: string) => {
     if (!sheba) return '';
     const cleaned = sheba.replace(/^IR/i, '').replace(/\s/g, '');
@@ -1586,12 +1610,16 @@ function AssignmentReceiptForm({
         <div>
           <p className="font-bold text-sm text-gray-800">{accountDisplay}</p>
           <p className="text-xs text-gray-500 mt-1">
-            مبلغ: {toPersianDigits(Number(assignment.amount).toLocaleString())} ریال
+            مبلغ تخصیص: {toPersianDigits(Number(assignment.amount).toLocaleString())} ریال
           </p>
+          {uploadedTotal > 0 && (
+            <p className="text-xs text-green-700 mt-0.5">
+              آپلود شده: {toPersianDigits(uploadedTotal.toLocaleString())} — مانده: {toPersianDigits(remainingAmount.toLocaleString())} ریال
+            </p>
+          )}
         </div>
       </div>
 
-      {/* نمایش شماره کارت و شبا */}
       {(cardNumber || shebaNumber) && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
           {cardNumber && (
@@ -1633,121 +1661,135 @@ function AssignmentReceiptForm({
         </div>
       )}
 
-      <div className="space-y-3 pt-2 border-t border-blue-200">
-        <div className="relative">
-          <Input 
-            label="مبلغ واریز شده"
-            placeholder={toPersianDigits(Number(assignment.amount).toLocaleString())}
-            value={amount ? toPersianDigits(formatNumber(amount)) : ""}
-            onChange={handleAmountChange}
-            className="text-center text-lg font-bold text-gray-800 dir-ltr"
-            dir="ltr"
-          />
-          <span className="absolute left-4 top-[42px] text-gray-400 text-xs font-bold bg-white px-1">ریال</span>
-          <p className="text-xs text-gray-500 mt-1 text-center">
-            حداکثر: {toPersianDigits(Number(assignment.amount).toLocaleString())} ریال
-          </p>
-        </div>
+      {lines.map((line, index) => (
+        <div key={index} className="space-y-3 pt-2 border-t border-blue-200">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-blue-700">فیش {toPersianDigits(String(index + 1))}</p>
+            {lines.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setReceiptLines(lines.filter((_, i) => i !== index))}
+                className="text-xs text-red-500 font-bold hover:text-red-600"
+              >
+                حذف این فیش
+              </button>
+            )}
+          </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Input 
-            label="شماره پیگیری" 
-            placeholder="مثلا: ۱۲۳۴۵۶" 
-            className="text-center font-bold text-sm"
-            value={trackingNumber}
-            onChange={(e) => {
-              const englishValue = toEnglishDigits(e.target.value);
-              setReceiptForm({
-                amount: receiptForm?.amount || "",
-                tracking_number: englishValue,
-                deposit_date: receiptForm?.deposit_date || null,
-                receipt_file: receiptForm?.receipt_file || null,
-                receipt_image: receiptForm?.receipt_image || null,
-              });
-            }}
-          />
-          
-          <div className="w-full">
-            <label className="block text-xs font-bold text-gray-700 mb-2">تاریخ واریز</label>
-            <div className="relative">
-              <DatePicker
-                calendar={persian}
-                locale={persian_fa}
-                calendarPosition="bottom-right"
-                containerClassName="w-full"
-                inputClass="w-full bg-gray-50 text-gray-900 border-2 border-gray-200 focus:border-gold-500 rounded-xl px-3 py-2 outline-none transition-all text-center font-bold text-xs"
-                placeholder="انتخاب کنید"
-                value={depositDate}
-                onChange={(date) => {
-                  setReceiptForm({
-                    amount: receiptForm?.amount || "",
-                    tracking_number: receiptForm?.tracking_number || "",
-                    deposit_date: date as DateObject | null,
-                    receipt_file: receiptForm?.receipt_file || null,
-                    receipt_image: receiptForm?.receipt_image || null,
-                  });
-                }}
-              />
-              <CalendarIcon size={14} className="absolute right-2 top-2.5 text-gray-400 pointer-events-none"/>
+          <div className="relative">
+            <Input 
+              label="مبلغ واریز شده"
+              placeholder={toPersianDigits(remainingAmount.toLocaleString())}
+              value={line.amount ? toPersianDigits(formatNumber(line.amount)) : ""}
+              onChange={(e) => handleAmountChange(index, e)}
+              className="text-center text-lg font-bold text-gray-800 dir-ltr"
+              dir="ltr"
+            />
+            <span className="absolute left-4 top-[42px] text-gray-400 text-xs font-bold bg-white px-1">ریال</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input 
+              label="شماره پیگیری" 
+              placeholder="مثلا: ۱۲۳۴۵۶" 
+              className="text-center font-bold text-sm"
+              value={line.tracking_number}
+              onChange={(e) => {
+                updateLine(index, { tracking_number: toEnglishDigits(e.target.value) });
+              }}
+            />
+            
+            <div className="w-full">
+              <label className="block text-xs font-bold text-gray-700 mb-2">تاریخ واریز</label>
+              <div className="relative">
+                <DatePicker
+                  calendar={persian}
+                  locale={persian_fa}
+                  calendarPosition="bottom-right"
+                  containerClassName="w-full"
+                  inputClass="w-full bg-gray-50 text-gray-900 border-2 border-gray-200 focus:border-gold-500 rounded-xl px-3 py-2 outline-none transition-all text-center font-bold text-xs"
+                  placeholder="انتخاب کنید"
+                  value={line.deposit_date}
+                  onChange={(date) => {
+                    updateLine(index, { deposit_date: date as DateObject | null });
+                  }}
+                />
+                <CalendarIcon size={14} className="absolute right-2 top-2.5 text-gray-400 pointer-events-none"/>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* آپلود فیش */}
-        <div className="w-full">
-          <label className="block text-xs font-bold text-gray-700 mb-2">تصویر فیش واریزی</label>
-          <p className="text-[10px] text-gray-500 mb-2 leading-relaxed">
-            JPG، PNG، WebP یا HEIC آیفون — حداکثر {MAX_IMAGE_SIZE_LABEL}
-          </p>
-          {!receiptImage ? (
-            <div 
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all group text-center h-24 ${
-                uploadHelpReason
-                  ? "border-red-300 bg-red-50/40"
-                  : "border-gray-300 hover:border-gold-500 hover:bg-gold-50/20"
-              }`}
-            >
-              <UploadCloud size={20} className="text-gray-400 group-hover:text-gold-600 mb-1"/>
-              <span className="text-[10px] font-bold text-gray-600">آپلود تصویر فیش</span>
-            </div>
-          ) : (
-            <div className="relative h-32 border-2 border-green-500 rounded-xl overflow-hidden group">
-              {previewFailed ? (
-                <div className="w-full h-full bg-gray-50 flex items-center justify-center text-[10px] text-gray-500 px-3 text-center">
-                  فایل انتخاب شد: {receiptFile?.name || "فیش واریزی"}
-                  <br />
-                  (پیش‌نمایش در این مرورگر در دسترس نیست؛ آپلود مشکلی ندارد)
-                </div>
-              ) : (
-                <img
-                  src={receiptImage}
-                  className="w-full h-full object-cover"
-                  alt="receipt"
-                  onError={() => setPreviewFailed(true)}
-                />
-              )}
-              <button type="button" onClick={() => {
-                setUploadHelpReason(null);
-                setPreviewFailed(false);
-                setReceiptForm({
-                  amount: receiptForm?.amount || "",
-                  tracking_number: receiptForm?.tracking_number || "",
-                  deposit_date: receiptForm?.deposit_date || null,
-                  receipt_file: null,
-                  receipt_image: null,
-                });
-                if (fileInputRef.current) {
-                  fileInputRef.current.value = '';
-                }
-              }} className="absolute top-1 left-1 bg-red-500 text-white p-1 rounded-full shadow-lg z-10"><X size={14}/></button>
-              <div className="absolute bottom-0 w-full bg-green-500 text-white text-center text-[10px] py-1 font-bold">آماده ارسال</div>
-            </div>
-          )}
-          {uploadHelpReason && <ImageCompressHelp reason={uploadHelpReason} compact />}
-          <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept={IMAGE_FILE_ACCEPT} />
+          <div className="w-full">
+            <label className="block text-xs font-bold text-gray-700 mb-2">تصویر فیش واریزی</label>
+            <p className="text-[10px] text-gray-500 mb-2 leading-relaxed">
+              JPG، PNG، WebP یا HEIC آیفون — حداکثر {MAX_IMAGE_SIZE_LABEL}
+            </p>
+            {!line.receipt_image ? (
+              <div 
+                onClick={() => fileInputRefs.current[index]?.click()}
+                className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all group text-center h-24 ${
+                  uploadHelpReasons[index]
+                    ? "border-red-300 bg-red-50/40"
+                    : "border-gray-300 hover:border-gold-500 hover:bg-gold-50/20"
+                }`}
+              >
+                <UploadCloud size={20} className="text-gray-400 group-hover:text-gold-600 mb-1"/>
+                <span className="text-[10px] font-bold text-gray-600">آپلود تصویر فیش</span>
+              </div>
+            ) : (
+              <div className="relative h-32 border-2 border-green-500 rounded-xl overflow-hidden group">
+                {previewFailed[index] ? (
+                  <div className="w-full h-full bg-gray-50 flex items-center justify-center text-[10px] text-gray-500 px-3 text-center">
+                    فایل انتخاب شد: {line.receipt_file?.name || "فیش واریزی"}
+                    <br />
+                    (پیش‌نمایش در این مرورگر در دسترس نیست؛ آپلود مشکلی ندارد)
+                  </div>
+                ) : (
+                  <img
+                    src={line.receipt_image}
+                    className="w-full h-full object-cover"
+                    alt="receipt"
+                    onError={() => setPreviewFailed(prev => ({ ...prev, [index]: true }))}
+                  />
+                )}
+                <button type="button" onClick={() => {
+                  setUploadHelpReasons(prev => ({ ...prev, [index]: null }));
+                  setPreviewFailed(prev => ({ ...prev, [index]: false }));
+                  updateLine(index, { receipt_file: null, receipt_image: null });
+                  if (fileInputRefs.current[index]) {
+                    fileInputRefs.current[index]!.value = '';
+                  }
+                }} className="absolute top-1 left-1 bg-red-500 text-white p-1 rounded-full shadow-lg z-10"><X size={14}/></button>
+                <div className="absolute bottom-0 w-full bg-green-500 text-white text-center text-[10px] py-1 font-bold">آماده ارسال</div>
+              </div>
+            )}
+            {uploadHelpReasons[index] && <ImageCompressHelp reason={uploadHelpReasons[index]!} compact />}
+            <input
+              type="file"
+              ref={(el) => { fileInputRefs.current[index] = el; }}
+              onChange={(e) => handleFileChange(index, e)}
+              className="hidden"
+              accept={IMAGE_FILE_ACCEPT}
+            />
+          </div>
         </div>
+      ))}
 
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <p className="text-[11px] text-gray-500">
+          جمع فیش‌های این فرم: {toPersianDigits(linesSum.toLocaleString())} ریال
+          {leftover > 0 ? ` — مانده پوشش‌نداده: ${toPersianDigits(leftover.toLocaleString())}` : ""}
+        </p>
+        {leftover > 0 && (
+          <button
+            type="button"
+            onClick={() => setReceiptLines([...lines, emptyReceiptLine(leftover.toString())])}
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+          >
+            <Plus size={14} />
+            افزودن فیش دیگر
+          </button>
+        )}
       </div>
     </div>
   );

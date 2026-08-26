@@ -331,6 +331,9 @@ export interface DepositAccountAssignment {
     card_number: string;
     sheba_number: string;
   };
+  receipts_total?: string;
+  remaining_amount?: string;
+  receipts_count?: number;
   created_at: string;
 }
 

@@ -1517,10 +1517,12 @@ def user_upload_deposit_receipt(request, request_id):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # بررسی اینکه آیا قبلاً فیشی برای این حساب آپلود شده است
-        if assignment.receipts.exists():
+        # چند فیش برای یک حساب مجاز است؛ مجموع نباید از مبلغ تخصیص بیشتر شود
+        from decimal import Decimal
+        remaining = assignment.get_remaining_receipt_amount()
+        if remaining <= 0:
             return Response(
-                {'error': 'برای این حساب قبلاً فیش واریزی آپلود شده است'},
+                {'error': 'برای این حساب فیش‌ها به اندازه مبلغ تخصیص کامل شده‌اند'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -1554,12 +1556,19 @@ def user_upload_deposit_receipt(request, request_id):
             )
         
         # اعتبارسنجی مبلغ
-        from decimal import Decimal
         try:
             amount_decimal = Decimal(str(amount))
-            if amount_decimal != assignment.amount:
+            if amount_decimal <= 0:
                 return Response(
-                    {'error': f'مبلغ باید برابر با {assignment.amount} ریال باشد'},
+                    {'error': 'مبلغ فیش باید بیشتر از صفر باشد'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if amount_decimal > remaining:
+                return Response(
+                    {
+                        'error': f'مبلغ این فیش نمی‌تواند بیشتر از مانده ({remaining}) ریال باشد',
+                        'remaining_amount': int(remaining),
+                    },
                     status=status.HTTP_400_BAD_REQUEST
                 )
         except (ValueError, TypeError):
@@ -1578,12 +1587,19 @@ def user_upload_deposit_receipt(request, request_id):
             amount=amount_decimal,
             status='PENDING'
         )
+
+        try:
+            from trades.pending_purchase_service import PendingPurchaseService
+            PendingPurchaseService.mark_awaiting_approval(deposit_request)
+        except Exception:
+            pass
         
         # Serialize و برگرداندن
         serializer = DepositReceiptSerializer(receipt, context={'request': request})
         return Response({
             'message': 'فیش واریزی با موفقیت آپلود شد',
-            'receipt': serializer.data
+            'receipt': serializer.data,
+            'remaining_amount': int(assignment.get_remaining_receipt_amount()),
         }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
@@ -1659,6 +1675,8 @@ def user_upload_deposit_receipts_batch(request, request_id):
         
         created_receipts = []
         errors = []
+        # جمع مبالغ فیش‌های همین batch برای هر assignment (قبل از commit نهایی)
+        batch_sums_by_assignment = {}
         
         from datetime import datetime
         from decimal import Decimal
@@ -1683,23 +1701,11 @@ def user_upload_deposit_receipts_batch(request, request_id):
                 errors.append({'assignment_id': f'خطا در دریافت حساب {assignment_id}: {str(e)}'})
                 continue
             
-            # بررسی اینکه آیا قبلاً فیشی برای این حساب آپلود شده است
-            if assignment.receipts.exists():
-                errors.append({'assignment_id': f'برای حساب {assignment_id} قبلاً فیش آپلود شده است'})
-                continue
-            
-            # دریافت داده‌های فیش
+            # چند فیش برای یک حساب مجاز است؛ جمع موجود + جدید ≤ مبلغ تخصیص
             tracking_number = receipt_data.get('tracking_number')
             deposit_date_str = receipt_data.get('deposit_date')
             receipt_image = receipt_data.get('receipt_image')
             amount = receipt_data.get('amount')
-            
-            # Debug: چاپ داده‌های دریافتی
-            print(f"DEBUG receipt_data for assignment {assignment_id}:")
-            print(f"  tracking_number: {tracking_number}")
-            print(f"  deposit_date_str: {deposit_date_str}")
-            print(f"  receipt_image: {receipt_image}")
-            print(f"  amount: {amount}")
             
             if not all([tracking_number, deposit_date_str, receipt_image, amount]):
                 missing_fields = []
@@ -1721,42 +1727,38 @@ def user_upload_deposit_receipts_batch(request, request_id):
                 errors.append({'assignment_id': f'فیش حساب {assignment_id}: {image_error}'})
                 continue
             
-            # تبدیل تاریخ
             try:
                 deposit_date = datetime.strptime(deposit_date_str, '%Y-%m-%d').date()
             except (ValueError, TypeError):
                 errors.append({'assignment_id': f'فرمت تاریخ برای حساب {assignment_id} نامعتبر است'})
                 continue
             
-            # اعتبارسنجی مبلغ
             try:
-                # تبدیل amount به Decimal برای مقایسه
                 amount_decimal = Decimal(str(amount))
-                assignment_amount_decimal = Decimal(str(assignment.amount))
-                
-                print(f"DEBUG: amount_decimal={amount_decimal}, assignment.amount={assignment_amount_decimal}")
-                
-                # بررسی اینکه مبلغ باید بیشتر از صفر و کمتر یا مساوی assignment.amount باشد
                 if amount_decimal <= 0:
-                    print(f"DEBUG: مبلغ باید بیشتر از صفر باشد")
                     errors.append({'assignment_id': f'مبلغ برای حساب {assignment_id} باید بیشتر از صفر باشد'})
                     continue
-                
-                if amount_decimal > assignment_amount_decimal:
-                    print(f"DEBUG: مبلغ بیشتر از assignment است: {amount_decimal} > {assignment_amount_decimal}")
-                    errors.append({'assignment_id': f'مبلغ برای حساب {assignment_id} نمی‌تواند بیشتر از {assignment.amount} ریال باشد (ارسال شده: {amount_decimal})'})
+
+                # مانده واقعی = مانده دیتابیس − فیش‌های همین batch برای همین حساب
+                already_in_batch = batch_sums_by_assignment.get(int(assignment_id), Decimal('0'))
+                remaining = assignment.get_remaining_receipt_amount() - already_in_batch
+                if remaining <= 0:
+                    errors.append({
+                        'assignment_id': f'برای حساب {assignment_id} فیش‌ها به اندازه مبلغ تخصیص کامل شده‌اند'
+                    })
                     continue
-                
-                # اگر مبلغ کمتر از assignment.amount باشد، این partial payment است و مجاز است
-                print(f"DEBUG: مبلغ معتبر است (partial payment مجاز است)")
+                if amount_decimal > remaining:
+                    errors.append({
+                        'assignment_id': (
+                            f'مبلغ برای حساب {assignment_id} نمی‌تواند بیشتر از مانده '
+                            f'({remaining}) ریال باشد (ارسال شده: {amount_decimal})'
+                        )
+                    })
+                    continue
             except (ValueError, TypeError) as e:
-                print(f"DEBUG: خطا در تبدیل مبلغ: {e}")
-                import traceback
-                traceback.print_exc()
                 errors.append({'assignment_id': f'مبلغ برای حساب {assignment_id} نامعتبر است: {str(e)}'})
                 continue
             
-            # ایجاد فیش واریزی
             try:
                 receipt = DepositReceipt.objects.create(
                     deposit_request=deposit_request,
@@ -1768,11 +1770,13 @@ def user_upload_deposit_receipts_batch(request, request_id):
                     status='PENDING'
                 )
                 created_receipts.append(receipt)
+                batch_sums_by_assignment[int(assignment_id)] = (
+                    batch_sums_by_assignment.get(int(assignment_id), Decimal('0')) + amount_decimal
+                )
             except Exception as e:
                 errors.append({'assignment_id': f'خطا در ایجاد فیش برای حساب {assignment_id}: {str(e)}'})
         
         if errors:
-            # اگر خطایی وجود دارد، فیش‌های ایجاد شده را حذف می‌کنیم
             for receipt in created_receipts:
                 receipt.delete()
             return Response(
@@ -1907,17 +1911,24 @@ def admin_approve_deposit_new_flow(request, request_id):
         # تبدیل queryset به list برای استفاده بعد از delete
         assignments_list = list(assignments)
         
-        # بررسی اینکه تمام فیش‌ها آپلود شده‌اند
-        all_receipts_uploaded = True
-        missing_assignments = []
+        # جمع فیش‌های هر حساب باید حداقل برابر مبلغ تخصیص باشد
+        incomplete_assignments = []
         for assignment in assignments_list:
-            if not assignment.receipts.exists():
-                all_receipts_uploaded = False
-                missing_assignments.append(assignment.get_account_display())
+            uploaded_total = assignment.get_uploaded_receipts_total()
+            if uploaded_total < assignment.amount:
+                incomplete_assignments.append(
+                    f"{assignment.get_account_display()} "
+                    f"(آپلود شده: {int(uploaded_total)} از {int(assignment.amount)})"
+                )
         
-        if not all_receipts_uploaded:
+        if incomplete_assignments:
             return Response(
-                {'error': f'فیش واریزی برای حساب‌های زیر آپلود نشده است: {", ".join(missing_assignments)}'},
+                {
+                    'error': (
+                        'جمع فیش‌های آپلودشده برای حساب‌های زیر هنوز کامل نیست: '
+                        + ', '.join(incomplete_assignments)
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -1958,38 +1969,38 @@ def admin_approve_deposit_new_flow(request, request_id):
             for assignment in assignments_list:
                 if assignment.account_type == 'WITHDRAWAL' and assignment.withdrawal_request:
                     withdrawal_request = assignment.withdrawal_request
-                    receipt = assignment.receipts.first()  # باید فقط یک receipt داشته باشد
-                    
-                    if not receipt:
+                    assignment_receipts = list(assignment.receipts.all())
+                    if not assignment_receipts:
                         continue
-                    
-                    # بررسی اینکه درخواست برداشت هنوز در انتظار است
+
                     if withdrawal_request.status == 'PENDING':
-                        # استفاده از receipt.amount به جای assignment.amount
-                        # چون receipt.amount مبلغ واقعی واریز شده است (ممکن است کمتر از assignment.amount باشد)
-                        link_amount = receipt.amount
-                        
-                        # ایجاد لینک (بدون auto_approved - بعداً بررسی می‌کنیم)
-                        link = DepositWithdrawalLink.objects.create(
-                            deposit_receipt=receipt,
-                            withdrawal_request=withdrawal_request,
-                            amount=link_amount,  # استفاده از receipt.amount
-                            auto_approved=False  # ابتدا False، بعداً بررسی می‌کنیم
-                        )
-                        links_created.append(link)
-                        
-                        print(f"DEBUG: Created link for withdrawal {withdrawal_request.id}: receipt.amount={receipt.amount}, assignment.amount={assignment.amount}, link.amount={link_amount}")
-                        
-                        # محاسبه باقی‌مانده بعد از این واریز
-                        # refresh کردن withdrawal_request برای دریافت لینک‌های جدید
+                        for receipt in assignment_receipts:
+                            # جلوگیری از لینک تکراری برای همان فیش
+                            if DepositWithdrawalLink.objects.filter(
+                                deposit_receipt=receipt,
+                                withdrawal_request=withdrawal_request,
+                            ).exists():
+                                continue
+
+                            link_amount = receipt.amount
+                            link = DepositWithdrawalLink.objects.create(
+                                deposit_receipt=receipt,
+                                withdrawal_request=withdrawal_request,
+                                amount=link_amount,
+                                auto_approved=False
+                            )
+                            links_created.append(link)
+                            print(
+                                f"DEBUG: Created link for withdrawal {withdrawal_request.id}: "
+                                f"receipt.amount={receipt.amount}, assignment.amount={assignment.amount}, "
+                                f"link.amount={link_amount}"
+                            )
+
                         withdrawal_request.refresh_from_db()
                         remaining_amount = withdrawal_request.get_remaining_amount()
-                        
+
                         # فقط اگر باقی‌مانده = 0 یا کمتر باشد، تایید خودکار انجام می‌شود
-                        if remaining_amount <= 0:
-                            # تایید خودکار درخواست برداشت
-                            # موجودی قبلاً در زمان ایجاد درخواست کسر شده است
-                            # آزاد کردن موجودی مسدود شده
+                        if remaining_amount <= 0 and withdrawal_request.status == 'PENDING':
                             withdrawal_wallet, _ = Wallet.objects.get_or_create(user=withdrawal_request.user)
                             if withdrawal_request.withdrawal_type == 'RIAL':
                                 withdrawal_wallet.pending_withdrawal_rial -= withdrawal_request.amount
@@ -1998,12 +2009,11 @@ def admin_approve_deposit_new_flow(request, request_id):
                             withdrawal_wallet.save()
                             withdrawal_request.status = 'APPROVED'
                             withdrawal_request.save()
-                            
-                            # به‌روزرسانی لینک به auto_approved=True
-                            link.auto_approved = True
-                            link.save()
-                            
-                            # ذخیره اطلاعات برای ارسال پیامک بعد از transaction
+
+                            DepositWithdrawalLink.objects.filter(
+                                withdrawal_request=withdrawal_request,
+                            ).update(auto_approved=True)
+
                             account_code = withdrawal_request.user.customer_profile.account_code if hasattr(withdrawal_request.user, 'customer_profile') else 'N/A'
                             users_to_notify.append({
                                 'phone_number': withdrawal_request.user.phone_number,
