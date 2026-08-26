@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Wallet, BankCard, WithdrawalRequest, DepositRequest, DepositAccountAssignment, DepositReceipt, DepositWithdrawalLink
 from accounts.services import persian_to_english_numbers
+from accounts.image_upload import get_uploaded_image_error
 import re
 
 
@@ -308,6 +309,14 @@ class DepositRequestSerializer(serializers.ModelSerializer):
             'tracking_number': {'required': False, 'allow_blank': True, 'allow_null': True},
             'deposit_date': {'required': False, 'allow_null': True},
         }
+
+    def validate_receipt_image(self, value):
+        if not value:
+            return value
+        error = get_uploaded_image_error(value)
+        if error:
+            raise serializers.ValidationError(error)
+        return value
     
     def get_user_info(self, obj):
         """اطلاعات کاربر"""

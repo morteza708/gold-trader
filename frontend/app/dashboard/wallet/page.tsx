@@ -15,7 +15,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import AddCardModal from "@/components/dashboard/AddCardModal";
 import WalletTabGuide from "@/components/dashboard/WalletTabGuide";
+import ImageCompressHelp from "@/components/ui/ImageCompressHelp";
 import { formatNumber, toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
+import { IMAGE_FILE_ACCEPT, MAX_IMAGE_SIZE_LABEL, validateImageFile } from "@/lib/utils/imageUpload";
 import { walletAPI, Wallet, BankCard, WithdrawalRequest, DepositRequest, DepositAccountAssignment, DepositReceipt } from "@/lib/api/auth";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -606,6 +608,13 @@ function WalletContent() {
                                         toast.error(`لطفا تمام فیش‌های واریزی را تکمیل کنید (${incompleteForms.length} فیش ناقص)`);
                                         return;
                                       }
+
+                                      const invalidImage = allForms.find(f => f?.receipt_file && !validateImageFile(f.receipt_file).ok);
+                                      if (invalidImage?.receipt_file) {
+                                        const result = validateImageFile(invalidImage.receipt_file);
+                                        toast.error(result.message || "یکی از تصاویر فیش نامعتبر است", { duration: 6000 });
+                                        return;
+                                      }
                                       
                                       // آماده کردن داده‌ها برای ارسال
                                       const receipts = request.filteredAssignments.map(assignment => {
@@ -643,7 +652,15 @@ function WalletContent() {
                                         await fetchWalletData();
                                       } catch (error: any) {
                                         console.error('Error uploading receipts:', error);
-                                        toast.error(error.response?.data?.error || "خطا در ثبت فیش‌های واریزی");
+                                        const details = error.response?.data?.details;
+                                        const firstDetail = Array.isArray(details) && details[0]
+                                          ? Object.values(details[0])[0]
+                                          : null;
+                                        toast.error(
+                                          (typeof firstDetail === "string" ? firstDetail : error.response?.data?.error) ||
+                                          "خطا در ثبت فیش‌های واریزی",
+                                          { duration: 6000 }
+                                        );
                                       }
                                     }}
                                   >
@@ -1295,6 +1312,8 @@ function AssignmentReceiptForm({
   const receiptFile = receiptForm?.receipt_file || null;
   const receiptImage = receiptForm?.receipt_image || null;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadHelpReason, setUploadHelpReason] = useState<"size" | "format" | "general" | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
   
   // تنظیم مقدار پیش‌فرض در اولین بار
   useEffect(() => {
@@ -1311,19 +1330,33 @@ function AssignmentReceiptForm({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setReceiptForm({
-          amount: receiptForm?.amount || "",
-          tracking_number: receiptForm?.tracking_number || "",
-          deposit_date: receiptForm?.deposit_date || null,
-          receipt_file: file,
-          receipt_image: reader.result as string,
-        });
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (!validation.ok) {
+      setPreviewFailed(false);
+      setUploadHelpReason(validation.reason || "general");
+      setReceiptForm({
+        amount: receiptForm?.amount || "",
+        tracking_number: receiptForm?.tracking_number || "",
+        deposit_date: receiptForm?.deposit_date || null,
+        receipt_file: null,
+        receipt_image: null,
+      });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      toast.error(validation.message || "فایل نامعتبر است", { duration: 5000 });
+      return;
     }
+
+    setUploadHelpReason(null);
+    setPreviewFailed(false);
+    setReceiptForm({
+      amount: receiptForm?.amount || "",
+      tracking_number: receiptForm?.tracking_number || "",
+      deposit_date: receiptForm?.deposit_date || null,
+      receipt_file: file,
+      receipt_image: URL.createObjectURL(file),
+    });
   };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1531,18 +1564,40 @@ function AssignmentReceiptForm({
         {/* آپلود فیش */}
         <div className="w-full">
           <label className="block text-xs font-bold text-gray-700 mb-2">تصویر فیش واریزی</label>
+          <p className="text-[10px] text-gray-500 mb-2 leading-relaxed">
+            JPG، PNG، WebP یا HEIC آیفون — حداکثر {MAX_IMAGE_SIZE_LABEL}
+          </p>
           {!receiptImage ? (
             <div 
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-gray-300 hover:border-gold-500 hover:bg-gold-50/20 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all group text-center h-24"
+              className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all group text-center h-24 ${
+                uploadHelpReason
+                  ? "border-red-300 bg-red-50/40"
+                  : "border-gray-300 hover:border-gold-500 hover:bg-gold-50/20"
+              }`}
             >
               <UploadCloud size={20} className="text-gray-400 group-hover:text-gold-600 mb-1"/>
               <span className="text-[10px] font-bold text-gray-600">آپلود تصویر فیش</span>
             </div>
           ) : (
             <div className="relative h-32 border-2 border-green-500 rounded-xl overflow-hidden group">
-              <img src={receiptImage} className="w-full h-full object-cover" alt="receipt" />
-              <button onClick={() => {
+              {previewFailed ? (
+                <div className="w-full h-full bg-gray-50 flex items-center justify-center text-[10px] text-gray-500 px-3 text-center">
+                  فایل انتخاب شد: {receiptFile?.name || "فیش واریزی"}
+                  <br />
+                  (پیش‌نمایش در این مرورگر در دسترس نیست؛ آپلود مشکلی ندارد)
+                </div>
+              ) : (
+                <img
+                  src={receiptImage}
+                  className="w-full h-full object-cover"
+                  alt="receipt"
+                  onError={() => setPreviewFailed(true)}
+                />
+              )}
+              <button type="button" onClick={() => {
+                setUploadHelpReason(null);
+                setPreviewFailed(false);
                 setReceiptForm({
                   amount: receiptForm?.amount || "",
                   tracking_number: receiptForm?.tracking_number || "",
@@ -1553,11 +1608,12 @@ function AssignmentReceiptForm({
                 if (fileInputRef.current) {
                   fileInputRef.current.value = '';
                 }
-              }} className="absolute top-1 left-1 bg-red-500 text-white p-1 rounded-full shadow-lg"><X size={14}/></button>
+              }} className="absolute top-1 left-1 bg-red-500 text-white p-1 rounded-full shadow-lg z-10"><X size={14}/></button>
               <div className="absolute bottom-0 w-full bg-green-500 text-white text-center text-[10px] py-1 font-bold">آماده ارسال</div>
             </div>
           )}
-          <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
+          {uploadHelpReason && <ImageCompressHelp reason={uploadHelpReason} compact />}
+          <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept={IMAGE_FILE_ACCEPT} />
         </div>
 
       </div>

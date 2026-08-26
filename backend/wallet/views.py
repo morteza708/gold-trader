@@ -10,6 +10,7 @@ import logging
 
 from accounts.models import CustomUser, UserRole
 from accounts.services import send_double_token_message, send_triple_token_message
+from accounts.image_upload import get_uploaded_image_error
 from .models import Wallet, BankCard, WithdrawalRequest, DepositRequest, DepositAccountAssignment, DepositReceipt, DepositWithdrawalLink
 from settings.models import SystemSettings, DepositAccount
 from .tasks import send_sms_async
@@ -938,7 +939,14 @@ def admin_upload_receipt(request, request_id):
         
         # آپلود فیش
         if 'receipt_image' in request.FILES:
-            withdrawal_request.receipt_image = request.FILES['receipt_image']
+            receipt_image = request.FILES['receipt_image']
+            image_error = get_uploaded_image_error(receipt_image)
+            if image_error:
+                return Response(
+                    {'error': image_error},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            withdrawal_request.receipt_image = receipt_image
             withdrawal_request.save()
             
             # ارسال پیامک به کاربر
@@ -1460,6 +1468,13 @@ def user_upload_deposit_receipt(request, request_id):
                 {'error': 'تمام فیلدها الزامی هستند'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        image_error = get_uploaded_image_error(receipt_image)
+        if image_error:
+            return Response(
+                {'error': image_error},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         # تبدیل تاریخ از string به date object
         from datetime import datetime
@@ -1632,6 +1647,11 @@ def user_upload_deposit_receipts_batch(request, request_id):
                 errors.append({
                     'assignment_id': f'فیلدهای زیر برای حساب {assignment_id} الزامی هستند: {", ".join(missing_fields)}'
                 })
+                continue
+
+            image_error = get_uploaded_image_error(receipt_image)
+            if image_error:
+                errors.append({'assignment_id': f'فیش حساب {assignment_id}: {image_error}'})
                 continue
             
             # تبدیل تاریخ

@@ -11,6 +11,8 @@ import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import StatsCard from "@/components/admin/StatsCard";
 import { toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
+import { IMAGE_FILE_ACCEPT, MAX_IMAGE_SIZE_LABEL, validateImageFile, type ImageUploadErrorReason } from "@/lib/utils/imageUpload";
+import ImageCompressHelp from "@/components/ui/ImageCompressHelp";
 import { adminWalletAPI, WithdrawalRequest, DepositRequest } from "@/lib/api/auth";
 import { useDebounce } from "@/hooks/useDebounce";
 import DepositDetailModalNew from "@/components/admin/DepositDetailModalNew";
@@ -26,6 +28,7 @@ export default function FinancePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState<number | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptUploadError, setReceiptUploadError] = useState<ImageUploadErrorReason | null>(null);
   const [rejectNote, setRejectNote] = useState("");
 
   // تنظیم title صفحه
@@ -202,11 +205,19 @@ export default function FinancePage() {
       return;
     }
 
+    const validation = validateImageFile(receiptFile);
+    if (!validation.ok) {
+      setReceiptUploadError(validation.reason || "general");
+      toast.error(validation.message || "فایل نامعتبر است");
+      return;
+    }
+
     setIsProcessing(request.id);
     try {
       await adminWalletAPI.uploadReceipt(request.id, receiptFile);
       toast.success("فیش واریزی با موفقیت آپلود شد");
       setReceiptFile(null);
+      setReceiptUploadError(null);
       await fetchRequests();
       if (selectedRequest?.id === request.id) {
         const updated = await adminWalletAPI.getWithdrawalRequestDetail(request.id);
@@ -214,7 +225,11 @@ export default function FinancePage() {
       }
     } catch (error: any) {
       console.error('Error uploading receipt:', error);
-      toast.error(error.response?.data?.error || "خطا در آپلود فیش واریزی");
+      const message = error.response?.data?.error || "خطا در آپلود فیش واریزی";
+      toast.error(message, { duration: 6000 });
+      if (typeof message === "string" && (message.includes("حجم") || message.includes("فرمت"))) {
+        setReceiptUploadError(message.includes("حجم") ? "size" : "format");
+      }
     } finally {
       setIsProcessing(null);
     }
@@ -679,6 +694,7 @@ export default function FinancePage() {
                 setIsDetailModalOpen(false);
                 setSelectedRequest(null);
                 setReceiptFile(null);
+                setReceiptUploadError(null);
                 setRejectNote("");
               }}
               onApprove={handleApprove}
@@ -687,6 +703,8 @@ export default function FinancePage() {
               onCompleteGold={handleCompleteGoldWithdrawal}
               receiptFile={receiptFile}
               setReceiptFile={setReceiptFile}
+              receiptUploadError={receiptUploadError}
+              setReceiptUploadError={setReceiptUploadError}
               rejectNote={rejectNote}
               setRejectNote={setRejectNote}
             />
@@ -957,6 +975,8 @@ function WithdrawalDetailModal({
   onCompleteGold,
   receiptFile,
   setReceiptFile,
+  receiptUploadError,
+  setReceiptUploadError,
   rejectNote,
   setRejectNote,
 }: {
@@ -970,6 +990,8 @@ function WithdrawalDetailModal({
   onCompleteGold: (request: WithdrawalRequest) => void;
   receiptFile: File | null;
   setReceiptFile: (file: File | null) => void;
+  receiptUploadError: ImageUploadErrorReason | null;
+  setReceiptUploadError: (reason: ImageUploadErrorReason | null) => void;
   rejectNote: string;
   setRejectNote: (note: string) => void;
 }) {
@@ -1366,10 +1388,20 @@ function WithdrawalDetailModal({
                     <div className="flex items-center gap-3 mb-4">
                       <input
                         type="file"
-                        accept="image/*"
+                        accept={IMAGE_FILE_ACCEPT}
                         onChange={(e) => {
                           const file = e.target.files?.[0];
-                          if (file) setReceiptFile(file);
+                          if (!file) return;
+                          const validation = validateImageFile(file);
+                          if (!validation.ok) {
+                            setReceiptFile(null);
+                            setReceiptUploadError(validation.reason || "general");
+                            toast.error(validation.message || "فایل نامعتبر است", { duration: 5000 });
+                            e.target.value = "";
+                            return;
+                          }
+                          setReceiptUploadError(null);
+                          setReceiptFile(file);
                         }}
                         className="hidden"
                         id="receipt-upload"
@@ -1385,6 +1417,12 @@ function WithdrawalDetailModal({
                         <span className="text-sm text-slate-300">{receiptFile.name}</span>
                       )}
                     </div>
+                    <p className="text-xs text-slate-400 mb-3">
+                      فرمت مجاز: JPG، PNG، WebP، HEIC (آیفون) — حداکثر {MAX_IMAGE_SIZE_LABEL}
+                    </p>
+                    {receiptUploadError && (
+                      <ImageCompressHelp reason={receiptUploadError} variant="dark" compact />
+                    )}
                     {receiptFile && (
                       <button
                         onClick={() => onUploadReceipt(request)}

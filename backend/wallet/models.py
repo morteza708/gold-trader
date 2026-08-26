@@ -160,12 +160,12 @@ class WithdrawalRequest(models.Model):
         verbose_name='کارت بانکی',
         help_text='کارت بانکی برای برداشت وجه (فقط برای نوع RIAL)'
     )
-    receipt_image = models.ImageField(
+    receipt_image = models.FileField(
         upload_to='withdrawal_receipts/',
         null=True,
         blank=True,
         verbose_name='فیش واریزی',
-        help_text='فیش واریزی (فقط برای برداشت وجه)'
+        help_text='JPG، PNG، WebP، HEIC/HEIF — حداکثر ۱۰ مگابایت (فقط برای برداشت وجه)'
     )
     admin_note = models.TextField(
         null=True,
@@ -255,12 +255,12 @@ class DepositRequest(models.Model):
         verbose_name='تاریخ واریز',
         help_text='تاریخ واریز (در flow جدید اختیاری است)'
     )
-    receipt_image = models.ImageField(
+    receipt_image = models.FileField(
         upload_to='deposit_receipts/',
         null=True,
         blank=True,
         verbose_name='تصویر فیش واریزی',
-        help_text='تصویر فیش واریزی (در flow جدید اختیاری است)'
+        help_text='JPG، PNG، WebP، HEIC/HEIF — حداکثر ۱۰ مگابایت (در flow جدید اختیاری است)'
     )
     status = models.CharField(
         max_length=20,
@@ -435,9 +435,10 @@ class DepositReceipt(models.Model):
     deposit_date = models.DateField(
         verbose_name='تاریخ واریز'
     )
-    receipt_image = models.ImageField(
+    receipt_image = models.FileField(
         upload_to='deposit_receipts/',
-        verbose_name='تصویر فیش واریزی'
+        verbose_name='تصویر فیش واریزی',
+        help_text='JPG، PNG، WebP، HEIC/HEIF — حداکثر ۱۰ مگابایت'
     )
     amount = models.DecimalField(
         max_digits=15,
