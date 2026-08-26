@@ -267,67 +267,82 @@ def create_withdrawal_request(request):
         withdrawal_type = serializer.validated_data['withdrawal_type']
         amount = serializer.validated_data['amount']
         bank_card_id = serializer.validated_data.get('bank_card_id')
-        
-        # دریافت یا ایجاد کیف پول
-        wallet, created = Wallet.objects.get_or_create(user=request.user)
-        
-        # بررسی موجودی قابل استفاده (کل - مسدود شده)
+
+        from django.db import transaction
+        from decimal import Decimal
+        amount_decimal = Decimal(str(amount))
+        bank_card = None
+
+        # کارت بانکی را قبل از قفل کیف بررسی کن
         if withdrawal_type == 'RIAL':
-            available_balance = wallet.get_available_rial_balance()
-            # تبدیل amount به Decimal برای مقایسه صحیح
-            from decimal import Decimal
-            amount_decimal = Decimal(str(amount))
-            print(f"موجودی ریالی: {wallet.rial_balance}, مسدود شده: {wallet.pending_withdrawal_rial}, قابل استفاده: {available_balance}, درخواست: {amount_decimal}")
-            if available_balance < amount_decimal:
-                return Response(
-                    {'error': f'موجودی ریالی کافی نیست. موجودی قابل استفاده: {available_balance}، درخواست: {amount_decimal}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
             try:
-                bank_card = BankCard.objects.select_related('user').get(id=bank_card_id, user=request.user, is_active=True)
+                bank_card = BankCard.objects.select_related('user').get(
+                    id=bank_card_id, user=request.user, is_active=True
+                )
             except BankCard.DoesNotExist:
                 return Response(
                     {'error': 'کارت بانکی یافت نشد'},
                     status=status.HTTP_404_NOT_FOUND
                 )
-        else:  # GOLD
-            available_balance = wallet.get_available_gold_balance()
-            # تبدیل amount به Decimal برای مقایسه صحیح
-            from decimal import Decimal
-            amount_decimal = Decimal(str(amount))
-            print(f"موجودی طلا: {wallet.gold_balance}, مسدود شده: {wallet.pending_withdrawal_gold}, قابل استفاده: {available_balance}, درخواست: {amount_decimal}")
-            if available_balance < amount_decimal:
-                return Response(
-                    {'error': f'موجودی طلا کافی نیست. موجودی قابل استفاده: {available_balance}، درخواست: {amount_decimal}'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            bank_card = None
-        
-        # کسر موجودی و اضافه به pending (قبل از ایجاد درخواست)
-        from django.db import transaction
-        from decimal import Decimal
-        amount_decimal = Decimal(str(amount))
+
         with transaction.atomic():
+            # در صورت خرید معلق فعال، برداشت ریال/طلا مسدود است تا موجودی قفل‌شده خراب نشود
+            from trades.pending_purchase_service import PendingPurchaseService
+            active_pending = PendingPurchaseService.get_active_for_user(request.user)
+            if active_pending:
+                PendingPurchaseService.expire_if_needed(active_pending)
+                if PendingPurchaseService.user_has_active(request.user):
+                    return Response(
+                        {
+                            'error': (
+                                'تا تکمیل یا لغو خرید در انتظار تسویه، امکان ثبت برداشت وجود ندارد.'
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            wallet = Wallet.lock_for_user(request.user)
+
             if withdrawal_type == 'RIAL':
+                available_balance = wallet.get_available_rial_balance()
+                if available_balance < amount_decimal:
+                    return Response(
+                        {
+                            'error': (
+                                f'موجودی ریالی کافی نیست. موجودی قابل استفاده: {available_balance}، '
+                                f'درخواست: {amount_decimal}'
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
                 wallet.rial_balance -= amount_decimal
                 wallet.pending_withdrawal_rial += amount_decimal
             else:  # GOLD
+                available_balance = wallet.get_available_gold_balance()
+                if available_balance < amount_decimal:
+                    return Response(
+                        {
+                            'error': (
+                                f'موجودی طلا کافی نیست. موجودی قابل استفاده: {available_balance}، '
+                                f'درخواست: {amount_decimal}'
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
                 wallet.gold_balance -= amount_decimal
                 wallet.pending_withdrawal_gold += amount_decimal
+
             wallet.save()
-        
-        # تولید کد درخواست منحصر به فرد
-        request_code = f"WR-{uuid.uuid4().hex[:8].upper()}"
-        
-        # ایجاد درخواست
-        withdrawal_request = WithdrawalRequest.objects.create(
-            user=request.user,
-            withdrawal_type=withdrawal_type,
-            amount=amount_decimal,
-            bank_card=bank_card,
-            request_code=request_code,
-            status='PENDING'
-        )
+
+            request_code = f"WR-{uuid.uuid4().hex[:8].upper()}"
+            withdrawal_request = WithdrawalRequest.objects.create(
+                user=request.user,
+                withdrawal_type=withdrawal_type,
+                amount=amount_decimal,
+                bank_card=bank_card,
+                request_code=request_code,
+                status='PENDING'
+            )
         
         # ارسال پیامک به مدیران
         try:
@@ -360,12 +375,8 @@ def create_withdrawal_request(request):
                             token2=token2
                         )
                         logger.info(f"پیامک {template} به صف ارسال اضافه شد برای مدیر {admin_phone}")
-                        if True:  # برای حفظ منطق
-                            print(f"✓ پیامک {template} با موفقیت ارسال شد به {admin_phone}")
-                        else:
-                            print(f"✗ خطا در ارسال پیامک {template} به {admin_phone}")
                     except Exception as e:
-                        print(f"✗ خطا در ارسال پیامک {template} به {admin_phone}: {e}")
+                        logger.error(f"خطا در queue کردن پیامک {template} به مدیر {admin_phone}: {e}", exc_info=True)
         except Exception as sms_error:
             print(f"✗ خطا در ارسال پیامک به مدیران: {sms_error}")
             import traceback
@@ -614,25 +625,6 @@ def admin_approve_withdrawal(request, request_id):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # دریافت یا ایجاد کیف پول
-        wallet, created = Wallet.objects.get_or_create(user=withdrawal_request.user)
-        
-        # بررسی موجودی مسدود شده (باید موجود باشد)
-        # توجه: باید کل مبلغ درخواست را بررسی کنیم، نه فقط باقی‌مانده
-        # چون موجودی مسدود شده برای کل مبلغ درخواست است
-        if withdrawal_request.withdrawal_type == 'RIAL':
-            if wallet.pending_withdrawal_rial < withdrawal_request.amount:
-                return Response(
-                    {'error': 'موجودی ریالی مسدود شده کافی نیست'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        else:  # GOLD
-            if wallet.pending_withdrawal_gold < withdrawal_request.amount:
-                return Response(
-                    {'error': 'موجودی طلای مسدود شده کافی نیست'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
         # تایید درخواست و حذف از pending (چون قبلاً از موجودی کسر شده)
         from django.db import transaction
         from django.utils import timezone
@@ -640,6 +632,38 @@ def admin_approve_withdrawal(request, request_id):
         import uuid
         
         with transaction.atomic():
+            withdrawal_request = WithdrawalRequest.objects.select_for_update().select_related(
+                'user', 'user__customer_profile'
+            ).get(pk=withdrawal_request.pk)
+            if withdrawal_request.status != 'PENDING':
+                return Response(
+                    {'error': 'این درخواست قبلاً پردازش شده است'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            remaining_amount = withdrawal_request.get_remaining_amount()
+            if remaining_amount <= 0:
+                return Response(
+                    {'error': 'این درخواست قبلاً به صورت کامل پرداخت شده است'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            wallet = Wallet.lock_for_user(withdrawal_request.user)
+
+            # بررسی موجودی مسدود شده (باید موجود باشد)
+            if withdrawal_request.withdrawal_type == 'RIAL':
+                if wallet.pending_withdrawal_rial < withdrawal_request.amount:
+                    return Response(
+                        {'error': 'موجودی ریالی مسدود شده کافی نیست'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            else:  # GOLD
+                if wallet.pending_withdrawal_gold < withdrawal_request.amount:
+                    return Response(
+                        {'error': 'موجودی طلای مسدود شده کافی نیست'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
             # اگر فیش واریزی وجود دارد و باقی‌مانده > 0 است، باید یک لینک ایجاد کنیم
             # این برای حالتی است که مدیر باقی‌مانده را از طریق مودال برداشت پرداخت می‌کند
             if (withdrawal_request.receipt_image and 
@@ -774,29 +798,30 @@ def admin_reject_withdrawal(request, request_id):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        try:
-            withdrawal_request = WithdrawalRequest.objects.select_related('user', 'user__customer_profile', 'bank_card').get(id=request_id)
-        except WithdrawalRequest.DoesNotExist:
-            return Response(
-                {'error': 'درخواست یافت نشد'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        if withdrawal_request.status != 'PENDING':
-            return Response(
-                {'error': 'این درخواست قبلاً پردازش شده است'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
         # دریافت دلیل رد
         admin_note = request.data.get('admin_note', '')
         
-        # دریافت یا ایجاد کیف پول
-        wallet, created = Wallet.objects.get_or_create(user=withdrawal_request.user)
-        
-        # برگرداندن موجودی از pending به موجودی اصلی
         from django.db import transaction
         with transaction.atomic():
+            try:
+                withdrawal_request = WithdrawalRequest.objects.select_for_update().select_related(
+                    'user', 'user__customer_profile', 'bank_card'
+                ).get(id=request_id)
+            except WithdrawalRequest.DoesNotExist:
+                return Response(
+                    {'error': 'درخواست یافت نشد'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            if withdrawal_request.status != 'PENDING':
+                return Response(
+                    {'error': 'این درخواست قبلاً پردازش شده است'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            wallet = Wallet.lock_for_user(withdrawal_request.user)
+
+            # برگرداندن موجودی از pending به موجودی اصلی
             if withdrawal_request.withdrawal_type == 'RIAL':
                 wallet.pending_withdrawal_rial -= withdrawal_request.amount
                 wallet.rial_balance += withdrawal_request.amount
@@ -867,34 +892,34 @@ def admin_complete_gold_withdrawal(request, request_id):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        try:
-            withdrawal_request = WithdrawalRequest.objects.select_related('user', 'user__customer_profile').get(id=request_id)
-        except WithdrawalRequest.DoesNotExist:
-            return Response(
-                {'error': 'درخواست یافت نشد'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        if withdrawal_request.withdrawal_type != 'GOLD':
-            return Response(
-                {'error': 'فقط برای درخواست‌های برداشت طلا می‌توان تسویه انجام داد'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if withdrawal_request.status != 'APPROVED':
-            return Response(
-                {'error': 'فقط درخواست‌های تایید شده قابل تسویه هستند'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # دریافت یا ایجاد کیف پول
-        wallet, created = Wallet.objects.get_or_create(user=withdrawal_request.user)
-        
-        # تسویه درخواست (موجودی قبلاً در زمان تایید کسر شده است)
+        from django.db import transaction
         from django.utils import timezone
-        withdrawal_request.status = 'COMPLETED'
-        withdrawal_request.completed_at = timezone.now()
-        withdrawal_request.save()
+        with transaction.atomic():
+            try:
+                withdrawal_request = WithdrawalRequest.objects.select_for_update().select_related(
+                    'user', 'user__customer_profile'
+                ).get(id=request_id)
+            except WithdrawalRequest.DoesNotExist:
+                return Response(
+                    {'error': 'درخواست یافت نشد'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            if withdrawal_request.withdrawal_type != 'GOLD':
+                return Response(
+                    {'error': 'فقط برای درخواست‌های برداشت طلا می‌توان تسویه انجام داد'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if withdrawal_request.status != 'APPROVED':
+                return Response(
+                    {'error': 'فقط درخواست‌های تایید شده قابل تسویه هستند'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            withdrawal_request.status = 'COMPLETED'
+            withdrawal_request.completed_at = timezone.now()
+            withdrawal_request.save(update_fields=['status', 'completed_at'])
         
         # ارسال پیامک به کاربر
         account_code = withdrawal_request.user.customer_profile.account_code if hasattr(withdrawal_request.user, 'customer_profile') else 'N/A'
@@ -1125,16 +1150,23 @@ def admin_approve_deposit(request, request_id):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # دریافت یا ایجاد کیف پول
-        wallet, created = Wallet.objects.get_or_create(user=deposit_request.user)
-        
-        # افزودن مبلغ به کیف پول
-        wallet.rial_balance += deposit_request.amount
-        wallet.save()
-        
-        # تایید درخواست
-        deposit_request.status = 'APPROVED'
-        deposit_request.save()
+        from django.db import transaction
+        with transaction.atomic():
+            deposit_request = DepositRequest.objects.select_for_update().select_related(
+                'user', 'user__customer_profile'
+            ).get(pk=deposit_request.pk)
+            if deposit_request.status != 'PENDING':
+                return Response(
+                    {'error': 'این درخواست قبلاً پردازش شده است'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            wallet = Wallet.lock_for_user(deposit_request.user)
+            wallet.rial_balance += deposit_request.amount
+            wallet.save()
+
+            deposit_request.status = 'APPROVED'
+            deposit_request.save(update_fields=['status'])
         
         # ارسال پیامک به کاربر
         account_code = deposit_request.user.customer_profile.account_code if hasattr(deposit_request.user, 'customer_profile') else 'N/A'
@@ -1950,11 +1982,21 @@ def admin_approve_deposit_new_flow(request, request_id):
         users_to_notify = []
         
         with transaction.atomic():
+            # قفل درخواست واریز برای جلوگیری از double-approve
+            deposit_request = DepositRequest.objects.select_for_update().select_related(
+                'user', 'user__customer_profile'
+            ).get(pk=deposit_request.pk)
+            if deposit_request.status != 'PENDING':
+                return Response(
+                    {'error': 'این درخواست قبلاً پردازش شده است'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             # 1. تایید تمام فیش‌ها
             receipts.update(status='APPROVED', updated_at=timezone.now())
             
-            # 2. دریافت یا ایجاد کیف پول
-            wallet, created = Wallet.objects.get_or_create(user=deposit_request.user)
+            # 2. دریافت یا ایجاد کیف پول با قفل ردیف
+            wallet = Wallet.lock_for_user(deposit_request.user)
             
             # 3. افزودن مبلغ به کیف پول
             wallet.rial_balance += deposit_request.amount
@@ -1968,7 +2010,9 @@ def admin_approve_deposit_new_flow(request, request_id):
             links_created = []
             for assignment in assignments_list:
                 if assignment.account_type == 'WITHDRAWAL' and assignment.withdrawal_request:
-                    withdrawal_request = assignment.withdrawal_request
+                    withdrawal_request = WithdrawalRequest.objects.select_for_update().get(
+                        pk=assignment.withdrawal_request_id
+                    )
                     assignment_receipts = list(assignment.receipts.all())
                     if not assignment_receipts:
                         continue
@@ -2001,7 +2045,7 @@ def admin_approve_deposit_new_flow(request, request_id):
 
                         # فقط اگر باقی‌مانده = 0 یا کمتر باشد، تایید خودکار انجام می‌شود
                         if remaining_amount <= 0 and withdrawal_request.status == 'PENDING':
-                            withdrawal_wallet, _ = Wallet.objects.get_or_create(user=withdrawal_request.user)
+                            withdrawal_wallet = Wallet.lock_for_user(withdrawal_request.user)
                             if withdrawal_request.withdrawal_type == 'RIAL':
                                 withdrawal_wallet.pending_withdrawal_rial -= withdrawal_request.amount
                             else:  # GOLD

@@ -85,7 +85,7 @@ class PendingPurchaseService:
             raise ValueError("مقدار طلا باید بیشتر از صفر باشد")
 
         # قفل ردیف کیف پول برای جلوگیری از race
-        wallet, _ = Wallet.objects.select_for_update().get_or_create(user=user)
+        wallet = Wallet.lock_for_user(user)
 
         if PendingPurchase.objects.filter(
             user=user,
@@ -260,7 +260,7 @@ class PendingPurchaseService:
         if not pending:
             return None
 
-        wallet = Wallet.objects.select_for_update().get(user=pending.user)
+        wallet = Wallet.lock_for_user(pending.user)
 
         # آزادسازی قفل سهم قبلی
         if wallet.pending_trade_rial < pending.wallet_applied:
@@ -335,7 +335,7 @@ class PendingPurchaseService:
         ):
             raise ValueError("پس از ارسال فیش، لغو فقط توسط پشتیبانی امکان‌پذیر است")
 
-        wallet = Wallet.objects.select_for_update().get(user=user)
+        wallet = Wallet.lock_for_user(user)
         if wallet.pending_trade_rial >= pending.wallet_applied:
             wallet.pending_trade_rial -= pending.wallet_applied
         else:
@@ -365,7 +365,7 @@ class PendingPurchaseService:
         if pending.expires_at and pending.expires_at > timezone.now():
             return False
 
-        wallet = Wallet.objects.select_for_update().get(user=pending.user)
+        wallet = Wallet.lock_for_user(pending.user)
         if wallet.pending_trade_rial >= pending.wallet_applied:
             wallet.pending_trade_rial -= pending.wallet_applied
         else:

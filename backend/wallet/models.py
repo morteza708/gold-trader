@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, IntegrityError, transaction
 from decimal import Decimal
 from accounts.models import CustomUser
 
@@ -58,6 +58,24 @@ class Wallet(models.Model):
     class Meta:
         verbose_name = 'کیف پول'
         verbose_name_plural = 'کیف پول‌ها'
+
+    @classmethod
+    def lock_for_user(cls, user):
+        """
+        دریافت کیف پول با قفل ردیف (SELECT FOR UPDATE).
+        باید داخل transaction.atomic صدا زده شود تا از race روی موجودی جلوگیری شود.
+        """
+        if not transaction.get_connection().in_atomic_block:
+            raise RuntimeError('Wallet.lock_for_user باید داخل transaction.atomic فراخوانی شود')
+        try:
+            return cls.objects.select_for_update().get(user=user)
+        except cls.DoesNotExist:
+            try:
+                cls.objects.create(user=user)
+            except IntegrityError:
+                # ایجاد همزمان توسط درخواست دیگر
+                pass
+            return cls.objects.select_for_update().get(user=user)
     
     def get_available_rial_balance(self):
         """موجودی ریالی قابل استفاده (کل − مسدود برداشت − قفل خرید معلق)"""

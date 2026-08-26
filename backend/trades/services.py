@@ -224,7 +224,7 @@ class TradeService:
         total = amount * final_price
         
         # 3. دریافت یا ایجاد کیف پول (با قفل ردیف)
-        wallet, _ = Wallet.objects.select_for_update().get_or_create(user=user)
+        wallet = Wallet.lock_for_user(user)
         
         # 4. بررسی موجودی قابل استفاده (کل - مسدود شده)
         # برای خرید: باید موجودی برای total کافی باشد
@@ -314,8 +314,8 @@ class TradeService:
         # 2. محاسبه مبلغ کل با قیمت مشخص (price به عنوان قیمت نهایی در نظر گرفته می‌شود)
         total = amount * price
         
-        # 3. دریافت یا ایجاد کیف پول
-        wallet, _ = Wallet.objects.get_or_create(user=user)
+        # 3. دریافت یا ایجاد کیف پول (با قفل ردیف)
+        wallet = Wallet.lock_for_user(user)
         
         # 4. بررسی موجودی قابل استفاده (کل - مسدود شده)
         # برای خرید: باید موجودی برای total کافی باشد
@@ -420,8 +420,8 @@ class TradeService:
             if target_price <= current_final_price:
                 raise ValueError("قیمت هدف باید بیشتر از قیمت فعلی فروش باشد")
         
-        # 2. دریافت یا ایجاد کیف پول
-        wallet, _ = Wallet.objects.select_for_update().get_or_create(user=user)
+        # 2. دریافت یا ایجاد کیف پول (با قفل ردیف)
+        wallet = Wallet.lock_for_user(user)
         
         # 3. بررسی موجودی قابل استفاده (برای رزرو)
         # total بر اساس قیمت نهایی (بدون کارمزد اضافی)
@@ -461,6 +461,9 @@ class TradeService:
         Returns:
             Trade object یا None
         """
+        # قفل سفارش برای جلوگیری از double-execute
+        order = Order.objects.select_for_update().select_related('user').get(pk=order.pk)
+
         # بررسی وضعیت سفارش
         if order.status != 'PENDING':
             return None  # فقط سفارشات در انتظار قابل اجرا هستند
@@ -471,7 +474,7 @@ class TradeService:
         except ValueError:
             # اگر معاملات غیرفعال باشد، سفارش را معلق می‌کنیم
             order.status = 'SUSPENDED'
-            order.save()
+            order.save(update_fields=['status'])
             return None
         
         # بررسی اینکه آیا قیمت نهایی به هدف رسیده
@@ -527,6 +530,7 @@ class TradeService:
     @transaction.atomic
     def cancel_order(order: Order):
         """لغو سفارش"""
+        order = Order.objects.select_for_update().get(pk=order.pk)
         if order.status not in ['PENDING', 'SUSPENDED']:
             raise ValueError("فقط سفارشات در انتظار یا معلق قابل لغو هستند")
         

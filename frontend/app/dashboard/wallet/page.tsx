@@ -259,8 +259,8 @@ function WalletContent() {
       return;
     }
 
-    if (wallet && Number(wallet.rial_balance || 0) < amountValue) {
-      toast.error("موجودی ریالی کافی نیست");
+    if (wallet && Number(wallet.available_rial_balance ?? wallet.rial_balance ?? 0) < amountValue) {
+      toast.error("موجودی ریالی قابل استفاده کافی نیست");
       return;
     }
 
@@ -294,8 +294,8 @@ function WalletContent() {
       return;
     }
 
-    if (wallet && Number(wallet.gold_balance || 0) < amountValue) {
-      toast.error("موجودی طلا کافی نیست");
+    if (wallet && Number(wallet.available_gold_balance ?? wallet.gold_balance ?? 0) < amountValue) {
+      toast.error("موجودی طلای قابل استفاده کافی نیست");
       return;
     }
 
@@ -370,6 +370,16 @@ function WalletContent() {
                    </>
                  )}
                </h2>
+               {!isLoading && wallet && (
+                 Number(wallet.pending_trade_rial || 0) > 0 || Number(wallet.pending_withdrawal_rial || 0) > 0
+               ) && (
+                 <p className="text-xs text-amber-300/90 mt-2">
+                   قابل استفاده: {toPersianDigits(Number(wallet.available_rial_balance ?? 0).toLocaleString())} ریال
+                   {Number(wallet.pending_trade_rial || 0) > 0 && (
+                     <> — قفل خرید معلق: {toPersianDigits(Number(wallet.pending_trade_rial).toLocaleString())}</>
+                   )}
+                 </p>
+               )}
             </div>
             <div className="flex justify-between items-end">
                <div>
