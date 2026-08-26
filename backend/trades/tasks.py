@@ -19,25 +19,19 @@ def check_and_execute_pending_orders():
     این task هر 30 ثانیه توسط Celery Beat اجرا می‌شود
     """
     try:
-        logger.info("شروع بررسی سفارشات هوشمند در انتظار...")
-        
-        result = TradeService.check_and_execute_pending_orders()
-        
-        if result:
-            executed_count = result.get('executed_count', 0)
-            resumed_count = result.get('resumed_count', 0)
-            
-            if executed_count > 0 or resumed_count > 0:
-                logger.info(
-                    f"بررسی سفارشات تکمیل شد: {executed_count} سفارش اجرا شد، "
-                    f"{resumed_count} سفارش از حالت SUSPENDED به PENDING برگشت"
-                )
-            else:
-                logger.debug("هیچ سفارش در انتظاری برای اجرا یافت نشد")
+        logger.debug("شروع بررسی سفارشات هوشمند در انتظار...")
+
+        # سرویس عدد executed_count برمی‌گرداند (۰ هم معتبر است)
+        executed_count = TradeService.check_and_execute_pending_orders() or 0
+        if executed_count > 0:
+            logger.info("بررسی سفارشات تکمیل شد: %s سفارش اجرا شد", executed_count)
         else:
-            logger.warning("نتیجه بررسی سفارشات None برگشت")
-        
-        return result
+            logger.debug("هیچ سفارش در انتظاری برای اجرا یافت نشد")
+
+        return {
+            'executed_count': executed_count,
+            'resumed_count': 0,
+        }
     except Exception as e:
         logger.error(f"خطا در بررسی و اجرای سفارشات هوشمند: {e}", exc_info=True)
         # در periodic tasks، خطا را log می‌کنیم اما exception را raise نمی‌کنیم

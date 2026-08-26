@@ -633,7 +633,7 @@ def admin_approve_withdrawal(request, request_id):
         
         with transaction.atomic():
             withdrawal_request = WithdrawalRequest.objects.select_for_update().select_related(
-                'user', 'user__customer_profile'
+                'user'
             ).get(pk=withdrawal_request.pk)
             if withdrawal_request.status != 'PENDING':
                 return Response(
@@ -805,7 +805,7 @@ def admin_reject_withdrawal(request, request_id):
         with transaction.atomic():
             try:
                 withdrawal_request = WithdrawalRequest.objects.select_for_update().select_related(
-                    'user', 'user__customer_profile', 'bank_card'
+                    'user', 'bank_card'
                 ).get(id=request_id)
             except WithdrawalRequest.DoesNotExist:
                 return Response(
@@ -897,7 +897,7 @@ def admin_complete_gold_withdrawal(request, request_id):
         with transaction.atomic():
             try:
                 withdrawal_request = WithdrawalRequest.objects.select_for_update().select_related(
-                    'user', 'user__customer_profile'
+                    'user'
                 ).get(id=request_id)
             except WithdrawalRequest.DoesNotExist:
                 return Response(
@@ -1153,7 +1153,7 @@ def admin_approve_deposit(request, request_id):
         from django.db import transaction
         with transaction.atomic():
             deposit_request = DepositRequest.objects.select_for_update().select_related(
-                'user', 'user__customer_profile'
+                'user'
             ).get(pk=deposit_request.pk)
             if deposit_request.status != 'PENDING':
                 return Response(
@@ -1984,7 +1984,7 @@ def admin_approve_deposit_new_flow(request, request_id):
         with transaction.atomic():
             # قفل درخواست واریز برای جلوگیری از double-approve
             deposit_request = DepositRequest.objects.select_for_update().select_related(
-                'user', 'user__customer_profile'
+                'user'
             ).get(pk=deposit_request.pk)
             if deposit_request.status != 'PENDING':
                 return Response(

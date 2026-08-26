@@ -4,14 +4,15 @@ import { pageTitle } from "@/lib/brand";
 
 import { useState, useEffect } from "react";
 import { 
-  ArrowUpRight, ArrowDownRight, Filter, Search, 
-  Calendar, FileText, ChevronRight, ChevronLeft, X, Loader2
+  ArrowUpRight, ArrowDownRight, Search, 
+  Calendar, FileText, X, Loader2, Clock
 } from "lucide-react";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import InvoiceModal from "@/components/dashboard/InvoiceModal";
 import { motion } from "framer-motion";
-import { toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
-import { tradesAPI, Trade } from "@/lib/api/trades";
+import Link from "next/link";
+import { toPersianDigits } from "@/lib/utils/numberUtils";
+import { tradesAPI, Trade, PendingPurchase } from "@/lib/api/trades";
 import toast from "react-hot-toast";
 
 // تقویم شمسی
@@ -25,6 +26,7 @@ export default function HistoryPage() {
   const [dateRange, setDateRange] = useState<DateObject[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<Trade | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [pendingPurchase, setPendingPurchase] = useState<PendingPurchase | null>(null);
 
   // تنظیم title صفحه
   useEffect(() => {
@@ -35,6 +37,9 @@ export default function HistoryPage() {
   // دریافت معاملات از API
   useEffect(() => {
     fetchTrades();
+    tradesAPI.getActivePendingPurchase()
+      .then((res) => setPendingPurchase(res.pending_purchase))
+      .catch(() => setPendingPurchase(null));
   }, []);
 
   const fetchTrades = async () => {
@@ -82,6 +87,65 @@ export default function HistoryPage() {
             <p className="text-sm text-gray-400 mt-1">لیست تمام خرید و فروش‌های طلای شما</p>
          </div>
       </div>
+
+      {/* حواله خرید در انتظار تسویه (پیش‌فاکتور) */}
+      {pendingPurchase && (filter === "all" || filter === "buy") && (
+        <div className="bg-amber-50 border border-amber-200 rounded-3xl p-4 md:p-5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <Clock size={20} />
+              </div>
+              <div>
+                <p className="font-black text-amber-900 text-sm">حواله خرید در انتظار تسویه</p>
+                <p className="text-xs text-amber-800/80 mt-1 leading-relaxed">
+                  کد {toPersianDigits(pendingPurchase.request_code)} —{" "}
+                  {toPersianDigits(String(pendingPurchase.gold_amount))} گرم با قیمت قفل‌شده{" "}
+                  {toPersianDigits(Number(pendingPurchase.locked_unit_price).toLocaleString())} ریال
+                  {pendingPurchase.expires_at_jalali
+                    ? ` — مهلت تا ${toPersianDigits(pendingPurchase.expires_at_jalali)}`
+                    : ""}
+                </p>
+                <p className="text-[11px] text-amber-700 mt-1">
+                  وضعیت: {pendingPurchase.status_display} — فاکتور نهایی پس از تأیید واریز صادر می‌شود
+                </p>
+              </div>
+            </div>
+            <Link
+              href={`/dashboard/wallet?tab=deposit&pending_purchase=${pendingPurchase.id}`}
+              className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-colors"
+            >
+              ادامه تسویه
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+            <div className="bg-white/70 rounded-xl p-3 border border-amber-100">
+              <p className="text-amber-700/70 mb-1">مبلغ کل قفل‌شده</p>
+              <p className="font-black text-amber-950">
+                {toPersianDigits(Number(pendingPurchase.locked_total).toLocaleString())} ریال
+              </p>
+            </div>
+            <div className="bg-white/70 rounded-xl p-3 border border-amber-100">
+              <p className="text-amber-700/70 mb-1">سهم کیف پول</p>
+              <p className="font-black text-amber-950">
+                {toPersianDigits(Number(pendingPurchase.wallet_applied).toLocaleString())} ریال
+              </p>
+            </div>
+            <div className="bg-white/70 rounded-xl p-3 border border-amber-100">
+              <p className="text-amber-700/70 mb-1">حداقل واریز</p>
+              <p className="font-black text-amber-950">
+                {toPersianDigits(Number(pendingPurchase.deposit_min_amount).toLocaleString())} ریال
+              </p>
+            </div>
+            <div className="bg-white/70 rounded-xl p-3 border border-amber-100">
+              <p className="text-amber-700/70 mb-1">کد حواله</p>
+              <p className="font-mono font-black text-amber-950 dir-ltr text-right">
+                {pendingPurchase.request_code}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* نوار ابزار (فیلتر و سرچ) */}
       <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex flex-col lg:flex-row gap-4">
@@ -199,91 +263,84 @@ export default function HistoryPage() {
                            <div className="flex justify-center">
                               <button 
                                 onClick={() => setSelectedInvoice(item)}
-                                className="flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-full hover:bg-blue-100 transition-colors"
+                                className="flex items-center gap-1.5 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-xl transition-colors"
                               >
                                  <FileText size={14} /> فاکتور PDF
                               </button>
                            </div>
                         </div>
 
-                        {/* 2. نسخه موبایل (Card جداگانه) */}
-                        <div className="md:hidden p-4">
-                           <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm space-y-4 relative overflow-hidden">
-                              
-                              {/* نوار رنگی کنار کارت */}
-                              <div className={`absolute right-0 top-0 bottom-0 w-1.5 ${tradeType === 'buy' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-
-                              <div className="flex justify-between items-start pl-1 pr-2">
-                                 <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${tradeType === 'buy' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                                       {tradeType === 'buy' ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
-                                    </div>
-                                    <div>
-                                       <p className="font-bold text-gray-800 text-sm">{tradeType === 'buy' ? 'خرید طلا' : 'فروش طلا'}</p>
-                                       <p className="text-[10px] text-gray-400 mt-0.5">{item.created_at_jalali}</p>
-                                    </div>
+                        {/* 2. نسخه موبایل (Card) */}
+                        <div className="md:hidden p-4 space-y-3">
+                           <div className="flex justify-between items-start">
+                              <div className="flex items-center gap-3">
+                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tradeType === 'buy' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                                    {tradeType === 'buy' ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
                                  </div>
-                                 <StatusBadge status={statusMap[item.status] || "pending"} />
-                              </div>
-
-                              {/* اطلاعات وسط کارت */}
-                              <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-2xl p-3 pr-4">
                                  <div>
-                                    <p className="text-[10px] text-gray-400 mb-1">شماره فاکتور</p>
-                                    <p className="font-mono text-xs font-bold text-gray-600 dir-ltr text-right">{item.invoice_number}</p>
-                                 </div>
-                                 <div className="text-left">
-                                    <p className="text-[10px] text-gray-400 mb-1">مقدار طلا</p>
-                                    <p className="font-black text-gray-800">{toPersianDigits(Number(item.amount).toFixed(3))} <span className="text-[10px] font-normal">گرم</span></p>
-                                 </div>
-                                 <div className="col-span-2 border-t border-gray-200 pt-2 flex justify-between items-center">
-                                    <p className="text-[10px] text-gray-400">مبلغ کل</p>
-                                    <p className="font-black text-gray-800">{toPersianDigits(Number(item.total).toLocaleString())} <span className="text-[10px] font-normal">ریال</span></p>
+                                    <p className="font-bold text-gray-800 text-sm">{tradeType === 'buy' ? 'خرید طلا' : 'فروش طلا'}</p>
+                                    <p className="text-[10px] text-gray-400 mt-0.5">{item.created_at_jalali}</p>
                                  </div>
                               </div>
-
-                              {/* دکمه دانلود PDF */}
-                              <button 
-                                onClick={() => setSelectedInvoice(item)}
-                                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-50 text-blue-600 text-xs font-bold hover:bg-blue-100 transition-colors"
-                              >
-                                 <FileText size={16} /> مشاهده و دانلود فاکتور
-                              </button>
-
+                              <StatusBadge status={statusMap[item.status] || "pending"} />
                            </div>
-                        </div>
+                           
+                           <div className="grid grid-cols-2 gap-2 text-xs bg-gray-50 rounded-2xl p-3">
+                              <div>
+                                 <p className="text-[10px] text-gray-400 mb-1">مقدار</p>
+                                 <p className="font-black text-gray-800">{toPersianDigits(Number(item.amount).toFixed(3))} گرم</p>
+                              </div>
+                              <div>
+                                 <p className="text-[10px] text-gray-400 mb-1">مبلغ کل</p>
+                                 <p className="font-black text-gray-800">{toPersianDigits(Number(item.total).toLocaleString())} ریال</p>
+                              </div>
+                              <div>
+                                 <p className="text-[10px] text-gray-400 mb-1">شماره فاکتور</p>
+                                 <p className="font-mono text-xs font-bold text-gray-600 dir-ltr text-right">{item.invoice_number}</p>
+                              </div>
+                              <div>
+                                 <p className="text-[10px] text-gray-400 mb-1">کد رهگیری</p>
+                                 <p className="font-mono text-xs font-bold text-gray-600 dir-ltr text-right">{item.tracking_code}</p>
+                              </div>
+                           </div>
 
+                           <button 
+                             onClick={() => setSelectedInvoice(item)}
+                             className="w-full flex items-center justify-center gap-2 text-sm font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 py-3 rounded-2xl transition-colors"
+                           >
+                              <FileText size={16} /> مشاهده و دانلود فاکتور
+                           </button>
+                        </div>
                      </motion.div>
                   );
                })
             ) : (
-               <div className="py-12 flex flex-col items-center justify-center text-gray-400">
-                  <div className="bg-gray-50 p-4 rounded-full mb-3">
-                     <Filter size={32} className="opacity-50" />
-                  </div>
-                  <p className="text-sm font-bold">هیچ تراکنشی یافت نشد!</p>
+               <div className="py-16 text-center text-gray-400 text-sm">
+                  {pendingPurchase
+                    ? "هنوز معامله نهایی‌شده‌ای ندارید؛ حواله معلق بالا را ببینید."
+                    : "معامله‌ای یافت نشد"}
                </div>
             )}
          </div>
-
-         {/* صفحه‌بندی (Pagination) */}
-         {filteredData.length > 0 && (
-            <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/30">
-               <span className="text-xs text-gray-400 font-bold">
+         
+         {/* فوتر جدول */}
+         {!isLoading && filteredData.length > 0 && (
+            <div className="p-4 border-t border-gray-100 bg-gray-50/30 flex justify-between items-center text-xs text-gray-400 font-bold">
+               <span>
                   نمایش ۱ تا {toPersianDigits(filteredData.length.toString())} از {toPersianDigits(trades.length.toString())} تراکنش
                </span>
             </div>
          )}
-
       </div>
 
       {/* --- فراخوانی مودال فاکتور --- */}
-      <InvoiceModal 
-        isOpen={!!selectedInvoice}
-        data={selectedInvoice}
-        onClose={() => setSelectedInvoice(null)}
-      />
-
+      {selectedInvoice && (
+        <InvoiceModal 
+          isOpen={!!selectedInvoice} 
+          onClose={() => setSelectedInvoice(null)} 
+          trade={selectedInvoice} 
+        />
+      )}
     </div>
   );
 }

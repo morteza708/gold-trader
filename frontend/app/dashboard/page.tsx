@@ -21,8 +21,8 @@ import { tradesAPI, Trade, PendingPurchase } from "@/lib/api/trades";
 
 export default function DashboardPage() {
   const [modalType, setModalType] = useState<"buy" | "sell" | null>(null);
-  const { prices, loading: priceLoading } = useGoldPrice(5000); // هر 5 ثانیه
-  const { status: tradesStatus } = useTradesStatus(5000); // هر 5 ثانیه
+  const { prices, loading: priceLoading } = useGoldPrice(10000); // هر 10 ثانیه
+  const { status: tradesStatus } = useTradesStatus(15000); // هر 15 ثانیه
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [recentTrades, setRecentTrades] = useState<Trade[]>([]);
   const [isLoadingTrades, setIsLoadingTrades] = useState(true);

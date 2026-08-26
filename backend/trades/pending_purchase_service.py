@@ -173,13 +173,14 @@ class PendingPurchaseService:
             related_object_id=pending.id,
         )
 
-        # SMS فقط برای کاربر — بدون Space در توکن‌ها
+        # SMS کاربر — الگوی دو توکن مثل deposit-approved-user
+        # token = کد حساب | token2 = مقدار گرم (بدون فاصله)
+        # در کاوه‌نگار باید %token و %token2 باشد (نه سه بار %token)
         try:
             account_code = 'N/A'
             if hasattr(user, 'customer_profile') and user.customer_profile:
                 account_code = user.customer_profile.account_code or 'N/A'
 
-            # گرم بدون فاصله؛ نقطه اعشار مجاز است (Space در token2 ممنوع است)
             gold_token = sanitize_kavenegar_token(f"{gold_amount:.3f}")
 
             send_sms_async.delay(
@@ -187,7 +188,6 @@ class PendingPurchaseService:
                 template='pending-purchase-created-user',
                 token=sanitize_kavenegar_token(account_code),
                 token2=gold_token,
-                token3=sanitize_kavenegar_token(str(expiry_hours)),
             )
         except Exception as e:
             logger.error(f"خطا در queue پیامک خرید معلق برای {user.phone_number}: {e}", exc_info=True)
@@ -281,6 +281,7 @@ class PendingPurchaseService:
         wallet.save(update_fields=['pending_trade_rial', 'rial_balance', 'gold_balance', 'updated_at'])
 
         from trades.services import TradeService
+        from wallet.tasks import send_sms_async
         price_obj = GoldPrice.get_current_price()
         margin_profit = Decimal('0')
         if price_obj:
@@ -317,6 +318,25 @@ class PendingPurchaseService:
             related_object_type='trade',
             related_object_id=trade.id,
         )
+
+        # SMS تکمیل — الگوی دو توکن مثل deposit-approved-user
+        try:
+            account_code = 'N/A'
+            if hasattr(pending.user, 'customer_profile') and pending.user.customer_profile:
+                account_code = pending.user.customer_profile.account_code or 'N/A'
+            send_sms_async.delay(
+                phone_number=pending.user.phone_number,
+                template='pending-purchase-completed-user',
+                token=sanitize_kavenegar_token(account_code),
+                token2=sanitize_kavenegar_token(f"{pending.gold_amount:.3f}"),
+            )
+        except Exception as e:
+            logger.error(
+                "خطا در queue پیامک تکمیل خرید معلق برای %s: %s",
+                pending.user.phone_number,
+                e,
+                exc_info=True,
+            )
 
         return pending
 
