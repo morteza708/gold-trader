@@ -24,6 +24,7 @@ kavenegar==1.1.2
 Markdown==3.10
 pdfkit==1.0.0
 pillow==12.0.0
+pillow-heif==0.22.0
 playwright==1.57.0
 psycopg2-binary==2.9.11
 pycparser==2.23

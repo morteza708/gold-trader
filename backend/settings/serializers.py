@@ -140,3 +140,21 @@ class SitePageSerializer(serializers.ModelSerializer):
 
     def get_extra_image_url(self, obj):
         return self._absolute_url(obj.extra_image)
+
+    def _validate_and_optimize(self, value, purpose='page'):
+        if not value:
+            return value
+        from accounts.image_upload import get_uploaded_image_error, ensure_optimized_upload
+        error = get_uploaded_image_error(value)
+        if error:
+            raise serializers.ValidationError(error)
+        try:
+            return ensure_optimized_upload(value, purpose=purpose)
+        except ValueError as e:
+            raise serializers.ValidationError(str(e))
+
+    def validate_hero_image(self, value):
+        return self._validate_and_optimize(value, purpose='page')
+
+    def validate_extra_image(self, value):
+        return self._validate_and_optimize(value, purpose='page')

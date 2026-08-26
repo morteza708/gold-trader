@@ -318,7 +318,11 @@ class DepositRequestSerializer(serializers.ModelSerializer):
         error = get_uploaded_image_error(value)
         if error:
             raise serializers.ValidationError(error)
-        return value
+        from accounts.image_upload import ensure_optimized_upload
+        try:
+            return ensure_optimized_upload(value, purpose='document')
+        except ValueError as e:
+            raise serializers.ValidationError(str(e))
     
     def get_user_info(self, obj):
         """اطلاعات کاربر"""

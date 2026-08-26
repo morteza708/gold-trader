@@ -241,6 +241,15 @@ class WithdrawalRequest(models.Model):
         """
         remaining = self.get_remaining_amount()
         return remaining <= Decimal('0')
+
+    def save(self, *args, **kwargs):
+        from accounts.image_upload import ensure_optimized_upload
+
+        if self.receipt_image:
+            self.receipt_image = ensure_optimized_upload(
+                self.receipt_image, purpose='document'
+            )
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.request_code} - {self.user.phone_number} - {self.get_withdrawal_type_display()} - {self.amount}"
@@ -319,6 +328,15 @@ class DepositRequest(models.Model):
         verbose_name = 'درخواست واریز'
         verbose_name_plural = 'درخواست‌های واریز'
         ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        from accounts.image_upload import ensure_optimized_upload
+
+        if self.receipt_image:
+            self.receipt_image = ensure_optimized_upload(
+                self.receipt_image, purpose='document'
+            )
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.request_code} - {self.user.phone_number} - {self.amount} تومان"
@@ -506,6 +524,15 @@ class DepositReceipt(models.Model):
         verbose_name = 'فیش واریزی'
         verbose_name_plural = 'فیش‌های واریزی'
         ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        from accounts.image_upload import ensure_optimized_upload
+
+        if self.receipt_image:
+            self.receipt_image = ensure_optimized_upload(
+                self.receipt_image, purpose='document'
+            )
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.deposit_request.request_code} - {self.account_assignment} - {self.amount} ریال"

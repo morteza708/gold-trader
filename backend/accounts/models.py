@@ -117,6 +117,17 @@ class CustomUser(AbstractUser):
     
     def __str__(self):
         return f"{self.phone_number} - {self.get_role_display()}"
+
+    def save(self, *args, **kwargs):
+        from accounts.image_upload import ensure_optimized_upload
+
+        if self.national_card_image:
+            self.national_card_image = ensure_optimized_upload(
+                self.national_card_image, purpose='document'
+            )
+        if self.avatar:
+            self.avatar = ensure_optimized_upload(self.avatar, purpose='avatar')
+        super().save(*args, **kwargs)
     
     def is_profile_complete(self):
         """بررسی اینکه آیا پروفایل کاربر کامل است یا نه"""

@@ -156,7 +156,11 @@ class CompleteProfileSerializer(serializers.ModelSerializer):
         error = get_uploaded_image_error(value)
         if error:
             raise serializers.ValidationError(error)
-        return value
+        from .image_upload import ensure_optimized_upload
+        try:
+            return ensure_optimized_upload(value, purpose='document')
+        except ValueError as e:
+            raise serializers.ValidationError(str(e))
     
     def validate(self, attrs):
         instance = self.instance
@@ -392,6 +396,18 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = ['first_name', 'last_name', 'birth_date', 'avatar', 'remove_avatar']
+
+    def validate_avatar(self, value):
+        if value is None:
+            return value
+        error = get_uploaded_image_error(value)
+        if error:
+            raise serializers.ValidationError(error)
+        from .image_upload import ensure_optimized_upload
+        try:
+            return ensure_optimized_upload(value, purpose='avatar')
+        except ValueError as e:
+            raise serializers.ValidationError(str(e))
     
     def validate_birth_date(self, value):
         """اعتبارسنجی تاریخ تولد (فرمت: YYYY-MM-DD شمسی)"""

@@ -156,6 +156,15 @@ class SitePage(models.Model):
     def __str__(self):
         return self.get_slug_display()
 
+    def save(self, *args, **kwargs):
+        from accounts.image_upload import ensure_optimized_upload
+
+        if self.hero_image:
+            self.hero_image = ensure_optimized_upload(self.hero_image, purpose='page')
+        if self.extra_image:
+            self.extra_image = ensure_optimized_upload(self.extra_image, purpose='page')
+        super().save(*args, **kwargs)
+
     @classmethod
     def get_or_create_defaults(cls):
         """ساخت رکوردهای پیش‌فرض about/contact در صورت نبودن"""
