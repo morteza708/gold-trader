@@ -39,10 +39,14 @@ export default function ImageCompressHelp({
               ? "حجم عکس بیشتر از حد مجاز است"
               : reason === "format"
                 ? "فرمت عکس پشتیبانی نمی‌شود"
-                : "راهنمای آماده‌سازی تصویر"}
+                : "راهنمای انتخاب تصویر"}
           </p>
           <p className={`text-xs leading-relaxed ${isDark ? "text-amber-200/80" : "text-amber-800/90"}`}>
-            صفحه را نبندید. حجم/فرمت را اصلاح کنید و دوباره آپلود کنید.
+            {reason === "size"
+              ? `حداکثر حجم قبل از آپلود ${MAX_IMAGE_SIZE_LABEL} است. عکس کوچک‌تری انتخاب کنید.`
+              : reason === "format"
+                ? "JPG، PNG، WebP یا HEIC/HEIF (آیفون) را انتخاب کنید."
+                : "عکس‌ها به‌صورت خودکار فشرده می‌شوند؛ فقط فرمت مجاز را انتخاب کنید."}
           </p>
         </div>
       </div>
@@ -57,48 +61,47 @@ export default function ImageCompressHelp({
             فرمت‌های مجاز: <strong>JPG، PNG، WebP، HEIC/HEIF (عکس آیفون)</strong>
           </li>
           <li>
-            حداکثر حجم: <strong>{MAX_IMAGE_SIZE_LABEL}</strong>
+            حداکثر حجم انتخاب: <strong>{MAX_IMAGE_SIZE_LABEL}</strong>
           </li>
-          <li>
-            در آیفون: Settings → Camera → Formats → گزینه{" "}
-            <strong>Most Compatible</strong>
-          </li>
+          <li>فشرده‌سازی خودکار در مرورگر انجام می‌شود؛ نیازی به ابزار خارجی نیست</li>
         </ul>
       )}
 
-      <div>
-        <p className={`text-xs font-bold mb-2 ${isDark ? "text-amber-200" : "text-amber-900"}`}>
-          سایت‌های معتبر برای کاهش حجم عکس:
-        </p>
-        <div className="space-y-2">
-          {COMPRESS_IMAGE_TOOLS.map((tool) => (
-            <a
-              key={tool.url}
-              href={tool.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 transition-colors ${
-                isDark
-                  ? "bg-slate-900 border-amber-500/30 hover:border-amber-400"
-                  : "bg-white border-amber-200 hover:border-amber-400 hover:bg-amber-50"
-              }`}
-            >
-              <div className="min-w-0">
-                <p className={`text-sm font-bold ${isDark ? "text-white" : "text-gray-800"}`}>
-                  {tool.name}
-                </p>
-                <p className={`text-[11px] mt-0.5 ${isDark ? "text-slate-400" : "text-gray-500"}`}>
-                  {tool.note}
-                </p>
-              </div>
-              <ExternalLink
-                size={14}
-                className={`shrink-0 ${isDark ? "text-amber-400" : "text-amber-600"}`}
-              />
-            </a>
-          ))}
+      {reason === "size" && (
+        <div>
+          <p className={`text-xs font-bold mb-2 ${isDark ? "text-amber-200" : "text-amber-900"}`}>
+            اگر هنوز حجم بالا است، می‌توانید از این ابزارها استفاده کنید:
+          </p>
+          <div className="space-y-2">
+            {COMPRESS_IMAGE_TOOLS.map((tool) => (
+              <a
+                key={tool.url}
+                href={tool.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 transition-colors ${
+                  isDark
+                    ? "bg-slate-900 border-amber-500/30 hover:border-amber-400"
+                    : "bg-white border-amber-200 hover:border-amber-400 hover:bg-amber-50"
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className={`text-sm font-bold ${isDark ? "text-white" : "text-gray-800"}`}>
+                    {tool.name}
+                  </p>
+                  <p className={`text-[11px] mt-0.5 ${isDark ? "text-slate-400" : "text-gray-500"}`}>
+                    {tool.note}
+                  </p>
+                </div>
+                <ExternalLink
+                  size={14}
+                  className={`shrink-0 ${isDark ? "text-amber-400" : "text-amber-600"}`}
+                />
+              </a>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

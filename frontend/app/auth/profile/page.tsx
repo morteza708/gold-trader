@@ -10,64 +10,18 @@ import {
   CheckCircle2,
   X,
   Info,
-  ExternalLink,
-  AlertTriangle,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import toast from "react-hot-toast";
 import { toEnglishDigits, toPersianDigits } from "@/lib/utils/numberUtils";
+import { IMAGE_FILE_ACCEPT, MAX_IMAGE_SIZE_LABEL, prepareImageForUpload } from "@/lib/utils/imageUpload";
+import ImageCompressHelp from "@/components/ui/ImageCompressHelp";
 import { useAuth } from "@/contexts/AuthContext";
 
 import DatePicker, { DateObject } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-
-const ALLOWED_IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/jpg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-  "image/heic-sequence",
-  "image/heif-sequence",
-]);
-
-const ALLOWED_EXTENSIONS = new Set([
-  ".jpg",
-  ".jpeg",
-  ".png",
-  ".webp",
-  ".heic",
-  ".heif",
-]);
-
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
-const MAX_IMAGE_SIZE_LABEL = "۱۰ مگابایت";
-
-const COMPRESS_TOOLS = [
-  {
-    name: "iLoveIMG",
-    url: "https://www.iloveimg.com/compress-image",
-    note: "فشرده‌سازی آنلاین — مناسب آیفون و اندروید",
-  },
-  {
-    name: "TinyPNG",
-    url: "https://tinypng.com/",
-    note: "کاهش حجم JPG و PNG با کیفیت خوب",
-  },
-  {
-    name: "Compress JPEG",
-    url: "https://compressjpeg.com/",
-    note: "تبدیل و فشرده‌سازی سریع به JPG",
-  },
-  {
-    name: "Img2Go",
-    url: "https://www.img2go.com/compress-image",
-    note: "پشتیبانی از فرمت‌های مختلف از جمله HEIC",
-  },
-] as const;
 
 type FieldErrors = {
   firstName?: string;
@@ -76,92 +30,6 @@ type FieldErrors = {
   birthDate?: string;
   nationalCard?: string;
 };
-
-function getFileExtension(fileName: string): string {
-  const idx = fileName.lastIndexOf(".");
-  if (idx < 0) return "";
-  return fileName.slice(idx).toLowerCase();
-}
-
-function isAllowedImageFile(file: File): boolean {
-  const mime = (file.type || "").toLowerCase().trim();
-  const ext = getFileExtension(file.name);
-
-  if (ALLOWED_IMAGE_TYPES.has(mime)) return true;
-  if (ALLOWED_EXTENSIONS.has(ext)) {
-    // Safari/iOS گاهی MIME خالی یا octet-stream می‌فرستد
-    if (!mime || mime === "application/octet-stream" || mime === "binary/octet-stream") {
-      return true;
-    }
-    if (mime.startsWith("image/")) return true;
-  }
-  return false;
-}
-
-function ImageCompressHelp({ reason }: { reason?: "size" | "format" | "general" }) {
-  return (
-    <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-right space-y-3">
-      <div className="flex items-start gap-2">
-        <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <p className="text-sm font-bold text-amber-900">
-            {reason === "size"
-              ? "حجم عکس بیشتر از حد مجاز است"
-              : reason === "format"
-                ? "فرمت عکس پشتیبانی نمی‌شود"
-                : "راهنمای آماده‌سازی عکس کارت ملی"}
-          </p>
-          <p className="text-xs text-amber-800/90 leading-relaxed">
-            نگران نباشید — از سیستم خارج نمی‌شوید. همین صفحه را باز نگه دارید،
-            حجم/فرمت عکس را اصلاح کنید و دوباره آپلود کنید.
-          </p>
-        </div>
-      </div>
-
-      <ul className="text-xs text-amber-900/90 space-y-1.5 list-disc pr-5 leading-relaxed">
-        <li>
-          فرمت‌های مجاز: <strong>JPG، PNG، WebP، HEIC/HEIF (عکس آیفون)</strong>
-        </li>
-        <li>
-          حداکثر حجم: <strong>{MAX_IMAGE_SIZE_LABEL}</strong>
-        </li>
-        <li>
-          در آیفون: Settings → Camera → Formats → گزینه{" "}
-          <strong>Most Compatible</strong> را انتخاب کنید تا عکس‌ها JPG شوند
-        </li>
-        <li>
-          یا در Photos روی عکس بزنید → Share → Save to Files / Duplicate و در صورت امکان به JPG ذخیره کنید
-        </li>
-      </ul>
-
-      <div>
-        <p className="text-xs font-bold text-amber-900 mb-2">
-          سایت‌های معتبر برای کاهش حجم عکس:
-        </p>
-        <div className="space-y-2">
-          {COMPRESS_TOOLS.map((tool) => (
-            <a
-              key={tool.url}
-              href={tool.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between gap-2 rounded-xl bg-white border border-amber-200 px-3 py-2.5 hover:border-amber-400 hover:bg-amber-50 transition-colors"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-gray-800">{tool.name}</p>
-                <p className="text-[11px] text-gray-500 mt-0.5">{tool.note}</p>
-              </div>
-              <ExternalLink size={14} className="text-amber-600 shrink-0" />
-            </a>
-          ))}
-        </div>
-        <p className="text-[11px] text-amber-700/80 mt-2 leading-relaxed">
-          پس از کاهش حجم، فایل را از Downloads ذخیره کنید و در همین فرم دوباره انتخاب کنید.
-        </p>
-      </div>
-    </div>
-  );
-}
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -222,45 +90,30 @@ export default function ProfilePage() {
     setFormData((prev) => ({ ...prev, [name]: finalValue }));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // فقط فایل نامعتبر را رد می‌کنیم؛ فرم و نشست کاربر دست‌نخورده می‌ماند
-    if (!isAllowedImageFile(file)) {
+    const prepared = await prepareImageForUpload(file, "document");
+    if (!prepared.ok || !prepared.file) {
       setNationalCard(null);
       setPreviewUrl(null);
       setPreviewFailed(false);
-      setUploadHelpReason("format");
+      setUploadHelpReason(prepared.reason || "general");
       setFieldErrors((prev) => ({
         ...prev,
-        nationalCard:
-          "فرمت این فایل مجاز نیست. JPG، PNG، WebP یا HEIC/HEIF (آیفون) را انتخاب کنید.",
+        nationalCard: prepared.message || "فایل نامعتبر است",
       }));
       if (fileInputRef.current) fileInputRef.current.value = "";
-      toast.error("فرمت عکس پشتیبانی نمی‌شود — راهنما را پایین ببینید", { duration: 5000 });
-      return;
-    }
-
-    if (file.size > MAX_IMAGE_SIZE) {
-      setNationalCard(null);
-      setPreviewUrl(null);
-      setPreviewFailed(false);
-      setUploadHelpReason("size");
-      setFieldErrors((prev) => ({
-        ...prev,
-        nationalCard: `حجم این عکس بیش از ${MAX_IMAGE_SIZE_LABEL} است. با یکی از ابزارهای زیر حجم را کم کنید و دوباره آپلود کنید.`,
-      }));
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      toast.error("حجم عکس زیاد است — لینک کاهش حجم را ببینید", { duration: 6000 });
+      toast.error(prepared.message || "فایل نامعتبر است", { duration: 5000 });
       return;
     }
 
     clearFieldError("nationalCard");
     setUploadHelpReason(null);
     setPreviewFailed(false);
-    setNationalCard(file);
-    setPreviewUrl(URL.createObjectURL(file));
+    setNationalCard(prepared.file);
+    setPreviewUrl(URL.createObjectURL(prepared.file));
   };
 
   const removeImage = () => {
@@ -603,7 +456,7 @@ export default function ProfilePage() {
             ref={fileInputRef}
             onChange={handleFileChange}
             className="hidden"
-            accept="image/*,.heic,.heif,.jpg,.jpeg,.png,.webp"
+            accept={IMAGE_FILE_ACCEPT}
           />
         </div>
 

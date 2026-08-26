@@ -18,7 +18,7 @@ import AddCardModal from "@/components/dashboard/AddCardModal";
 import WalletTabGuide from "@/components/dashboard/WalletTabGuide";
 import ImageCompressHelp from "@/components/ui/ImageCompressHelp";
 import { formatNumber, toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
-import { IMAGE_FILE_ACCEPT, MAX_IMAGE_SIZE_LABEL, validateImageFile } from "@/lib/utils/imageUpload";
+import { IMAGE_FILE_ACCEPT, MAX_IMAGE_SIZE_LABEL, prepareImageForUpload, validateImageFile } from "@/lib/utils/imageUpload";
 import { walletAPI, Wallet, BankCard, WithdrawalRequest, DepositRequest, DepositAccountAssignment, DepositReceipt } from "@/lib/api/auth";
 import { tradesAPI, PendingPurchase } from "@/lib/api/trades";
 import { useAuth } from "@/contexts/AuthContext";
@@ -162,12 +162,21 @@ function WalletContent() {
     toast.success("کپی شد");
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setReceiptFile(file);
-      setReceiptImage(URL.createObjectURL(file));
+    if (!file) return;
+
+    const prepared = await prepareImageForUpload(file, "document");
+    if (!prepared.ok || !prepared.file) {
+      setReceiptFile(null);
+      setReceiptImage(null);
+      toast.error(prepared.message || "فایل نامعتبر است", { duration: 5000 });
+      e.target.value = "";
+      return;
     }
+
+    setReceiptFile(prepared.file);
+    setReceiptImage(URL.createObjectURL(prepared.file));
   };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1512,25 +1521,25 @@ function AssignmentReceiptForm({
     setReceiptLines(next);
   };
 
-  const handleFileChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const validation = validateImageFile(file);
-    if (!validation.ok) {
+    const prepared = await prepareImageForUpload(file, "document");
+    if (!prepared.ok || !prepared.file) {
       setPreviewFailed(prev => ({ ...prev, [index]: false }));
-      setUploadHelpReasons(prev => ({ ...prev, [index]: validation.reason || "general" }));
+      setUploadHelpReasons(prev => ({ ...prev, [index]: prepared.reason || "general" }));
       updateLine(index, { receipt_file: null, receipt_image: null });
       if (fileInputRefs.current[index]) fileInputRefs.current[index]!.value = "";
-      toast.error(validation.message || "فایل نامعتبر است", { duration: 5000 });
+      toast.error(prepared.message || "فایل نامعتبر است", { duration: 5000 });
       return;
     }
 
     setUploadHelpReasons(prev => ({ ...prev, [index]: null }));
     setPreviewFailed(prev => ({ ...prev, [index]: false }));
     updateLine(index, {
-      receipt_file: file,
-      receipt_image: URL.createObjectURL(file),
+      receipt_file: prepared.file,
+      receipt_image: URL.createObjectURL(prepared.file),
     });
   };
 

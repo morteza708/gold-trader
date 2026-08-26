@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { pagesAPI, SitePage, SitePageSlug } from "@/lib/api/pages";
+import { IMAGE_FILE_ACCEPT, prepareImageForUpload } from "@/lib/utils/imageUpload";
 
 const emptyForm = {
   title: "",
@@ -365,9 +366,22 @@ function ImageField({
             انتخاب فایل
             <input
               type="file"
-              accept="image/*"
+              accept={IMAGE_FILE_ACCEPT}
               className="hidden"
-              onChange={(e) => onChange(e.target.files?.[0] || null)}
+              onChange={async (e) => {
+                const file = e.target.files?.[0] || null;
+                if (!file) {
+                  onChange(null);
+                  return;
+                }
+                const prepared = await prepareImageForUpload(file, "page");
+                if (!prepared.ok || !prepared.file) {
+                  toast.error(prepared.message || "فایل نامعتبر است");
+                  e.target.value = "";
+                  return;
+                }
+                onChange(prepared.file);
+              }}
             />
           </label>
           {preview ? (

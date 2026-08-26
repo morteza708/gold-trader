@@ -14,6 +14,7 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { authAPI, UpdateProfileData } from "@/lib/api/auth";
 import { toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
+import { IMAGE_FILE_ACCEPT, prepareImageForUpload } from "@/lib/utils/imageUpload";
 import DatePicker, { DateObject } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -136,24 +137,21 @@ export default function ProfilePage() {
     return DEFAULT_AVATAR;
   };
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // بررسی اندازه فایل (حداکثر 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error("حجم فایل باید کمتر از 5 مگابایت باشد");
-        return;
-      }
-      // بررسی نوع فایل
-      if (!file.type.startsWith('image/')) {
-        toast.error("لطفا یک فایل تصویری انتخاب کنید");
-        return;
-      }
-      setAvatarFile(file);
-      setAvatarPreview(URL.createObjectURL(file));
-      setRemoveAvatar(false);
-      toast.success("تصویر پروفایل انتخاب شد");
+    if (!file) return;
+
+    const prepared = await prepareImageForUpload(file, "avatar");
+    if (!prepared.ok || !prepared.file) {
+      toast.error(prepared.message || "فایل نامعتبر است");
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+      return;
     }
+
+    setAvatarFile(prepared.file);
+    setAvatarPreview(URL.createObjectURL(prepared.file));
+    setRemoveAvatar(false);
+    toast.success("تصویر پروفایل انتخاب شد");
   };
 
   const handleRemoveAvatar = () => {
@@ -316,7 +314,7 @@ export default function ProfilePage() {
                       ref={avatarInputRef} 
                       onChange={handleAvatarChange} 
                       className="hidden" 
-                      accept="image/*"
+                      accept={IMAGE_FILE_ACCEPT}
                     />
                  </div>
 

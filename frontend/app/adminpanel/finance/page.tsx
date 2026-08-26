@@ -11,7 +11,7 @@ import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import StatsCard from "@/components/admin/StatsCard";
 import { toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
-import { IMAGE_FILE_ACCEPT, MAX_IMAGE_SIZE_LABEL, validateImageFile, type ImageUploadErrorReason } from "@/lib/utils/imageUpload";
+import { IMAGE_FILE_ACCEPT, MAX_IMAGE_SIZE_LABEL, prepareImageForUpload, type ImageUploadErrorReason } from "@/lib/utils/imageUpload";
 import ImageCompressHelp from "@/components/ui/ImageCompressHelp";
 import { adminWalletAPI, WithdrawalRequest, DepositRequest } from "@/lib/api/auth";
 import { tradesAPI, PendingPurchase } from "@/lib/api/trades";
@@ -213,16 +213,16 @@ export default function FinancePage() {
       return;
     }
 
-    const validation = validateImageFile(receiptFile);
-    if (!validation.ok) {
-      setReceiptUploadError(validation.reason || "general");
-      toast.error(validation.message || "فایل نامعتبر است");
+    const prepared = await prepareImageForUpload(receiptFile, "document");
+    if (!prepared.ok || !prepared.file) {
+      setReceiptUploadError(prepared.reason || "general");
+      toast.error(prepared.message || "فایل نامعتبر است");
       return;
     }
 
     setIsProcessing(request.id);
     try {
-      await adminWalletAPI.uploadReceipt(request.id, receiptFile);
+      await adminWalletAPI.uploadReceipt(request.id, prepared.file);
       toast.success("فیش واریزی با موفقیت آپلود شد");
       setReceiptFile(null);
       setReceiptUploadError(null);
@@ -1434,19 +1434,19 @@ function WithdrawalDetailModal({
                       <input
                         type="file"
                         accept={IMAGE_FILE_ACCEPT}
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
-                          const validation = validateImageFile(file);
-                          if (!validation.ok) {
+                          const prepared = await prepareImageForUpload(file, "document");
+                          if (!prepared.ok || !prepared.file) {
                             setReceiptFile(null);
-                            setReceiptUploadError(validation.reason || "general");
-                            toast.error(validation.message || "فایل نامعتبر است", { duration: 5000 });
+                            setReceiptUploadError(prepared.reason || "general");
+                            toast.error(prepared.message || "فایل نامعتبر است", { duration: 5000 });
                             e.target.value = "";
                             return;
                           }
                           setReceiptUploadError(null);
-                          setReceiptFile(file);
+                          setReceiptFile(prepared.file);
                         }}
                         className="hidden"
                         id="receipt-upload"
