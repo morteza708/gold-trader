@@ -334,13 +334,11 @@ export default function HistoryPage() {
       </div>
 
       {/* --- فراخوانی مودال فاکتور --- */}
-      {selectedInvoice && (
-        <InvoiceModal 
-          isOpen={!!selectedInvoice} 
-          onClose={() => setSelectedInvoice(null)} 
-          trade={selectedInvoice} 
-        />
-      )}
+      <InvoiceModal 
+        isOpen={!!selectedInvoice}
+        data={selectedInvoice}
+        onClose={() => setSelectedInvoice(null)}
+      />
     </div>
   );
 }
