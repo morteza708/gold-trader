@@ -153,8 +153,8 @@ class GoldPrice(models.Model):
         verbose_name_plural = 'قیمت‌های طلا'
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['is_active', '-created_at']),
-            models.Index(fields=['source', '-created_at']),
+            models.Index(fields=['is_active', '-created_at'], name='trades_gold_is_acti_500f05_idx'),
+            models.Index(fields=['source', '-created_at'], name='trades_gold_source_3e81b5_idx'),
         ]
     
     def __str__(self):
@@ -369,9 +369,9 @@ class Trade(models.Model):
         verbose_name_plural = 'معاملات'
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['user', '-created_at']),
-            models.Index(fields=['status', '-created_at']),
-            models.Index(fields=['trade_type', '-created_at']),
+            models.Index(fields=['user', '-created_at'], name='trades_trad_user_id_1f28fa_idx'),
+            models.Index(fields=['status', '-created_at'], name='trades_trad_status_2a01b5_idx'),
+            models.Index(fields=['trade_type', '-created_at'], name='trades_trad_trade_t_e0cc67_idx'),
         ]
     
     def __str__(self):
@@ -454,8 +454,8 @@ class Order(models.Model):
         verbose_name_plural = 'سفارشات هوشمند'
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['user', 'status', '-created_at']),
-            models.Index(fields=['order_type', 'status', 'target_price']),
+            models.Index(fields=['user', 'status', '-created_at'], name='trades_orde_user_id_66acb9_idx'),
+            models.Index(fields=['order_type', 'status', 'target_price'], name='trades_orde_order_t_1ee5b3_idx'),
         ]
     
     def __str__(self):
@@ -568,8 +568,14 @@ class PendingPurchase(models.Model):
         verbose_name_plural = 'خریدهای معلق'
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['user', 'status', '-created_at']),
-            models.Index(fields=['status', 'expires_at']),
+            models.Index(
+                fields=['user', 'status', '-created_at'],
+                name='trades_pend_user_id_7c0a1a_idx',
+            ),
+            models.Index(
+                fields=['status', 'expires_at'],
+                name='trades_pend_status_2f8b1c_idx',
+            ),
         ]
 
     def __str__(self):
