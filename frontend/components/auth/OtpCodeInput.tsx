@@ -11,12 +11,19 @@ interface OtpCodeInputProps {
   value: string;
   onChange: (value: string) => void;
   onComplete?: (value: string) => void;
-  /** Bump after resend so WebOTP listens for the new SMS */
+  /** Bump after resend / error to restart WebOTP and reset the native input */
   webOtpSession?: number;
   disabled?: boolean;
   variant?: OtpCodeInputVariant;
 }
 
+/**
+ * iOS Safari needs:
+ * - autocomplete="one-time-code" on a real (not opacity-0) input
+ * - uncontrolled input (controlled inputs often block SMS QuickType)
+ * - no focus outline on the full-width overlay input
+ * SMS last line: @opalbox.ir #1234
+ */
 export default function OtpCodeInput({
   value,
   onChange,
@@ -30,13 +37,17 @@ export default function OtpCodeInput({
 
   useEffect(() => {
     if (!disabled) {
-      inputRef.current?.focus();
+      const t = window.setTimeout(() => inputRef.current?.focus(), 100);
+      return () => window.clearTimeout(t);
     }
-  }, [disabled]);
+  }, [disabled, webOtpSession]);
 
   const applyCode = (raw: string) => {
     const normalized = normalizeOtpInput(raw);
     onChange(normalized);
+    if (inputRef.current && inputRef.current.value !== normalized) {
+      inputRef.current.value = normalized;
+    }
     if (normalized.length === OTP_LENGTH) {
       onComplete?.(normalized);
     }
@@ -58,7 +69,7 @@ export default function OtpCodeInput({
         role="group"
         aria-label="کد تایید چهار رقمی"
       >
-        <div className="absolute inset-0 flex justify-between gap-4 ltr pointer-events-none" dir="ltr">
+        <div className="absolute inset-0 flex justify-between gap-4 ltr pointer-events-none select-none" dir="ltr">
           {Array.from({ length: OTP_LENGTH }, (_, index) => {
             const digit = value[index];
             const isActive = index === value.length;
@@ -94,14 +105,22 @@ export default function OtpCodeInput({
           })}
         </div>
 
+        {/* Uncontrolled for iOS SMS QuickType; transparent overlay without Safari blue focus ring */}
         <input
+          key={`otp-${webOtpSession}`}
           ref={inputRef}
           id="otp-code"
           name="one-time-code"
-          value={value}
+          defaultValue=""
+          onInput={(e) => applyCode(e.currentTarget.value)}
           onChange={(e) => applyCode(e.target.value)}
           disabled={disabled}
-          className="absolute inset-0 w-full h-full opacity-[0.01] cursor-text tracking-[2em] text-center text-transparent caret-transparent"
+          className="otp-autofill-input absolute inset-0 z-20 w-full h-full border-0 bg-transparent shadow-none outline-none ring-0 focus:outline-none focus:ring-0 focus:border-0 appearance-none cursor-text text-transparent caret-transparent text-xl text-center tracking-[0.5em] font-black"
+          style={{
+            WebkitAppearance: "none",
+            WebkitTapHighlightColor: "transparent",
+            WebkitTextFillColor: "transparent",
+          }}
           type="text"
           inputMode="numeric"
           autoComplete="one-time-code"
@@ -110,12 +129,13 @@ export default function OtpCodeInput({
           spellCheck={false}
           pattern="[0-9]*"
           maxLength={OTP_LENGTH}
+          enterKeyHint="done"
           aria-label="کد تایید"
         />
       </div>
 
       <p className={`text-[11px] text-center ${isDark ? "text-slate-500" : "text-gray-400"}`}>
-        کد از پیامک روی کیبورد پیشنهاد می‌شود (iOS / Android)
+        کد از پیامک روی کیبورد پیشنهاد می‌شود — روی پیشنهاد بالای کیبورد بزنید
       </p>
     </div>
   );

@@ -54,3 +54,13 @@ main {
     @apply w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
   }
 }
+
+/* iOS Safari: remove blue focus ring on OTP overlay input */
+.otp-autofill-input,
+.otp-autofill-input:focus,
+.otp-autofill-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
