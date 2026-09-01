@@ -223,7 +223,7 @@ class PendingPurchaseService:
 
         pending.deposit_request = deposit_request
         pending.deposit_requested_amount = requested_amount
-        pending.status = PendingPurchase.STATUS_AWAITING_ACCOUNTS
+        pending.status = PendingPurchase.STATUS_AWAITING_APPROVAL
         pending.save(update_fields=[
             'deposit_request', 'deposit_requested_amount', 'status', 'updated_at'
         ])

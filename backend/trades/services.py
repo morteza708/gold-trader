@@ -663,11 +663,11 @@ class TradeService:
         parts = [get_market_message(buy_enabled, sell_enabled)]
         if suspended_buy or suspended_sell:
             parts.append(
-                f"{suspended_buy + suspended_sell} سفارش limit معلق شد."
+                f"{suspended_buy + suspended_sell} سفارش هوشمند معلق شد."
             )
         if resumed_buy or resumed_sell:
             parts.append(
-                f"{resumed_buy + resumed_sell} سفارش limit دوباره فعال شد."
+                f"{resumed_buy + resumed_sell} سفارش هوشمند دوباره فعال شد."
             )
 
         return {

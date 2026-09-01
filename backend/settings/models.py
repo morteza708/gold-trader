@@ -17,12 +17,12 @@ class SystemSettings(models.Model):
     buy_enabled = models.BooleanField(
         default=True,
         verbose_name='فعال بودن خرید',
-        help_text='خرید فوری، سفارش limit خرید و ثبت خرید معلق جدید',
+        help_text='خرید فوری، سفارش هوشمند خرید و ثبت خرید معلق جدید',
     )
     sell_enabled = models.BooleanField(
         default=True,
         verbose_name='فعال بودن فروش',
-        help_text='فروش فوری و سفارش limit فروش',
+        help_text='فروش فوری و سفارش هوشمند فروش',
     )
     market_admin_notice = models.TextField(
         blank=True,

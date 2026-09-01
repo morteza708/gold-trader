@@ -21,6 +21,7 @@ from .serializers import (
     WithdrawalRequestSerializer,
     CreateWithdrawalRequestSerializer,
     DepositRequestSerializer,
+    CreateDepositRequestSerializer,
     DepositAccountAssignmentSerializer,
     CreateDepositAccountAssignmentSerializer,
     DepositReceiptSerializer,
@@ -114,29 +115,93 @@ def bank_card_detail(request, card_id):
         )
 
 
+logger = logging.getLogger('wallet')
+
+
+def _notify_admins_deposit_receipt_uploaded(deposit_request, receipts_count=1):
+    """اطلاع مدیران پس از ثبت فیش واریزی توسط کاربر"""
+    settings = SystemSettings.get_settings()
+    admin_phones = settings.admin_phone_numbers or []
+    account_code = (
+        deposit_request.user.customer_profile.account_code
+        if hasattr(deposit_request.user, 'customer_profile')
+        else 'N/A'
+    )
+
+    if admin_phones:
+        for admin_phone in admin_phones:
+            try:
+                send_sms_async.delay(
+                    phone_number=admin_phone,
+                    template='deposit-receipt-uploaded-admin',
+                    token=account_code,
+                    token2=f"{int(deposit_request.amount):,}",
+                )
+                logger.info(
+                    f"پیامک deposit-receipt-uploaded-admin به صف ارسال اضافه شد برای مدیر {admin_phone}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"خطا در queue کردن پیامک deposit-receipt-uploaded-admin به مدیر {admin_phone}: {e}",
+                    exc_info=True,
+                )
+
+    try:
+        create_notification_for_admins(
+            title='فیش واریزی جدید',
+            message=(
+                f'کاربر {account_code} فیش واریز به مبلغ {int(deposit_request.amount):,} ریال '
+                f'برای درخواست {deposit_request.request_code} ثبت کرده است.'
+            ),
+            notification_type='SYSTEM',
+            related_object_type='deposit',
+            related_object_id=deposit_request.id,
+            metadata={
+                'user_phone': deposit_request.user.phone_number,
+                'account_code': account_code,
+                'amount': str(deposit_request.amount),
+                'request_code': deposit_request.request_code,
+                'receipts_count': receipts_count,
+            },
+        )
+    except Exception as e:
+        logger.error(f"خطا در ایجاد notification برای مدیران (فیش واریز): {e}", exc_info=True)
+
+
 @ratelimit(key='user', rate='10/m', method='POST', block=True)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_deposit_request(request):
     """
-    ایجاد درخواست واریز (فقط مبلغ - بدون tracking_number, deposit_date, receipt_image)
+    ثبت یک‌مرحله‌ای واریز: مبلغ + حساب مقصد + فیش + پیگیری + تاریخ
     Rate Limit: 10 requests per minute per user
     """
     try:
-        serializer = DepositRequestSerializer(data=request.data)
+        serializer = CreateDepositRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        amount = serializer.validated_data['amount']
-        # فیلدهای اختیاری - در flow جدید اینها بعدا در receipts ثبت می‌شوند
-        tracking_number = serializer.validated_data.get('tracking_number')
-        deposit_date = serializer.validated_data.get('deposit_date')
-        receipt_image = serializer.validated_data.get('receipt_image')
-        
-        # تولید کد درخواست منحصر به فرد
-        request_code = f"DR-{uuid.uuid4().hex[:8].upper()}"
 
-        pending_purchase_id = request.data.get('pending_purchase_id')
+        amount = serializer.validated_data['amount']
+        tracking_number = serializer.validated_data['tracking_number']
+        deposit_date = serializer.validated_data['deposit_date']
+        receipt_image = serializer.validated_data['receipt_image']
+        deposit_account_id = serializer.validated_data['deposit_account_id']
+        pending_purchase_id = serializer.validated_data.get('pending_purchase_id')
+
+        if not DepositAccount.objects.filter(id=deposit_account_id, is_active=True).exists():
+            return Response(
+                {'error': 'حساب واریز انتخاب‌شده معتبر یا فعال نیست'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not pending_purchase_id and DepositRequest.objects.filter(
+            user=request.user, status='PENDING'
+        ).exists():
+            return Response(
+                {'error': 'یک واریز در انتظار تأیید دارید. لطفاً تا بررسی آن صبر کنید.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         pending = None
         if pending_purchase_id:
             from trades.models import PendingPurchase
@@ -150,13 +215,12 @@ def create_deposit_request(request):
             except PendingPurchase.DoesNotExist:
                 return Response(
                     {'error': 'خرید معلق معتبر یافت نشد یا قبلاً به واریز متصل شده است'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-            # انقضا
             if PendingPurchaseService.expire_if_needed(pending):
                 return Response(
                     {'error': 'مهلت خرید معلق به پایان رسیده است'},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
             pending.refresh_from_db()
             if amount < pending.deposit_min_amount:
@@ -165,87 +229,54 @@ def create_deposit_request(request):
                         'error': f'مبلغ واریز نمی‌تواند کمتر از {int(pending.deposit_min_amount):,} ریال باشد',
                         'deposit_min_amount': int(pending.deposit_min_amount),
                     },
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-        
-        # ایجاد درخواست (فقط با amount)
-        deposit_request = DepositRequest.objects.create(
-            user=request.user,
-            amount=amount,
-            tracking_number=tracking_number,
-            deposit_date=deposit_date,
-            receipt_image=receipt_image,
-            request_code=request_code,
-            status='PENDING'
-        )
 
-        if pending:
-            from trades.pending_purchase_service import PendingPurchaseService
-            PendingPurchaseService.attach_deposit_request(pending, deposit_request, amount)
-        
-        # ارسال پیامک به مدیران
-        settings = SystemSettings.get_settings()
-        admin_phones = settings.admin_phone_numbers or []
-        
-        print(f"DEBUG: admin_phone_numbers = {admin_phones}")
-        print(f"DEBUG: admin_phone_numbers type = {type(admin_phones)}")
-        print(f"DEBUG: admin_phone_numbers length = {len(admin_phones) if admin_phones else 0}")
-        
-        if admin_phones and len(admin_phones) > 0:
-            account_code = request.user.customer_profile.account_code if hasattr(request.user, 'customer_profile') else 'N/A'
-            print(f"DEBUG: ارسال پیامک برای درخواست واریز - account_code: {account_code}, amount: {amount}")
-            
-            for admin_phone in admin_phones:
-                try:
-                    # ارسال async SMS
-                    send_sms_async.delay(
-                        phone_number=admin_phone,
-                        template='deposit-request-notification-admin',
-                        token=account_code,
-                        token2=f"{int(amount):,}"
-                    )
-                    logger.info(f"پیامک deposit-request-notification-admin به صف ارسال اضافه شد برای مدیر {admin_phone}")
-                    if True:  # برای حفظ منطق
-                        print(f"✓ پیامک با موفقیت ارسال شد به {admin_phone}")
-                    else:
-                        print(f"✗ خطا در ارسال پیامک به {admin_phone}")
-                except Exception as e:
-                    print(f"✗ خطا در ارسال پیامک به {admin_phone}: {e}")
-                    import traceback
-                    traceback.print_exc()
-        else:
-            print("⚠ هشدار: شماره مدیران برای دریافت پیامک ثبت نشده است یا لیست خالی است")
-            print(f"   تنظیمات فعلی: {settings.admin_phone_numbers}")
-        
-        # ایجاد notification برای مدیران
-        try:
-            account_code = request.user.customer_profile.account_code if hasattr(request.user, 'customer_profile') else 'N/A'
-            create_notification_for_admins(
-                title='درخواست واریز جدید',
-                message=f'کاربر {account_code} درخواست واریز به مبلغ {int(amount):,} ریال ثبت کرده است.',
-                notification_type='SYSTEM',
-                related_object_type='deposit',
-                related_object_id=deposit_request.id,
-                metadata={
-                    'user_phone': request.user.phone_number,
-                    'account_code': account_code,
-                    'amount': str(amount),
-                    'request_code': deposit_request.request_code,
-                }
+        request_code = f"DR-{uuid.uuid4().hex[:8].upper()}"
+
+        from django.db import transaction
+        with transaction.atomic():
+            deposit_request = DepositRequest.objects.create(
+                user=request.user,
+                amount=amount,
+                tracking_number=tracking_number,
+                deposit_date=deposit_date,
+                request_code=request_code,
+                status='PENDING',
             )
-        except Exception as e:
-            logger.error(f"خطا در ایجاد notification برای مدیران (درخواست واریز): {e}", exc_info=True)
-        
-        # Serialize و برگرداندن
+
+            assignment = DepositAccountAssignment.objects.create(
+                deposit_request=deposit_request,
+                account_type='DEPOSIT_ACCOUNT',
+                deposit_account_id=deposit_account_id,
+                amount=amount,
+                order=0,
+            )
+
+            DepositReceipt.objects.create(
+                deposit_request=deposit_request,
+                account_assignment=assignment,
+                tracking_number=tracking_number,
+                deposit_date=deposit_date,
+                receipt_image=receipt_image,
+                amount=amount,
+                status='PENDING',
+            )
+
+            if pending:
+                from trades.pending_purchase_service import PendingPurchaseService
+                PendingPurchaseService.attach_deposit_request(pending, deposit_request, amount)
+
+        _notify_admins_deposit_receipt_uploaded(deposit_request)
+
         response_serializer = DepositRequestSerializer(deposit_request, context={'request': request})
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
-        
+
     except Exception as e:
-        import traceback
         logger.error(f"خطا در create_deposit_request: {e}", exc_info=True)
         return Response(
-            {'error': 'خطا در ثبت درخواست واریز. لطفاً دوباره تلاش کنید.'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {'error': 'خطا در ثبت واریز. لطفاً دوباره تلاش کنید.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
@@ -1931,58 +1962,23 @@ def admin_approve_deposit_new_flow(request, request_id):
                 {'error': 'این درخواست قبلاً پردازش شده است'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # بررسی اینکه حساب‌ها تخصیص داده شده‌اند
-        assignments = deposit_request.account_assignments.all()
-        if not assignments.exists():
-            return Response(
-                {'error': 'ابتدا باید حساب‌ها را تخصیص دهید'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # تبدیل queryset به list برای استفاده بعد از delete
-        assignments_list = list(assignments)
-        
-        # جمع فیش‌های هر حساب باید حداقل برابر مبلغ تخصیص باشد
-        incomplete_assignments = []
-        for assignment in assignments_list:
-            uploaded_total = assignment.get_uploaded_receipts_total()
-            if uploaded_total < assignment.amount:
-                incomplete_assignments.append(
-                    f"{assignment.get_account_display()} "
-                    f"(آپلود شده: {int(uploaded_total)} از {int(assignment.amount)})"
-                )
-        
-        if incomplete_assignments:
-            return Response(
-                {
-                    'error': (
-                        'جمع فیش‌های آپلودشده برای حساب‌های زیر هنوز کامل نیست: '
-                        + ', '.join(incomplete_assignments)
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # بررسی اینکه تمام فیش‌ها تایید شده‌اند (یا در انتظار)
-        receipts = DepositReceipt.objects.select_related(
-            'deposit_request', 'deposit_request__user',
-            'account_assignment', 'account_assignment__withdrawal_request',
-            'account_assignment__deposit_account'
-        ).filter(
+
+        receipts = DepositReceipt.objects.filter(
             deposit_request=deposit_request,
-            status__in=['PENDING', 'APPROVED']
+            status__in=['PENDING', 'APPROVED'],
         )
-        
+        if not receipts.exists():
+            return Response(
+                {'error': 'فیش واریزی برای این درخواست ثبت نشده است'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         from django.db import transaction
         from django.utils import timezone
-        from decimal import Decimal
-        
-        # لیست کاربرانی که باید پیامک دریافت کنند
+
         users_to_notify = []
-        
+
         with transaction.atomic():
-            # قفل درخواست واریز برای جلوگیری از double-approve
             deposit_request = DepositRequest.objects.select_for_update().select_related(
                 'user'
             ).get(pk=deposit_request.pk)
@@ -1992,99 +1988,18 @@ def admin_approve_deposit_new_flow(request, request_id):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # 1. تایید تمام فیش‌ها
             receipts.update(status='APPROVED', updated_at=timezone.now())
-            
-            # 2. دریافت یا ایجاد کیف پول با قفل ردیف
+
             wallet = Wallet.lock_for_user(deposit_request.user)
-            
-            # 3. افزودن مبلغ به کیف پول
             wallet.rial_balance += deposit_request.amount
             wallet.save()
 
-            # 3.1 اگر این واریز مربوط به خرید معلق است، خرید را با قیمت قفل‌شده تکمیل کن
             from trades.pending_purchase_service import PendingPurchaseService
             PendingPurchaseService.complete_after_deposit_approved(deposit_request)
-            
-            # 4. پردازش خودکار واریزها به درخواست‌های برداشت
-            links_created = []
-            for assignment in assignments_list:
-                if assignment.account_type == 'WITHDRAWAL' and assignment.withdrawal_request:
-                    withdrawal_request = WithdrawalRequest.objects.select_for_update().get(
-                        pk=assignment.withdrawal_request_id
-                    )
-                    assignment_receipts = list(assignment.receipts.all())
-                    if not assignment_receipts:
-                        continue
 
-                    if withdrawal_request.status == 'PENDING':
-                        for receipt in assignment_receipts:
-                            # جلوگیری از لینک تکراری برای همان فیش
-                            if DepositWithdrawalLink.objects.filter(
-                                deposit_receipt=receipt,
-                                withdrawal_request=withdrawal_request,
-                            ).exists():
-                                continue
-
-                            link_amount = receipt.amount
-                            link = DepositWithdrawalLink.objects.create(
-                                deposit_receipt=receipt,
-                                withdrawal_request=withdrawal_request,
-                                amount=link_amount,
-                                auto_approved=False
-                            )
-                            links_created.append(link)
-                            print(
-                                f"DEBUG: Created link for withdrawal {withdrawal_request.id}: "
-                                f"receipt.amount={receipt.amount}, assignment.amount={assignment.amount}, "
-                                f"link.amount={link_amount}"
-                            )
-
-                        withdrawal_request.refresh_from_db()
-                        remaining_amount = withdrawal_request.get_remaining_amount()
-
-                        # فقط اگر باقی‌مانده = 0 یا کمتر باشد، تایید خودکار انجام می‌شود
-                        if remaining_amount <= 0 and withdrawal_request.status == 'PENDING':
-                            withdrawal_wallet = Wallet.lock_for_user(withdrawal_request.user)
-                            if withdrawal_request.withdrawal_type == 'RIAL':
-                                withdrawal_wallet.pending_withdrawal_rial -= withdrawal_request.amount
-                            else:  # GOLD
-                                withdrawal_wallet.pending_withdrawal_gold -= withdrawal_request.amount
-                            withdrawal_wallet.save()
-                            withdrawal_request.status = 'APPROVED'
-                            withdrawal_request.save()
-
-                            DepositWithdrawalLink.objects.filter(
-                                withdrawal_request=withdrawal_request,
-                            ).update(auto_approved=True)
-
-                            account_code = withdrawal_request.user.customer_profile.account_code if hasattr(withdrawal_request.user, 'customer_profile') else 'N/A'
-                            users_to_notify.append({
-                                'phone_number': withdrawal_request.user.phone_number,
-                                'account_code': account_code,
-                                'amount': withdrawal_request.amount,
-                                'template': 'withdrawal-approved-user',
-                                'user_type': 'withdrawal',
-                                'user': withdrawal_request.user,
-                                'withdrawal_id': withdrawal_request.id,
-                                'withdrawal_type': withdrawal_request.withdrawal_type,
-                            })
-                        # اگر باقی‌مانده > 0 باشد، درخواست برداشت در حالت PENDING می‌ماند
-                        # و مدیر باید باقی‌مانده را از طریق مودال برداشت پرداخت کند
-            
-            # 5. تایید درخواست واریز
             deposit_request.status = 'APPROVED'
             deposit_request.save()
-            
-            # 6. نگه داشتن assignments برای حفظ receipts و links
-            # مشکل: اگر assignment حذف شود، receipt هم حذف می‌شود (CASCADE در DepositReceipt.account_assignment)
-            # و اگر receipt حذف شود، DepositWithdrawalLink هم حذف می‌شود (CASCADE در DepositWithdrawalLink.deposit_receipt)
-            # پس assignments را حذف نمی‌کنیم تا receipts و links حفظ شوند
-            # این assignments دیگر استفاده نمی‌شوند اما برای گزارش‌گیری و ردیابی نگه داشته می‌شوند
-            # for assignment in assignments_list:
-            #     assignment.delete()
-            
-            # ذخیره اطلاعات کاربر واریز کننده برای ارسال پیامک بعد از transaction
+
             account_code = deposit_request.user.customer_profile.account_code if hasattr(deposit_request.user, 'customer_profile') else 'N/A'
             users_to_notify.append({
                 'phone_number': deposit_request.user.phone_number,
@@ -2128,50 +2043,16 @@ def admin_approve_deposit_new_flow(request, request_id):
                         logger.info(f"✓ Notification با موفقیت ایجاد شد برای کاربر {user_info['user'].phone_number} - ID: {notification.id}")
                     else:
                         logger.error(f"✗ Notification ایجاد نشد برای کاربر {user_info['user'].phone_number}")
-                elif user_info['user_type'] == 'withdrawal':
-                    if user_info['withdrawal_type'] == 'RIAL':
-                        message = f'درخواست برداشت شما به مبلغ {int(user_info["amount"]):,} ریال تایید شد.'
-                    else:
-                        message = f'درخواست برداشت طلا شما به مقدار {float(user_info["amount"])} گرم تایید شد.'
-                    
-                    logger.info(f"ایجاد notification برای کاربر {user_info['user'].phone_number} - نوع: withdrawal - withdrawal_id: {user_info.get('withdrawal_id')}")
-                    notification = create_notification(
-                        user=user_info['user'],
-                        title='تایید برداشت',
-                        message=message,
-                        notification_type='WITHDRAWAL_APPROVED',
-                        related_object_type='withdrawal',
-                        related_object_id=user_info.get('withdrawal_id'),
-                        metadata={
-                            'amount': str(user_info['amount']),
-                            'withdrawal_type': user_info['withdrawal_type'],
-                        }
-                    )
-                    if notification:
-                        logger.info(f"✓ Notification با موفقیت ایجاد شد برای کاربر {user_info['user'].phone_number} - ID: {notification.id}")
-                    else:
-                        logger.error(f"✗ Notification ایجاد نشد برای کاربر {user_info['user'].phone_number}")
             except Exception as e:
                 logger.error(f"خطا در ایجاد notification برای {user_info['user_type']} - کاربر {user_info['user'].phone_number}: {e}", exc_info=True)
-        
-        # ارسال پیامک به مدیر برای اطلاع از تایید واریز و فیش‌های آپلود شده
-        # این پیامک قبلاً در user_upload_deposit_receipts_batch ارسال می‌شود
-        # اما برای اطمینان، در اینجا هم ارسال می‌کنیم
-        from settings.models import SystemSettings
-        # مدیر قبلاً از طریق deposit-receipt-uploaded-admin (در user_upload_deposit_receipts_batch) 
-        # و deposit-request-notification-admin (در create_deposit_request) اطلاع پیدا کرده است
-        # نیازی به ارسال پیامک اضافی برای مدیر نیست
-        # template deposit-approved-user فقط برای کاربر ارسال می‌شود
-        
-        # Serialize و برگرداندن
+
         deposit_serializer = DepositRequestSerializer(deposit_request, context={'request': request})
-        links_serializer = DepositWithdrawalLinkSerializer(links_created, many=True, context={'request': request}) if links_created else None
-        
+
         return Response({
-            'message': 'درخواست با موفقیت تایید شد و پردازش خودکار انجام شد',
+            'message': 'درخواست با موفقیت تایید شد',
             'deposit_request': deposit_serializer.data,
-            'auto_approved_withdrawals': links_serializer.data if links_serializer else [],
-            'auto_approved_count': len(links_created)
+            'auto_approved_withdrawals': [],
+            'auto_approved_count': 0,
         }, status=status.HTTP_200_OK)
         
     except Exception as e:

@@ -107,7 +107,7 @@ export default function MarketControlPanel({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <SideToggleCard
           title="خرید"
-          subtitle="فوری · معلق · limit خرید"
+          subtitle="فوری · معلق · سفارش هوشمند خرید"
           enabled={buyEnabled}
           loading={loading || isSaving}
           tone="green"
@@ -116,7 +116,7 @@ export default function MarketControlPanel({
         />
         <SideToggleCard
           title="فروش"
-          subtitle="فوری · limit فروش"
+          subtitle="فوری · سفارش هوشمند فروش"
           enabled={sellEnabled}
           loading={loading || isSaving}
           tone="red"
@@ -127,13 +127,13 @@ export default function MarketControlPanel({
 
       <div className="grid grid-cols-2 gap-3 text-center text-xs">
         <div className="rounded-xl bg-slate-900/70 border border-slate-700 p-3">
-          <p className="text-slate-500">سفارش limit خرید معلق</p>
+          <p className="text-slate-500">سفارش هوشمند خرید معلق</p>
           <p className="text-lg font-black text-white mt-1">
             {status?.suspended_buy_orders ?? 0}
           </p>
         </div>
         <div className="rounded-xl bg-slate-900/70 border border-slate-700 p-3">
-          <p className="text-slate-500">سفارش limit فروش معلق</p>
+          <p className="text-slate-500">سفارش هوشمند فروش معلق</p>
           <p className="text-lg font-black text-white mt-1">
             {status?.suspended_sell_orders ?? 0}
           </p>
@@ -190,8 +190,8 @@ export default function MarketControlPanel({
                       {confirmSide === "all-close"
                         ? "بازار کاملاً بسته می‌شود و هیچ معامله جدیدی ثبت نخواهد شد."
                         : confirmSide === "buy"
-                          ? "ثبت خرید جدید (فوری، معلق، limit) متوقف می‌شود. سفارش‌های limit خرید معلق می‌شوند."
-                          : "ثبت فروش جدید متوقف می‌شود. سفارش‌های limit فروش معلق می‌شوند."}
+                          ? "ثبت خرید جدید (فوری، معلق، هوشمند) متوقف می‌شود. سفارش‌های هوشمند خرید معلق می‌شوند."
+                          : "ثبت فروش جدید متوقف می‌شود. سفارش‌های هوشمند فروش معلق می‌شوند."}
                     </p>
                   </div>
                 </div>

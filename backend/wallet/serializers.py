@@ -394,6 +394,32 @@ class DepositRequestSerializer(serializers.ModelSerializer):
         return value
 
 
+class CreateDepositRequestSerializer(serializers.Serializer):
+    """ثبت یک‌مرحله‌ای واریز: مبلغ + حساب + فیش"""
+    amount = serializers.DecimalField(max_digits=20, decimal_places=0, min_value=1)
+    tracking_number = serializers.CharField(max_length=100)
+    deposit_date = serializers.DateField()
+    receipt_image = serializers.ImageField()
+    deposit_account_id = serializers.IntegerField()
+    pending_purchase_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate_receipt_image(self, value):
+        error = get_uploaded_image_error(value)
+        if error:
+            raise serializers.ValidationError(error)
+        from accounts.image_upload import ensure_optimized_upload
+        try:
+            return ensure_optimized_upload(value, purpose='document')
+        except ValueError as e:
+            raise serializers.ValidationError(str(e))
+
+    def validate_tracking_number(self, value):
+        value = (value or '').strip()
+        if not value:
+            raise serializers.ValidationError('شماره پیگیری الزامی است')
+        return value
+
+
 class DepositAccountAssignmentSerializer(serializers.ModelSerializer):
     """Serializer برای تخصیص حساب‌های واریز"""
     account_display = serializers.SerializerMethodField()

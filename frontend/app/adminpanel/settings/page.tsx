@@ -298,7 +298,7 @@ export default function SystemSettingsPage() {
 
   const tabs = [
     { id: "price", name: "قیمت و بازار", icon: DollarSign },
-    { id: "financial", name: "مالی", icon: CreditCard },
+    { id: "financial", name: "تعریف کارت", icon: CreditCard },
     { id: "general", name: "عمومی", icon: Globe },
     { id: "notifications", name: "اعلان‌ها", icon: Bell },
   ];
@@ -576,7 +576,7 @@ export default function SystemSettingsPage() {
             </motion.div>
           )}
 
-          {/* تب 2: تنظیمات مالی */}
+          {/* تب 2: تعریف کارت */}
           {activeTab === "financial" && (
             <motion.div
               key="financial"
@@ -588,7 +588,7 @@ export default function SystemSettingsPage() {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
                 <h2 className="text-lg md:text-xl font-black text-white flex items-center gap-2">
                   <CreditCard size={20} className="md:w-6 md:h-6" />
-                  تنظیمات مالی
+                  تعریف کارت
                 </h2>
                 <button
                   onClick={() => setIsAddBankModalOpen(true)}
@@ -616,18 +616,16 @@ export default function SystemSettingsPage() {
                 ) : (
                   <div className="space-y-3">
                     {depositAccounts.map((account) => (
-                      <div key={account.id} className="bg-slate-900 p-4 rounded-xl border border-slate-700 flex items-center justify-between">
+                      <div key={account.id} className="bg-slate-900 p-4 rounded-xl border border-slate-700 flex items-center justify-between gap-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <h4 className="text-sm font-bold text-white">{account.bank_name}</h4>
                             {account.is_active ? (
-                              <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1">
-                                <CheckCircle2 size={12} />
+                              <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded-lg text-xs font-bold">
                                 فعال
                               </span>
                             ) : (
-                              <span className="bg-gray-500/20 text-gray-400 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1">
-                                <XCircle size={12} />
+                              <span className="bg-gray-500/20 text-gray-400 px-2 py-1 rounded-lg text-xs font-bold">
                                 غیرفعال
                               </span>
                             )}
@@ -636,18 +634,23 @@ export default function SystemSettingsPage() {
                           <p className="text-xs text-slate-400 dir-ltr font-mono mb-1">{account.card_number}</p>
                           <p className="text-xs text-slate-400 dir-ltr font-mono">{account.sheba_number}</p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col items-end gap-3">
                           <button
+                            type="button"
+                            role="switch"
+                            aria-checked={account.is_active}
                             onClick={() => handleToggleBankActive(account)}
-                            className={`p-2 rounded-lg transition-colors ${
-                              account.is_active
-                                ? "bg-green-500/20 hover:bg-green-500/30 text-green-400"
-                                : "bg-gray-500/20 hover:bg-gray-500/30 text-gray-400"
+                            className={`relative inline-flex h-8 w-[4.5rem] flex-row items-center rounded-full px-1 transition-colors ${
+                              account.is_active ? "bg-green-500 justify-start" : "bg-slate-600 justify-end"
                             }`}
                             title={account.is_active ? "غیرفعال کردن" : "فعال کردن"}
                           >
-                            {account.is_active ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
+                            <span className="inline-block h-6 w-6 rounded-full bg-white shadow" />
                           </button>
+                          <span className={`text-[11px] font-bold ${account.is_active ? "text-green-400" : "text-slate-400"}`}>
+                            {account.is_active ? "فعال" : "غیرفعال"}
+                          </span>
+                          <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleEditBank(account)}
                             className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg transition-colors text-blue-400"
@@ -662,6 +665,7 @@ export default function SystemSettingsPage() {
                           >
                             <Trash2 size={18} />
                           </button>
+                          </div>
                         </div>
                       </div>
                     ))}

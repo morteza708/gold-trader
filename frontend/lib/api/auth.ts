@@ -466,18 +466,27 @@ export const walletAPI = {
     return response.data;
   },
 
-  // ایجاد درخواست واریز (فقط مبلغ)
+  // ثبت یک‌مرحله‌ای واریز (مبلغ + حساب + فیش)
   createDepositRequest: async (data: {
     amount: number;
+    deposit_account_id: number;
+    tracking_number: string;
+    deposit_date: string;
+    receipt_image: File;
     pending_purchase_id?: number;
   }): Promise<DepositRequest> => {
-    const payload: { amount: number; pending_purchase_id?: number } = {
-      amount: data.amount,
-    };
+    const formData = new FormData();
+    formData.append('amount', data.amount.toString());
+    formData.append('deposit_account_id', data.deposit_account_id.toString());
+    formData.append('tracking_number', data.tracking_number);
+    formData.append('deposit_date', data.deposit_date);
+    formData.append('receipt_image', data.receipt_image);
     if (data.pending_purchase_id) {
-      payload.pending_purchase_id = data.pending_purchase_id;
+      formData.append('pending_purchase_id', data.pending_purchase_id.toString());
     }
-    const response = await apiClient.post<DepositRequest>('/wallet/deposit/', payload);
+    const response = await apiClient.post<DepositRequest>('/wallet/deposit/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response.data;
   },
 

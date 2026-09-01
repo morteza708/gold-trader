@@ -163,7 +163,7 @@ export default function FinancePage() {
     setIsProcessing(request.id);
     try {
       if (activeTab === 'deposit') {
-        await adminWalletAPI.approveDeposit((request as DepositRequest).id);
+        await adminWalletAPI.approveDepositNewFlow((request as DepositRequest).id);
         toast.success("درخواست واریز با موفقیت تایید شد");
       } else {
         await adminWalletAPI.approveWithdrawal((request as WithdrawalRequest).id);
