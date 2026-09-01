@@ -5,14 +5,13 @@ import {
   FileText,
   Save,
   Loader2,
-  ImagePlus,
   Trash2,
   Eye,
   EyeOff,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import ImageUploadZone from "@/components/ui/ImageUploadZone";
 import { pagesAPI, SitePage, SitePageSlug } from "@/lib/api/pages";
-import { IMAGE_FILE_ACCEPT, prepareImageForUpload } from "@/lib/utils/imageUpload";
 
 const emptyForm = {
   title: "",
@@ -91,22 +90,22 @@ export default function AdminSitePagesPage() {
     }
   };
 
-  const onHeroChange = (file: File | null) => {
+  const onHeroChange = (file: File | null, previewUrl: string | null) => {
     setHeroFile(file);
     setClearHero(false);
-    if (file) {
-      setHeroPreview(URL.createObjectURL(file));
-    } else {
+    if (file && previewUrl) {
+      setHeroPreview(previewUrl);
+    } else if (!file) {
       setHeroPreview(page?.hero_image_url || null);
     }
   };
 
-  const onExtraChange = (file: File | null) => {
+  const onExtraChange = (file: File | null, previewUrl: string | null) => {
     setExtraFile(file);
     setClearExtra(false);
-    if (file) {
-      setExtraPreview(URL.createObjectURL(file));
-    } else {
+    if (file && previewUrl) {
+      setExtraPreview(previewUrl);
+    } else if (!file) {
       setExtraPreview(page?.extra_image_url || null);
     }
   };
@@ -311,6 +310,7 @@ export default function AdminSitePagesPage() {
             <ImageField
               label="تصویر اصلی"
               preview={clearHero ? null : heroPreview}
+              file={heroFile}
               onChange={onHeroChange}
               onClear={() => {
                 setHeroFile(null);
@@ -321,6 +321,7 @@ export default function AdminSitePagesPage() {
             <ImageField
               label="تصویر ثانویه (مثلاً نقشه)"
               preview={clearExtra ? null : extraPreview}
+              file={extraFile}
               onChange={onExtraChange}
               onClear={() => {
                 setExtraFile(null);
@@ -338,64 +339,44 @@ export default function AdminSitePagesPage() {
 function ImageField({
   label,
   preview,
+  file,
   onChange,
   onClear,
 }: {
   label: string;
   preview: string | null;
-  onChange: (file: File | null) => void;
+  file: File | null;
+  onChange: (file: File | null, previewUrl: string | null) => void;
   onClear: () => void;
 }) {
   return (
     <div>
-      <label className="block text-xs font-bold text-slate-400 mb-2">{label}</label>
-      <div className="border border-dashed border-slate-700 rounded-xl p-4 bg-slate-900/50">
-        {preview ? (
-          <div className="relative w-full h-40 rounded-lg overflow-hidden mb-3 border border-slate-700">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={preview} alt={label} className="w-full h-full object-cover" />
-          </div>
-        ) : (
-          <div className="h-40 flex flex-col items-center justify-center text-slate-500 gap-2 mb-3">
-            <ImagePlus size={28} />
-            <span className="text-xs">تصویری انتخاب نشده</span>
-          </div>
-        )}
-        <div className="flex gap-2">
-          <label className="flex-1 cursor-pointer text-center text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-lg transition-colors">
-            انتخاب فایل
-            <input
-              type="file"
-              accept={IMAGE_FILE_ACCEPT}
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0] || null;
-                if (!file) {
-                  onChange(null);
-                  return;
-                }
-                const prepared = await prepareImageForUpload(file, "page");
-                if (!prepared.ok || !prepared.file) {
-                  toast.error(prepared.message || "فایل نامعتبر است");
-                  e.target.value = "";
-                  return;
-                }
-                onChange(prepared.file);
-              }}
-            />
-          </label>
-          {preview ? (
-            <button
-              type="button"
-              onClick={onClear}
-              className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-red-400 bg-red-950/30 hover:bg-red-950/50 border border-red-900/40"
-            >
-              <Trash2 size={14} />
-              حذف
-            </button>
-          ) : null}
+      {preview && !file ? (
+        <div className="relative w-full h-40 rounded-lg overflow-hidden mb-3 border border-slate-700">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={preview} alt={label} className="w-full h-full object-cover" />
         </div>
-      </div>
+      ) : null}
+      <ImageUploadZone
+        purpose="page"
+        variant="dark"
+        label={label}
+        file={file}
+        previewUrl={file ? preview : null}
+        emptyHint="انتخاب تصویر"
+        onFileChange={onChange}
+        onError={(msg) => toast.error(msg || "فایل نامعتبر است")}
+      />
+      {(preview || file) ? (
+        <button
+          type="button"
+          onClick={onClear}
+          className="mt-2 inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-red-400 bg-red-950/30 hover:bg-red-950/50 border border-red-900/40"
+        >
+          <Trash2 size={14} />
+          حذف تصویر
+        </button>
+      ) : null}
     </div>
   );
 }

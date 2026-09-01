@@ -15,6 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { authAPI, UpdateProfileData } from "@/lib/api/auth";
 import { toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
 import { IMAGE_FILE_ACCEPT, prepareImageForUpload } from "@/lib/utils/imageUpload";
+import { UploadSuccessCheck } from "@/components/ui/ImageUploadZone";
 import DatePicker, { DateObject } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -290,6 +291,11 @@ export default function ProfilePage() {
                       alt="Profile" 
                       className="w-full h-full rounded-full border-4 border-white shadow-lg object-cover" 
                     />
+                    {isEditing && (avatarFile || avatarPreview) && (
+                      <div className="absolute -bottom-1 -left-1 z-20 ring-4 ring-white rounded-full">
+                        <UploadSuccessCheck size={32} />
+                      </div>
+                    )}
                     {isEditing && (
                       <>
                         <button 

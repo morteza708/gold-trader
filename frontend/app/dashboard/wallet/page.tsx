@@ -2,7 +2,7 @@
 
 import { pageTitle } from "@/lib/brand";
 
-import { useState, useRef, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { 
   CreditCard, ArrowUpCircle, ArrowDownCircle, Plus, 
@@ -17,11 +17,13 @@ import toast from "react-hot-toast";
 import AddCardModal from "@/components/dashboard/AddCardModal";
 import WalletTabGuide from "@/components/dashboard/WalletTabGuide";
 import ImageCompressHelp from "@/components/ui/ImageCompressHelp";
+import ImageUploadZone from "@/components/ui/ImageUploadZone";
 import { formatNumber, toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
-import { IMAGE_FILE_ACCEPT, MAX_IMAGE_SIZE_LABEL, prepareImageForUpload, validateImageFile } from "@/lib/utils/imageUpload";
+import { validateImageFile } from "@/lib/utils/imageUpload";
 import { walletAPI, depositAccountsAPI, Wallet, BankCard, WithdrawalRequest, DepositRequest, DepositReceipt, DepositAccount } from "@/lib/api/auth";
 import { tradesAPI, PendingPurchase } from "@/lib/api/trades";
 import { useAuth } from "@/contexts/AuthContext";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 
 // تقویم شمسی
 import DatePicker, { DateObject } from "react-multi-date-picker";
@@ -46,7 +48,6 @@ function WalletContent() {
   const [amount, setAmount] = useState("");
   const [goldAmount, setGoldAmount] = useState("");
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [trackingNumber, setTrackingNumber] = useState("");
@@ -71,20 +72,21 @@ function WalletContent() {
     (!activePendingPurchase || activePendingPurchase.status === "AWAITING_DEPOSIT") &&
     !hasPendingDeposit;
 
-  // بارگذاری داده‌ها
+  // تغییر تب بر اساس URL parameter
   useEffect(() => {
-    fetchWalletData();
-    loadPendingPurchase();
-  }, []);
+    if (tabFromUrl && ["deposit", "withdraw", "withdraw-gold", "cards", "history"].includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
 
-  const loadPendingPurchase = async () => {
+  const loadPendingPurchase = useCallback(async () => {
     try {
       if (pendingPurchaseIdFromUrl) {
         const detail = await tradesAPI.getPendingPurchase(Number(pendingPurchaseIdFromUrl));
         setActivePendingPurchase(detail);
         const minAmount = Number(detail.deposit_min_amount || 0);
-        if (minAmount > 0 && !amount) {
-          setAmount(formatNumber(String(minAmount)));
+        if (minAmount > 0) {
+          setAmount((prev) => prev || formatNumber(String(minAmount)));
         }
         return;
       }
@@ -93,23 +95,16 @@ function WalletContent() {
       if (res.pending_purchase?.status === "AWAITING_DEPOSIT") {
         const minAmount = Number(res.pending_purchase.deposit_min_amount || 0);
         if (minAmount > 0) {
-          setAmount(formatNumber(String(minAmount)));
+          setAmount((prev) => prev || formatNumber(String(minAmount)));
         }
       }
     } catch {
       // ignore
     }
-  };
+  }, [pendingPurchaseIdFromUrl]);
 
-  // تغییر تب بر اساس URL parameter
-  useEffect(() => {
-    if (tabFromUrl && ["deposit", "withdraw", "withdraw-gold", "cards", "history"].includes(tabFromUrl)) {
-      setActiveTab(tabFromUrl);
-    }
-  }, [tabFromUrl]);
-
-  const fetchWalletData = async () => {
-    setIsLoading(true);
+  const fetchWalletData = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const [walletData, cardsData, withdrawalData, depositData, addressData, accountsData] = await Promise.all([
         walletAPI.getWallet(),
@@ -119,50 +114,48 @@ function WalletContent() {
         walletAPI.getGoldPickupAddress(),
         depositAccountsAPI.getActiveAccounts().catch(() => []),
       ]);
-      
+
       setWallet(walletData);
       setCards(cardsData);
       setWithdrawalRequests(withdrawalData);
       setDepositRequests(depositData);
       setGoldPickupAddress(addressData.address || "");
       setDepositAccounts(accountsData);
-      if (accountsData.length > 0 && !selectedDepositAccountId) {
-        setSelectedDepositAccountId(accountsData[0].id);
+      if (accountsData.length > 0) {
+        setSelectedDepositAccountId((prev) => prev ?? accountsData[0].id);
       }
-      
-      // انتخاب کارت پیش‌فرض
-      if (cardsData.length > 0 && !selectedCardId) {
-        const activeCard = cardsData.find(c => c.is_active);
-        setSelectedCardId(activeCard ? activeCard.id : cardsData[0].id);
+      if (cardsData.length > 0) {
+        setSelectedCardId((prev) => {
+          if (prev) return prev;
+          const activeCard = cardsData.find((c) => c.is_active);
+          return activeCard ? activeCard.id : cardsData[0].id;
+        });
       }
-    } catch (error: any) {
-      console.error('Error fetching wallet data:', error);
-      toast.error("خطا در دریافت اطلاعات کیف پول");
+    } catch (error: unknown) {
+      console.error("Error fetching wallet data:", error);
+      if (!silent) toast.error("خطا در دریافت اطلاعات کیف پول");
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
-  };
+  }, []);
+
+  const refreshWalletSilently = useCallback(async () => {
+    await fetchWalletData(true);
+    await loadPendingPurchase();
+    await refreshUser();
+  }, [fetchWalletData, loadPendingPurchase, refreshUser]);
+
+  useVisibilityPolling(refreshWalletSilently, { interval: 20000 });
+
+  // بارگذاری اولیه
+  useEffect(() => {
+    fetchWalletData();
+    loadPendingPurchase();
+  }, [fetchWalletData, loadPendingPurchase]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success("کپی شد");
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const prepared = await prepareImageForUpload(file, "document");
-    if (!prepared.ok || !prepared.file) {
-      setReceiptFile(null);
-      setReceiptImage(null);
-      toast.error(prepared.message || "فایل نامعتبر است", { duration: 5000 });
-      e.target.value = "";
-      return;
-    }
-
-    setReceiptFile(prepared.file);
-    setReceiptImage(URL.createObjectURL(prepared.file));
   };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -243,19 +236,13 @@ function WalletContent() {
 
     setIsSubmitting(true);
     try {
-      const prepared = await prepareImageForUpload(receiptFile, "document");
-      if (!prepared.ok || !prepared.file) {
-        toast.error(prepared.message || "خطا در پردازش تصویر", { duration: 6000 });
-        return;
-      }
-
       const gregorianDate = depositDate.toDate().toISOString().split("T")[0];
       await walletAPI.createDepositRequest({
         amount: amountValue,
         deposit_account_id: selectedDepositAccountId,
         tracking_number: trackingNumber.trim(),
         deposit_date: gregorianDate,
-        receipt_image: prepared.file,
+        receipt_image: receiptFile,
         pending_purchase_id:
           activePendingPurchase?.status === "AWAITING_DEPOSIT"
             ? activePendingPurchase.id
@@ -269,7 +256,6 @@ function WalletContent() {
       setDepositDate(null);
       setReceiptFile(null);
       setReceiptImage(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
       await fetchWalletData();
       await loadPendingPurchase();
       await refreshUser();
@@ -684,42 +670,19 @@ function WalletContent() {
                          />
                        </div>
 
-                       <div>
-                         <label className="block text-xs font-bold text-gray-600 mb-2">تصویر فیش ({MAX_IMAGE_SIZE_LABEL})</label>
-                         <input
-                           ref={fileInputRef}
-                           type="file"
-                           accept={IMAGE_FILE_ACCEPT}
-                           className="hidden"
-                           onChange={async (e) => {
-                             const file = e.target.files?.[0];
-                             if (!file) return;
-                             const prepared = await prepareImageForUpload(file, "document");
-                             if (!prepared.ok || !prepared.file) {
-                               toast.error(prepared.message || "فایل نامعتبر است", { duration: 6000 });
-                               if (fileInputRef.current) fileInputRef.current.value = "";
-                               return;
-                             }
-                             setReceiptFile(prepared.file);
-                             setReceiptImage(URL.createObjectURL(prepared.file));
-                           }}
-                         />
-                         <button
-                           type="button"
-                           onClick={() => fileInputRef.current?.click()}
-                           className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-xl py-6 hover:border-gold-400 hover:bg-gold-50/50 transition-colors"
-                         >
-                           {receiptImage ? (
-                             <img src={receiptImage} alt="فیش" className="max-h-32 rounded-lg object-contain" />
-                           ) : (
-                             <>
-                               <UploadCloud size={28} className="text-gray-400" />
-                               <span className="text-xs font-bold text-gray-500">انتخاب تصویر فیش</span>
-                             </>
-                           )}
-                         </button>
-                         <ImageCompressHelp />
-                       </div>
+                       <ImageUploadZone
+                         purpose="document"
+                         file={receiptFile}
+                         previewUrl={receiptImage}
+                         label="تصویر فیش"
+                         emptyHint="انتخاب تصویر فیش واریزی"
+                         onFileChange={(file, url) => {
+                           setReceiptFile(file);
+                           setReceiptImage(url);
+                         }}
+                         onError={(msg) => toast.error(msg, { duration: 6000 })}
+                       />
+                       <ImageCompressHelp />
 
                        <Button 
                          variant="primary" 

@@ -11,12 +11,14 @@ import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import StatsCard from "@/components/admin/StatsCard";
 import { toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
-import { IMAGE_FILE_ACCEPT, MAX_IMAGE_SIZE_LABEL, prepareImageForUpload, type ImageUploadErrorReason } from "@/lib/utils/imageUpload";
+import { type ImageUploadErrorReason } from "@/lib/utils/imageUpload";
 import ImageCompressHelp from "@/components/ui/ImageCompressHelp";
 import { adminWalletAPI, WithdrawalRequest, DepositRequest } from "@/lib/api/auth";
 import { tradesAPI, PendingPurchase } from "@/lib/api/trades";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import DepositDetailModalNew from "@/components/admin/DepositDetailModalNew";
+import ImageUploadZone from "@/components/ui/ImageUploadZone";
 
 export default function FinancePage() {
   const [activeTab, setActiveTab] = useState<"rial" | "gold" | "deposit">("rial");
@@ -29,6 +31,7 @@ export default function FinancePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState<number | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(null);
   const [receiptUploadError, setReceiptUploadError] = useState<ImageUploadErrorReason | null>(null);
   const [rejectNote, setRejectNote] = useState("");
   const [pendingPurchases, setPendingPurchases] = useState<PendingPurchase[]>([]);
@@ -49,11 +52,11 @@ export default function FinancePage() {
   };
 
   // بارگذاری درخواست‌ها
-  const fetchRequests = useCallback(async () => {
-    setIsLoading(true);
+  const fetchRequests = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       if (activeTab === 'deposit') {
-        const params: any = {};
+        const params: Record<string, string> = {};
         if (statusFilter !== 'all') {
           params.status = statusFilter;
         }
@@ -66,7 +69,7 @@ export default function FinancePage() {
           setPendingPurchases([]);
         }
       } else {
-        const params: any = {
+        const params: Record<string, string> = {
           type: activeTab === 'rial' ? 'RIAL' : 'GOLD',
         };
         if (statusFilter !== 'all') {
@@ -75,13 +78,17 @@ export default function FinancePage() {
         const data = await adminWalletAPI.getWithdrawalRequests(params);
         setWithdrawalRequests(data);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching requests:', error);
-      toast.error(activeTab === 'deposit' ? "خطا در دریافت درخواست‌های واریز" : "خطا در دریافت درخواست‌های برداشت");
+      if (!silent) {
+        toast.error(activeTab === 'deposit' ? "خطا در دریافت درخواست‌های واریز" : "خطا در دریافت درخواست‌های برداشت");
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, [activeTab, statusFilter]);
+
+  useVisibilityPolling(() => fetchRequests(true), { interval: 25000 });
 
   useEffect(() => {
     fetchRequests();
@@ -213,18 +220,12 @@ export default function FinancePage() {
       return;
     }
 
-    const prepared = await prepareImageForUpload(receiptFile, "document");
-    if (!prepared.ok || !prepared.file) {
-      setReceiptUploadError(prepared.reason || "general");
-      toast.error(prepared.message || "فایل نامعتبر است");
-      return;
-    }
-
     setIsProcessing(request.id);
     try {
-      await adminWalletAPI.uploadReceipt(request.id, prepared.file);
+      await adminWalletAPI.uploadReceipt(request.id, receiptFile);
       toast.success("فیش واریزی با موفقیت آپلود شد");
       setReceiptFile(null);
+      setReceiptPreviewUrl(null);
       setReceiptUploadError(null);
       await fetchRequests();
       if (selectedRequest?.id === request.id) {
@@ -739,6 +740,7 @@ export default function FinancePage() {
                 setIsDetailModalOpen(false);
                 setSelectedRequest(null);
                 setReceiptFile(null);
+                setReceiptPreviewUrl(null);
                 setReceiptUploadError(null);
                 setRejectNote("");
               }}
@@ -748,6 +750,8 @@ export default function FinancePage() {
               onCompleteGold={handleCompleteGoldWithdrawal}
               receiptFile={receiptFile}
               setReceiptFile={setReceiptFile}
+              receiptPreviewUrl={receiptPreviewUrl}
+              setReceiptPreviewUrl={setReceiptPreviewUrl}
               receiptUploadError={receiptUploadError}
               setReceiptUploadError={setReceiptUploadError}
               rejectNote={rejectNote}
@@ -1020,6 +1024,8 @@ function WithdrawalDetailModal({
   onCompleteGold,
   receiptFile,
   setReceiptFile,
+  receiptPreviewUrl,
+  setReceiptPreviewUrl,
   receiptUploadError,
   setReceiptUploadError,
   rejectNote,
@@ -1035,6 +1041,8 @@ function WithdrawalDetailModal({
   onCompleteGold: (request: WithdrawalRequest) => void;
   receiptFile: File | null;
   setReceiptFile: (file: File | null) => void;
+  receiptPreviewUrl: string | null;
+  setReceiptPreviewUrl: (url: string | null) => void;
   receiptUploadError: ImageUploadErrorReason | null;
   setReceiptUploadError: (reason: ImageUploadErrorReason | null) => void;
   rejectNote: string;
@@ -1429,42 +1437,25 @@ function WithdrawalDetailModal({
                     />
                   </div>
                 ) : request.status === 'APPROVED' || request.status === 'COMPLETED' ? (
-                  <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
-                    <div className="flex items-center gap-3 mb-4">
-                      <input
-                        type="file"
-                        accept={IMAGE_FILE_ACCEPT}
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          const prepared = await prepareImageForUpload(file, "document");
-                          if (!prepared.ok || !prepared.file) {
-                            setReceiptFile(null);
-                            setReceiptUploadError(prepared.reason || "general");
-                            toast.error(prepared.message || "فایل نامعتبر است", { duration: 5000 });
-                            e.target.value = "";
-                            return;
-                          }
-                          setReceiptUploadError(null);
-                          setReceiptFile(prepared.file);
-                        }}
-                        className="hidden"
-                        id="receipt-upload"
-                      />
-                      <label
-                        htmlFor="receipt-upload"
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-bold text-white cursor-pointer transition-colors"
-                      >
-                        <Upload size={16} />
-                        انتخاب فایل فیش
-                      </label>
-                      {receiptFile && (
-                        <span className="text-sm text-slate-300">{receiptFile.name}</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-400 mb-3">
-                      فرمت مجاز: JPG، PNG، WebP، HEIC (آیفون) — حداکثر {MAX_IMAGE_SIZE_LABEL}
-                    </p>
+                  <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
+                    <ImageUploadZone
+                      purpose="document"
+                      variant="dark"
+                      file={receiptFile}
+                      previewUrl={receiptPreviewUrl}
+                      emptyHint="انتخاب فایل فیش واریزی"
+                      onFileChange={(file, url) => {
+                        setReceiptFile(file);
+                        setReceiptPreviewUrl(url);
+                        if (file) setReceiptUploadError(null);
+                      }}
+                      onError={(msg) => {
+                        setReceiptFile(null);
+                        setReceiptPreviewUrl(null);
+                        setReceiptUploadError("general");
+                        toast.error(msg, { duration: 5000 });
+                      }}
+                    />
                     {receiptUploadError && (
                       <ImageCompressHelp reason={receiptUploadError} variant="dark" compact />
                     )}

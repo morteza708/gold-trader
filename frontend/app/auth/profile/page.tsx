@@ -1,22 +1,20 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   User,
   CreditCard,
   Calendar as CalendarIcon,
-  UploadCloud,
-  CheckCircle2,
-  X,
   Info,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import toast from "react-hot-toast";
 import { toEnglishDigits, toPersianDigits } from "@/lib/utils/numberUtils";
-import { IMAGE_FILE_ACCEPT, MAX_IMAGE_SIZE_LABEL, prepareImageForUpload } from "@/lib/utils/imageUpload";
+import { MAX_IMAGE_SIZE_LABEL } from "@/lib/utils/imageUpload";
 import ImageCompressHelp from "@/components/ui/ImageCompressHelp";
+import ImageUploadZone from "@/components/ui/ImageUploadZone";
 import { useAuth } from "@/contexts/AuthContext";
 
 import DatePicker, { DateObject } from "react-multi-date-picker";
@@ -34,7 +32,6 @@ type FieldErrors = {
 export default function ProfilePage() {
   const router = useRouter();
   const { user, completeProfile, isLoading: authLoading } = useAuth();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState<{
     firstName: string;
@@ -50,7 +47,6 @@ export default function ProfilePage() {
 
   const [nationalCard, setNationalCard] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewFailed, setPreviewFailed] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [uploadHelpReason, setUploadHelpReason] = useState<"size" | "format" | "general" | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -90,38 +86,21 @@ export default function ProfilePage() {
     setFormData((prev) => ({ ...prev, [name]: finalValue }));
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const prepared = await prepareImageForUpload(file, "document");
-    if (!prepared.ok || !prepared.file) {
-      setNationalCard(null);
-      setPreviewUrl(null);
-      setPreviewFailed(false);
-      setUploadHelpReason(prepared.reason || "general");
-      setFieldErrors((prev) => ({
-        ...prev,
-        nationalCard: prepared.message || "فایل نامعتبر است",
-      }));
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      toast.error(prepared.message || "فایل نامعتبر است", { duration: 5000 });
+  const handleFileChange = (file: File | null, url: string | null) => {
+    if (!file) {
+      removeImage();
       return;
     }
-
     clearFieldError("nationalCard");
     setUploadHelpReason(null);
-    setPreviewFailed(false);
-    setNationalCard(prepared.file);
-    setPreviewUrl(URL.createObjectURL(prepared.file));
+    setNationalCard(file);
+    setPreviewUrl(url);
   };
 
   const removeImage = () => {
     setNationalCard(null);
     setPreviewUrl(null);
-    setPreviewFailed(false);
     setUploadHelpReason(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const validateForm = (): FieldErrors => {
@@ -390,57 +369,30 @@ export default function ProfilePage() {
             </p>
           </div>
 
-          {!previewUrl ? (
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group text-center ${
-                fieldErrors.nationalCard
-                  ? "border-red-300 bg-red-50/30 hover:border-red-400"
-                  : "border-gray-300 hover:border-gold-500 hover:bg-gold-50/20"
-              }`}
-            >
-              <div className="w-12 h-12 bg-gray-100 group-hover:bg-gold-100 rounded-full flex items-center justify-center text-gray-400 group-hover:text-gold-600 mb-3 transition-colors">
-                <UploadCloud size={24} />
-              </div>
-              <p className="text-gray-700 font-bold text-sm">کلیک کنید یا تصویر را اینجا رها کنید</p>
-              <p className="text-gray-400 text-xs mt-1">
-                حداکثر {MAX_IMAGE_SIZE_LABEL} — JPG، PNG، WebP، HEIC
-              </p>
-            </div>
-          ) : (
-            <div
-              className={`relative border-2 rounded-xl overflow-hidden p-1 bg-white shadow-md ${
-                fieldErrors.nationalCard ? "border-red-400" : "border-gold-500"
-              }`}
-            >
-              {previewFailed ? (
-                <div className="w-full h-48 rounded-lg bg-gray-50 flex items-center justify-center text-xs text-gray-500 px-4 text-center">
-                  فایل انتخاب شد: {nationalCard?.name || "عکس کارت ملی"}
-                  <br />
-                  (پیش‌نمایش در این مرورگر در دسترس نیست؛ آپلود مشکلی ندارد)
-                </div>
-              ) : (
-                <img
-                  src={previewUrl}
-                  alt="Preview"
-                  className="w-full h-48 object-cover rounded-lg bg-gray-50"
-                  onError={() => setPreviewFailed(true)}
-                />
-              )}
+          <ImageUploadZone
+            purpose="document"
+            file={nationalCard}
+            previewUrl={previewUrl}
+            error={!!fieldErrors.nationalCard}
+            emptyHint="کلیک کنید یا تصویر کارت ملی را انتخاب کنید"
+            onFileChange={handleFileChange}
+            onError={(msg) => {
+              setNationalCard(null);
+              setPreviewUrl(null);
+              setUploadHelpReason("general");
+              setFieldErrors((prev) => ({ ...prev, nationalCard: msg }));
+              toast.error(msg, { duration: 5000 });
+            }}
+          />
 
-              <button
-                type="button"
-                onClick={removeImage}
-                className="absolute top-3 left-3 bg-red-500 text-white p-1.5 rounded-full hover:bg-red-600 transition-colors shadow-lg z-10"
-              >
-                <X size={16} />
-              </button>
-
-              <div className="absolute bottom-3 right-3 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg z-10">
-                <CheckCircle2 size={12} />
-                آماده آپلود
-              </div>
-            </div>
+          {nationalCard && (
+            <button
+              type="button"
+              onClick={removeImage}
+              className="mt-2 text-xs font-bold text-red-500 hover:text-red-600"
+            >
+              حذف تصویر انتخاب‌شده
+            </button>
           )}
 
           {fieldErrors.nationalCard && (
@@ -450,14 +402,6 @@ export default function ProfilePage() {
           {(uploadHelpReason || fieldErrors.nationalCard) && (
             <ImageCompressHelp reason={uploadHelpReason || "general"} />
           )}
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            className="hidden"
-            accept={IMAGE_FILE_ACCEPT}
-          />
         </div>
 
         <Button
