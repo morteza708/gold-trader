@@ -5,13 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
   Home, User, Wallet as WalletIcon, History, Info, FileText, Bell, Menu as MenuIcon, X, Zap, LogOut,
-  CheckCircle2, AlertCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
 import { useTradesStatus } from "@/hooks/useTradesStatus";
+import MarketStatusBanner from "@/components/dashboard/MarketStatusBanner";
 import { walletAPI, Wallet } from "@/lib/api/auth";
 import NotificationPermission from "@/components/PWA/NotificationPermission";
 import NotificationBell from "@/components/dashboard/NotificationBell";
@@ -46,42 +46,14 @@ const menuItems = [
   { name: "درباره ما", href: "/dashboard/about", icon: Info },
 ];
 
-// کامپوننت نوار وضعیت معاملات
+// کامپوننت نوار وضعیت بازار
 function TradesStatusBar() {
   const { status: tradesStatus, loading } = useTradesStatus(5000);
 
-  if (loading) {
-    return null; // یا می‌توانید یک loading state نمایش دهید
-  }
-
-  if (tradesStatus?.trades_enabled) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-green-500/20 to-green-600/10 text-green-700 dark:text-green-400 text-center text-xs font-bold py-2.5 border-b border-green-500/30 relative overflow-hidden"
-      >
-        <div className="absolute inset-0 bg-green-500/5 animate-pulse"></div>
-        <div className="relative z-10 flex items-center justify-center gap-2">
-          <CheckCircle2 size={16} className="text-green-600 dark:text-green-400" />
-          <span>بازار باز است. معاملات انجام می‌شود.</span>
-        </div>
-      </motion.div>
-    );
-  }
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-gradient-to-r from-red-500 to-red-600 text-white text-center text-xs font-bold py-3 border-b border-red-600 shadow-lg relative z-10 overflow-hidden"
-    >
-      <div className="absolute inset-0 bg-red-500/20 animate-pulse"></div>
-      <div className="relative z-10 flex items-center justify-center gap-2">
-        <AlertCircle size={16} className="animate-pulse" />
-        <span>معاملات غیرفعال است. در حال حاضر امکان ثبت معامله وجود ندارد. لطفاً بعداً تلاش کنید.</span>
-      </div>
-    </motion.div>
+    <div className="px-3 sm:px-4 pt-3 pb-1">
+      <MarketStatusBanner status={tradesStatus} loading={loading} compact />
+    </div>
   );
 }
 

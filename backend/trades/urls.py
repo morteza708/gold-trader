@@ -25,6 +25,7 @@ urlpatterns = [
     # Admin Endpoints
     path('admin/trades/status/', views.admin_get_trades_status, name='admin-get-trades-status'),
     path('admin/trades/status/toggle/', views.admin_toggle_trades_status, name='admin-toggle-trades-status'),
+    path('admin/trades/market-control/', views.admin_update_market_control, name='admin-market-control'),
     path('admin/trades/price/current/', views.admin_get_current_price, name='admin-get-current-price'),
     path('admin/trades/price/update/', views.admin_update_price, name='admin-update-price'),
     path('admin/trades/price/history/', views.admin_get_price_history, name='admin-get-price-history'),

@@ -44,6 +44,14 @@ class PendingPurchaseService:
     )
 
     @staticmethod
+    def resume_orders_after_pending_purchase(user: CustomUser):
+        Order.objects.filter(
+            user=user,
+            status='SUSPENDED',
+            suspended_reason=Order.SUSPENDED_REASON_PENDING_PURCHASE,
+        ).update(status='PENDING', suspended_reason='')
+
+    @staticmethod
     def get_active_for_user(user: CustomUser):
         return (
             PendingPurchase.objects
@@ -78,7 +86,7 @@ class PendingPurchaseService:
         from wallet.tasks import send_sms_async
 
         TradeService = __import__('trades.services', fromlist=['TradeService']).TradeService
-        TradeService.check_trades_enabled()
+        TradeService.check_side_enabled('BUY')
 
         gold_amount = Decimal(str(gold_amount)).quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
         if gold_amount <= 0:
@@ -140,7 +148,10 @@ class PendingPurchaseService:
         )
 
         # تعلیق سفارش‌های limit باز کاربر برای جلوگیری از تداخل
-        Order.objects.filter(user=user, status='PENDING').update(status='SUSPENDED')
+        Order.objects.filter(user=user, status='PENDING').update(
+            status='SUSPENDED',
+            suspended_reason=Order.SUSPENDED_REASON_PENDING_PURCHASE,
+        )
 
         # نوتیفیکیشن کاربر
         create_notification(
@@ -338,6 +349,7 @@ class PendingPurchaseService:
                 exc_info=True,
             )
 
+        PendingPurchaseService.resume_orders_after_pending_purchase(pending.user)
         return pending
 
     @staticmethod
@@ -374,6 +386,7 @@ class PendingPurchaseService:
             related_object_type='pending_purchase',
             related_object_id=pending.id,
         )
+        PendingPurchaseService.resume_orders_after_pending_purchase(user)
         return pending
 
     @staticmethod
@@ -404,6 +417,7 @@ class PendingPurchaseService:
             related_object_type='pending_purchase',
             related_object_id=pending.id,
         )
+        PendingPurchaseService.resume_orders_after_pending_purchase(pending.user)
         return True
 
     @staticmethod

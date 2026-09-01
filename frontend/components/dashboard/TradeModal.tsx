@@ -15,10 +15,18 @@ interface TradeModalProps {
   isOpen: boolean;
   onClose: () => void;
   price: number;
-  tradesEnabled?: boolean;
+  buyEnabled?: boolean;
+  sellEnabled?: boolean;
 }
 
-export default function TradeModal({ type, isOpen, onClose, price, tradesEnabled = true }: TradeModalProps) {
+export default function TradeModal({
+  type,
+  isOpen,
+  onClose,
+  price,
+  buyEnabled = true,
+  sellEnabled = true,
+}: TradeModalProps) {
   const router = useRouter();
   const [weight, setWeight] = useState("");
   const [totalPrice, setTotalPrice] = useState("");
@@ -96,12 +104,18 @@ export default function TradeModal({ type, isOpen, onClose, price, tradesEnabled
   const shortfall = type === "buy" ? Math.max(0, neededTotal - availableRial) : 0;
   const needsPendingSettlement = type === "buy" && neededTotal > 0 && shortfall > 0;
 
+  const sideEnabled = type === "buy" ? buyEnabled : sellEnabled;
+
   const handleSubmit = async () => {
     if (!weight || !totalPrice) {
       return toast.error("لطفا مبلغ یا وزن را وارد کنید");
     }
-    if (!tradesEnabled) {
-      return toast.error("معاملات در حال حاضر غیرفعال است");
+    if (!sideEnabled) {
+      return toast.error(
+        type === "buy"
+          ? "خرید در حال حاضر غیرفعال است — فقط فروش امکان‌پذیر است"
+          : "فروش در حال حاضر غیرفعال است — فقط خرید امکان‌پذیر است"
+      );
     }
     if (hasActivePending) {
       return toast.error("شما یک خرید در انتظار تسویه دارید. ابتدا آن را تکمیل یا لغو کنید.");
@@ -307,15 +321,23 @@ export default function TradeModal({ type, isOpen, onClose, price, tradesEnabled
             </div>
           </div>
 
+          {!sideEnabled && (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 leading-relaxed">
+              {type === "buy"
+                ? "ثبت خرید جدید (فوری و معلق) در حال حاضر غیرفعال است."
+                : "ثبت فروش جدید در حال حاضر غیرفعال است."}
+            </div>
+          )}
+
           <Button
             onClick={handleSubmit}
-            disabled={isLoading || !totalPrice || !tradesEnabled || hasActivePending}
+            disabled={isLoading || !totalPrice || !sideEnabled || hasActivePending}
             className={`w-full mt-6 py-4 text-lg justify-center shadow-lg hover:shadow-xl transition-shadow ${
               type === "buy" ? "!bg-green-500 hover:!bg-green-600" : "!bg-red-500 hover:!bg-red-600"
             } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
-            {!tradesEnabled
-              ? "معاملات غیرفعال است"
+            {!sideEnabled
+              ? type === "buy" ? "خرید غیرفعال است" : "فروش غیرفعال است"
               : isLoading
                 ? "در حال پردازش..."
                 : needsPendingSettlement

@@ -386,10 +386,17 @@ class Order(models.Model):
     ]
     STATUS_CHOICES = [
         ('PENDING', 'در انتظار'),
-        ('SUSPENDED', 'معلق'),  # وقتی معاملات خاموش می‌شود
+        ('SUSPENDED', 'معلق'),
         ('EXECUTED', 'اجرا شده'),
         ('CANCELLED', 'لغو شده'),
         ('EXPIRED', 'منقضی شده'),
+    ]
+    SUSPENDED_REASON_KILL_SWITCH = 'KILL_SWITCH'
+    SUSPENDED_REASON_PENDING_PURCHASE = 'PENDING_PURCHASE'
+    SUSPENDED_REASON_CHOICES = [
+        ('', '—'),
+        (SUSPENDED_REASON_KILL_SWITCH, 'kill switch'),
+        (SUSPENDED_REASON_PENDING_PURCHASE, 'خرید معلق'),
     ]
     
     user = models.ForeignKey(
@@ -423,6 +430,13 @@ class Order(models.Model):
         default='PENDING',
         verbose_name='وضعیت',
         db_index=True
+    )
+    suspended_reason = models.CharField(
+        max_length=32,
+        choices=SUSPENDED_REASON_CHOICES,
+        blank=True,
+        default='',
+        verbose_name='دلیل تعلیق',
     )
     executed_trade = models.OneToOneField(
         'Trade',

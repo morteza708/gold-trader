@@ -34,8 +34,10 @@ class GoldPriceSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         """فقط قیمت‌های نهایی را نمایش می‌دهد"""
         from settings.models import SystemSettings
-        
+        from settings.market_status import build_market_status_payload
+
         settings = SystemSettings.get_settings()
+        market = build_market_status_payload(settings)
 
         def as_int(value):
             return None if value is None else int(value)
@@ -48,7 +50,7 @@ class GoldPriceSerializer(serializers.ModelSerializer):
         return {
             'buy': instance.buy_final_price,
             'sell': instance.sell_final_price,
-            'trades_enabled': settings.trades_enabled,
+            **market,
             'updated_at': instance.created_at.isoformat(),
             'created_at_jalali': self.get_created_at_jalali(instance),
             'last_synced_at': synced.isoformat() if synced else None,

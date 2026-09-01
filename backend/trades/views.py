@@ -66,17 +66,13 @@ def get_current_price(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_trades_status(request):
-    """
-    دریافت وضعیت معاملات
-    """
+    """دریافت وضعیت بازار (خرید/فروش جداگانه)"""
     try:
         from settings.models import SystemSettings
+        from settings.market_status import build_market_status_payload
+
         settings = SystemSettings.get_settings()
-        
-        return Response({
-            'trades_enabled': settings.trades_enabled,
-            'message': 'معاملات فعال است' if settings.trades_enabled else 'معاملات غیرفعال است'
-        }, status=status.HTTP_200_OK)
+        return Response(build_market_status_payload(settings), status=status.HTTP_200_OK)
     except Exception as e:
         return Response(
             {'error': f'خطای سرور: {str(e)}'},
@@ -527,23 +523,27 @@ def download_invoice_pdf(request, trade_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_get_trades_status(request):
-    """
-    دریافت وضعیت معاملات (Admin)
-    """
+    """دریافت وضعیت بازار (Admin)"""
     try:
         if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
             return Response(
                 {'error': 'شما دسترسی به این بخش ندارید'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         from settings.models import SystemSettings
+        from settings.market_status import build_market_status_payload
+        from trades.models import Order
+
         settings = SystemSettings.get_settings()
-        
-        return Response({
-            'trades_enabled': settings.trades_enabled,
-            'message': 'معاملات فعال است' if settings.trades_enabled else 'معاملات غیرفعال است'
-        }, status=status.HTTP_200_OK)
+        payload = build_market_status_payload(settings)
+        payload['suspended_buy_orders'] = Order.objects.filter(
+            status='SUSPENDED', order_type='BUY_LIMIT', suspended_reason=Order.SUSPENDED_REASON_KILL_SWITCH
+        ).count()
+        payload['suspended_sell_orders'] = Order.objects.filter(
+            status='SUSPENDED', order_type='SELL_LIMIT', suspended_reason=Order.SUSPENDED_REASON_KILL_SWITCH
+        ).count()
+        return Response(payload, status=status.HTTP_200_OK)
     except Exception as e:
         return Response(
             {'error': f'خطای سرور: {str(e)}'},
@@ -554,29 +554,57 @@ def admin_get_trades_status(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def admin_toggle_trades_status(request):
-    """
-    تغییر وضعیت معاملات (Admin)
-    """
+    """Deprecated — هر دو side با هم (سازگاری عقب‌رو)"""
     try:
         if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
             return Response(
                 {'error': 'شما دسترسی به این بخش ندارید'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
         enabled = request.data.get('enabled', False)
-        
         result = TradeService.toggle_trades_status(enabled)
-        
-        return Response({
-            'trades_enabled': enabled,
-            'message': result['message'],
-            'suspended_orders': result.get('suspended_orders', 0),
-            'resumed_orders': result.get('resumed_orders', 0),
-        }, status=status.HTTP_200_OK)
+
+        return Response(result, status=status.HTTP_200_OK)
     except Exception as e:
         import traceback
         print(f"خطا در admin_toggle_trades_status: {e}")
+        print(traceback.format_exc())
+        return Response(
+            {'error': f'خطای سرور: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_update_market_control(request):
+    """تغییر وضعیت خرید/فروش به‌صورت جداگانه"""
+    try:
+        if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
+            return Response(
+                {'error': 'شما دسترسی به این بخش ندارید'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        buy_enabled = request.data.get('buy_enabled')
+        sell_enabled = request.data.get('sell_enabled')
+        if buy_enabled is None or sell_enabled is None:
+            return Response(
+                {'error': 'buy_enabled و sell_enabled الزامی هستند'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        admin_notice = request.data.get('admin_notice')
+        result = TradeService.update_market_control(
+            buy_enabled=bool(buy_enabled),
+            sell_enabled=bool(sell_enabled),
+            admin_notice=admin_notice if admin_notice is not None else None,
+        )
+        return Response(result, status=status.HTTP_200_OK)
+    except Exception as e:
+        import traceback
+        print(f"خطا در admin_update_market_control: {e}")
         print(traceback.format_exc())
         return Response(
             {'error': f'خطای سرور: {str(e)}'},

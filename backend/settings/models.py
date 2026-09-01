@@ -14,10 +14,26 @@ class SystemSettings(models.Model):
         verbose_name='آدرس مراجعه حضوری',
         help_text='آدرس مراجعه حضوری برای دریافت طلا'
     )
+    buy_enabled = models.BooleanField(
+        default=True,
+        verbose_name='فعال بودن خرید',
+        help_text='خرید فوری، سفارش limit خرید و ثبت خرید معلق جدید',
+    )
+    sell_enabled = models.BooleanField(
+        default=True,
+        verbose_name='فعال بودن فروش',
+        help_text='فروش فوری و سفارش limit فروش',
+    )
+    market_admin_notice = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='پیام عمومی بازار برای کاربران',
+        help_text='اختیاری — در بنر وضعیت بازار به کاربر نمایش داده می‌شود',
+    )
     trades_enabled = models.BooleanField(
         default=True,
-        verbose_name='فعال بودن معاملات',
-        help_text='اگر فعال باشد، کاربران می‌توانند معامله انجام دهند'
+        verbose_name='فعال بودن معاملات (قدیمی)',
+        help_text='Deprecated — از buy_enabled و sell_enabled استفاده کنید',
     )
     pending_purchase_expiry_hours = models.PositiveIntegerField(
         default=4,

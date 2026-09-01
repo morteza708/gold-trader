@@ -15,7 +15,6 @@ import { toPersianDigits, toEnglishDigits, validateMobile } from "@/lib/utils/nu
 import { systemSettingsAPI, depositAccountsAPI, DepositAccount } from "@/lib/api/auth";
 import { adminTradesAPI, GoldPriceAdmin } from "@/lib/api/trades";
 import { useGoldPrice } from "@/hooks/useGoldPrice";
-import { useTradesStatus } from "@/hooks/useTradesStatus";
 
 // تایپ‌ها (DepositAccount از API import شده است)
 
@@ -32,7 +31,6 @@ export default function SystemSettingsPage() {
 
   // تنظیمات قیمت
   const { prices } = useGoldPrice(5000);
-  const { status: tradesStatus } = useTradesStatus(5000);
   const [currentPrice, setCurrentPrice] = useState<GoldPriceAdmin | null>(null);
   const [priceSettings, setPriceSettings] = useState({
     buyBasePrice: 0,
@@ -42,9 +40,6 @@ export default function SystemSettingsPage() {
   });
   const [isLoadingPrice, setIsLoadingPrice] = useState(true);
   const [isUpdatingPrice, setIsUpdatingPrice] = useState(false);
-  const [isTogglingTrades, setIsTogglingTrades] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [pendingStatus, setPendingStatus] = useState<boolean | null>(null);
   const [liveFeedEnabled, setLiveFeedEnabled] = useState(false);
 
   // حساب‌های بانکی واریز
@@ -144,59 +139,6 @@ export default function SystemSettingsPage() {
     } finally {
       setIsUpdatingPrice(false);
     }
-  };
-
-  const handleToggleTradesStatus = () => {
-    if (isTogglingTrades) return;
-    
-    const newStatus = !tradesStatus?.trades_enabled;
-    setPendingStatus(newStatus);
-    
-    // نمایش مودال تایید برای خاموش کردن
-    if (!newStatus) {
-      setShowConfirmModal(true);
-    } else {
-      // برای روشن کردن، مستقیماً اجرا می‌کنیم
-      executeToggle(newStatus);
-    }
-  };
-
-  const executeToggle = async (newStatus: boolean) => {
-    setIsTogglingTrades(true);
-    setShowConfirmModal(false);
-    
-    try {
-      const response = await adminTradesAPI.toggleTradesStatus(newStatus);
-      
-      if (newStatus) {
-        toast.success(
-          `معاملات فعال شد. ${response.resumed_orders} سفارش دوباره فعال شد.`,
-          { duration: 5000 }
-        );
-      } else {
-        toast.success(
-          `معاملات غیرفعال شد. ${response.suspended_orders} سفارش معلق شد.`,
-          { duration: 5000 }
-        );
-      }
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.error || 'خطا در تغییر وضعیت معاملات';
-      toast.error(errorMessage);
-    } finally {
-      setIsTogglingTrades(false);
-      setPendingStatus(null);
-    }
-  };
-
-  const handleConfirm = () => {
-    if (pendingStatus !== null) {
-      executeToggle(pendingStatus);
-    }
-  };
-
-  const handleCancel = () => {
-    setShowConfirmModal(false);
-    setPendingStatus(null);
   };
 
   const handleSaveSystemSettings = async () => {
@@ -471,53 +413,10 @@ export default function SystemSettingsPage() {
                 </div>
               ) : null}
 
-              {/* وضعیت معاملات */}
-              <div className="bg-slate-900 p-6 rounded-xl border border-slate-700">
-                <h3 className="text-lg font-bold text-white mb-4">وضعیت معاملات</h3>
-                <div className={`bg-slate-800 p-4 rounded-lg border ${
-                  tradesStatus?.trades_enabled 
-                    ? "border-green-500/50 bg-green-500/5" 
-                    : "border-red-500/50 bg-red-500/5"
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className={`text-sm font-bold ${
-                          tradesStatus?.trades_enabled ? "text-green-400" : "text-red-400"
-                        }`}>
-                          {tradesStatus?.trades_enabled ? "بازار باز است" : "بازار بسته است"}
-                        </span>
-                        <span className="text-xs text-slate-500">(Kill Switch)</span>
-                      </div>
-                      <p className="text-xs text-slate-400">
-                        {tradesStatus?.trades_enabled 
-                          ? "کاربران می‌توانند معامله انجام دهند" 
-                          : "معاملات غیرفعال است و کاربران نمی‌توانند معامله انجام دهند"}
-                      </p>
-                    </div>
-                    <button
-                      onClick={handleToggleTradesStatus}
-                      disabled={isTogglingTrades}
-                      className={`px-4 py-2 rounded-xl font-bold transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                        tradesStatus?.trades_enabled
-                          ? "bg-red-500 hover:bg-red-600 text-white"
-                          : "bg-green-500 hover:bg-green-600 text-white"
-                      }`}
-                    >
-                      {isTogglingTrades ? (
-                        <>
-                          <Loader2 size={16} className="animate-spin" />
-                          در حال پردازش...
-                        </>
-                      ) : (
-                        <>
-                          <Power size={16} />
-                          {tradesStatus?.trades_enabled ? "غیرفعال کردن" : "فعال کردن"}
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
+              {/* کنترل بازار — فقط از اتاق فرمان */}
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 text-sm text-slate-400">
+                کنترل جداگانه خرید/فروش (Kill Switch) از بخش{" "}
+                <span className="text-gold-400 font-bold">اتاق فرمان</span> انجام می‌شود.
               </div>
 
               {/* فرم به‌روزرسانی قیمت */}
@@ -948,104 +847,6 @@ export default function SystemSettingsPage() {
             phoneNumber={newPhoneNumber}
             setPhoneNumber={setNewPhoneNumber}
           />
-        )}
-      </AnimatePresence>
-
-      {/* مودال تایید تغییر وضعیت معاملات */}
-      <AnimatePresence>
-        {showConfirmModal && (
-          <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
-            {/* Overlay */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={handleCancel}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-
-            {/* Modal Content */}
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-slate-800 w-full max-w-md rounded-3xl border border-slate-700 shadow-2xl relative z-10 overflow-hidden"
-            >
-              {/* Header */}
-              <div className="p-6 border-b border-slate-700 bg-red-500/10 flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
-                    <AlertTriangle className="text-red-400" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-black text-white">تایید غیرفعال کردن معاملات</h3>
-                    <p className="text-sm text-slate-400 mt-1">این عمل قابل بازگشت است</p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleCancel}
-                  className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Body */}
-              <div className="p-6 space-y-4">
-                <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="text-red-400 mt-0.5" size={20} />
-                    <div className="flex-1">
-                      <p className="text-white font-bold mb-2">توجه!</p>
-                      <p className="text-slate-300 text-sm leading-relaxed">
-                        با غیرفعال کردن معاملات:
-                      </p>
-                      <ul className="text-slate-300 text-sm mt-2 space-y-1 list-disc list-inside">
-                        <li>کاربران نمی‌توانند معامله جدید ثبت کنند</li>
-                        <li>تمام سفارشات در انتظار (Limit Orders) معلق می‌شوند</li>
-                        <li>سفارشات معلق تا زمان فعال شدن معاملات اجرا نخواهند شد</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-900 rounded-2xl p-4 border border-slate-700">
-                  <p className="text-slate-400 text-sm mb-2">آیا مطمئن هستید که می‌خواهید معاملات را غیرفعال کنید؟</p>
-                  <p className="text-white font-bold">
-                    می‌توانید در هر زمان معاملات را دوباره فعال کنید
-                  </p>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="p-6 border-t border-slate-700 flex gap-3">
-                <button
-                  onClick={handleCancel}
-                  disabled={isTogglingTrades}
-                  className="flex-1 px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  انصراف
-                </button>
-                <button
-                  onClick={handleConfirm}
-                  disabled={isTogglingTrades}
-                  className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isTogglingTrades ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      در حال پردازش...
-                    </>
-                  ) : (
-                    <>
-                      <Power size={18} />
-                      غیرفعال کردن
-                    </>
-                  )}
-                </button>
-              </div>
-            </motion.div>
-          </div>
         )}
       </AnimatePresence>
     </div>

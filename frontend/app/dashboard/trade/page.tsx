@@ -15,12 +15,16 @@ import Input from "@/components/ui/Input";
 import { tradesAPI, Order } from "@/lib/api/trades";
 import { useGoldPrice } from "@/hooks/useGoldPrice";
 import { useTradesStatus } from "@/hooks/useTradesStatus";
+import MarketStatusBanner from "@/components/dashboard/MarketStatusBanner";
+import { isBuyAllowed, isSellAllowed } from "@/lib/utils/marketStatus";
 import { toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
 import { walletAPI, Wallet } from "@/lib/api/auth";
 
 export default function TradePage() {
   const { prices, loading: priceLoading } = useGoldPrice(5000);
   const { status: tradesStatus } = useTradesStatus(5000);
+  const buyAllowed = isBuyAllowed(tradesStatus);
+  const sellAllowed = isSellAllowed(tradesStatus);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,6 +39,7 @@ export default function TradePage() {
   const [orderType, setOrderType] = useState<"BUY_LIMIT" | "SELL_LIMIT">("BUY_LIMIT");
   const [targetPrice, setTargetPrice] = useState("");
   const [amount, setAmount] = useState("");
+  const currentSideAllowed = orderType === "BUY_LIMIT" ? buyAllowed : sellAllowed;
 
   // دریافت داده‌ها
   useEffect(() => {
@@ -81,8 +86,11 @@ export default function TradePage() {
       return toast.error("لطفا قیمت هدف و مقدار را وارد کنید");
     }
 
-    if (!tradesStatus?.trades_enabled) {
-      return toast.error("معاملات در حال حاضر غیرفعال است");
+    if (orderType === "BUY_LIMIT" && !buyAllowed) {
+      return toast.error("ثبت سفارش خرید هوشمند در حال حاضر غیرفعال است");
+    }
+    if (orderType === "SELL_LIMIT" && !sellAllowed) {
+      return toast.error("ثبت سفارش فروش هوشمند در حال حاضر غیرفعال است");
     }
 
     const targetPriceNum = Number(toEnglishDigits(targetPrice).replace(/,/g, ""));
@@ -168,40 +176,23 @@ export default function TradePage() {
         </p>
       </div>
 
-      {/* نمایش وضعیت معاملات */}
-      {tradesStatus && !tradesStatus.trades_enabled && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-red-50 border-r-4 border-red-500 p-4 rounded-lg"
-        >
-          <div className="flex items-center gap-3">
-            <AlertCircle className="text-red-500" size={20} />
-            <div>
-              <p className="font-bold text-red-800">معاملات غیرفعال است</p>
-              <p className="text-sm text-red-600">
-                در حال حاضر امکان ثبت سفارش جدید وجود ندارد.
-              </p>
-            </div>
-          </div>
-        </motion.div>
-      )}
+      <MarketStatusBanner status={tradesStatus} />
 
-      {/* نمایش سفارشات معلق */}
+      {/* نمایش سفارشات معلق kill switch */}
       {orders.filter(o => o.status === "SUSPENDED").length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-yellow-50 border-r-4 border-yellow-500 p-4 rounded-lg"
+          className="bg-amber-50 border border-amber-200 p-4 rounded-2xl"
         >
           <div className="flex items-center gap-3">
-            <AlertCircle className="text-yellow-500" size={20} />
+            <AlertCircle className="text-amber-600 shrink-0" size={20} />
             <div>
-              <p className="font-bold text-yellow-800">
-                {orders.filter(o => o.status === "SUSPENDED").length} سفارش معلق است
+              <p className="font-bold text-amber-900">
+                {toPersianDigits(String(orders.filter(o => o.status === "SUSPENDED").length))} سفارش هوشمند معلق است
               </p>
-              <p className="text-sm text-yellow-600">
-                این سفارشات تا زمانی که معاملات فعال شود، اجرا نخواهند شد.
+              <p className="text-sm text-amber-800/90 mt-0.5">
+                تا فعال شدن side مربوطه (خرید یا فروش) اجرا نمی‌شوند.
               </p>
             </div>
           </div>
@@ -224,9 +215,12 @@ export default function TradePage() {
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => setOrderType("BUY_LIMIT")}
+                  onClick={() => buyAllowed && setOrderType("BUY_LIMIT")}
+                  disabled={!buyAllowed}
                   className={`p-4 rounded-2xl border-2 transition-all ${
-                    orderType === "BUY_LIMIT"
+                    !buyAllowed
+                      ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
+                      : orderType === "BUY_LIMIT"
                       ? "border-green-500 bg-green-50 text-green-700"
                       : "border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300"
                   }`}
@@ -241,9 +235,12 @@ export default function TradePage() {
                 </button>
                 
                 <button
-                  onClick={() => setOrderType("SELL_LIMIT")}
+                  onClick={() => sellAllowed && setOrderType("SELL_LIMIT")}
+                  disabled={!sellAllowed}
                   className={`p-4 rounded-2xl border-2 transition-all ${
-                    orderType === "SELL_LIMIT"
+                    !sellAllowed
+                      ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
+                      : orderType === "SELL_LIMIT"
                       ? "border-red-500 bg-red-50 text-red-700"
                       : "border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300"
                   }`}
@@ -318,7 +315,7 @@ export default function TradePage() {
             {/* دکمه ثبت */}
             <Button
               onClick={handleCreateOrder}
-              disabled={isSubmitting || !tradesStatus?.trades_enabled || !targetPrice || !amount}
+              disabled={isSubmitting || !currentSideAllowed || !targetPrice || !amount}
               className="w-full py-4 text-lg"
             >
               {isSubmitting ? "در حال ثبت..." : "ثبت سفارش"}

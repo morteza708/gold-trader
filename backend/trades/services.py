@@ -13,24 +13,58 @@ logger = logging.getLogger('trades')
 
 class TradeService:
     """سرویس معاملات"""
-    
+
+    BUY_SIDE = 'BUY'
+    SELL_SIDE = 'SELL'
+
+    @staticmethod
+    def _get_market_settings():
+        return SystemSettings.get_settings()
+
     @staticmethod
     def check_trades_enabled():
-        """
-        بررسی اینکه آیا معاملات فعال هستند یا نه
-        
-        Returns:
-            bool: True اگر معاملات فعال باشند
-        
-        Raises:
-            ValueError: اگر معاملات غیرفعال باشند
-        """
-        settings = SystemSettings.get_settings()
-        
-        if not settings.trades_enabled:
-            raise ValueError("معاملات در حال حاضر غیرفعال است. لطفاً بعداً تلاش کنید.")
-        
+        """Backward-compatible: both sides must be enabled."""
+        settings = TradeService._get_market_settings()
+        if not settings.buy_enabled or not settings.sell_enabled:
+            if not settings.buy_enabled and not settings.sell_enabled:
+                raise ValueError("معاملات در حال حاضر غیرفعال است. لطفاً بعداً تلاش کنید.")
+            if not settings.buy_enabled:
+                raise ValueError("خرید در حال حاضر غیرفعال است. فقط فروش امکان‌پذیر است.")
+            raise ValueError("فروش در حال حاضر غیرفعال است. فقط خرید امکان‌پذیر است.")
         return True
+
+    @staticmethod
+    def check_side_enabled(trade_type: str):
+        settings = TradeService._get_market_settings()
+        side = (trade_type or '').upper()
+        if side == TradeService.BUY_SIDE:
+            if not settings.buy_enabled:
+                raise ValueError("خرید در حال حاضر غیرفعال است. فقط فروش امکان‌پذیر است.")
+        elif side == TradeService.SELL_SIDE:
+            if not settings.sell_enabled:
+                raise ValueError("فروش در حال حاضر غیرفعال است. فقط خرید امکان‌پذیر است.")
+        else:
+            raise ValueError("نوع معامله نامعتبر است")
+        return True
+
+    @staticmethod
+    def check_order_type_enabled(order_type: str):
+        order_type = (order_type or '').upper()
+        if order_type == 'BUY_LIMIT':
+            return TradeService.check_side_enabled(TradeService.BUY_SIDE)
+        if order_type == 'SELL_LIMIT':
+            return TradeService.check_side_enabled(TradeService.SELL_SIDE)
+        raise ValueError("نوع سفارش نامعتبر است")
+
+    @staticmethod
+    def is_side_enabled(trade_type: str) -> bool:
+        settings = TradeService._get_market_settings()
+        side = (trade_type or '').upper()
+        if side == TradeService.BUY_SIDE:
+            return bool(settings.buy_enabled)
+        if side == TradeService.SELL_SIDE:
+            return bool(settings.sell_enabled)
+        return False
     
     @staticmethod
     def get_current_price(trade_type='BUY'):
@@ -200,8 +234,8 @@ class TradeService:
         Raises:
             ValueError: اگر معاملات غیرفعال باشند
         """
-        # 0. بررسی فعال بودن معاملات
-        TradeService.check_trades_enabled()
+        # 0. بررسی فعال بودن side
+        TradeService.check_side_enabled(trade_type)
 
         from trades.pending_purchase_service import PendingPurchaseService
         active = PendingPurchaseService.get_active_for_user(user)
@@ -303,8 +337,8 @@ class TradeService:
             price در اینجا به عنوان قیمت نهایی در نظر گرفته می‌شود (همان قیمتی که کاربر می‌بیند).
             هیچ کارمزد اضافی وجود ندارد (حاشیه سود قبلاً در قیمت نهایی است).
         """
-        # 0. بررسی فعال بودن معاملات
-        TradeService.check_trades_enabled()
+        # 0. بررسی فعال بودن side
+        TradeService.check_side_enabled(trade_type)
         
         # 1. دریافت قیمت فعلی برای محاسبه سود حاشیه
         price_obj = GoldPrice.get_current_price()
@@ -393,8 +427,7 @@ class TradeService:
         Raises:
             ValueError: اگر معاملات غیرفعال باشند
         """
-        # 0. بررسی فعال بودن معاملات
-        TradeService.check_trades_enabled()
+        TradeService.check_order_type_enabled(order_type)
 
         from trades.pending_purchase_service import PendingPurchaseService
         active = PendingPurchaseService.get_active_for_user(user)
@@ -468,13 +501,12 @@ class TradeService:
         if order.status != 'PENDING':
             return None  # فقط سفارشات در انتظار قابل اجرا هستند
         
-        # بررسی فعال بودن معاملات
-        try:
-            TradeService.check_trades_enabled()
-        except ValueError:
-            # اگر معاملات غیرفعال باشد، سفارش را معلق می‌کنیم
+        # بررسی فعال بودن side مربوط به سفارش
+        trade_side = 'BUY' if order.order_type == 'BUY_LIMIT' else 'SELL'
+        if not TradeService.is_side_enabled(trade_side):
             order.status = 'SUSPENDED'
-            order.save(update_fields=['status'])
+            order.suspended_reason = Order.SUSPENDED_REASON_KILL_SWITCH
+            order.save(update_fields=['status', 'suspended_reason'])
             return None
         
         # بررسی اینکه آیا قیمت نهایی به هدف رسیده
@@ -535,58 +567,125 @@ class TradeService:
             raise ValueError("فقط سفارشات در انتظار یا معلق قابل لغو هستند")
         
         order.status = 'CANCELLED'
+        order.suspended_reason = ''
         order.save()
         return order
     
     @staticmethod
     @transaction.atomic
+    def suspend_orders_for_side(side: str):
+        """معلق کردن سفارشات limit یک side به‌دلیل kill switch"""
+        side = (side or '').lower()
+        if side == 'buy':
+            qs = Order.objects.filter(status='PENDING', order_type='BUY_LIMIT')
+        elif side == 'sell':
+            qs = Order.objects.filter(status='PENDING', order_type='SELL_LIMIT')
+        else:
+            return 0
+
+        count = 0
+        for order in qs.iterator():
+            order.status = 'SUSPENDED'
+            order.suspended_reason = Order.SUSPENDED_REASON_KILL_SWITCH
+            order.save(update_fields=['status', 'suspended_reason', 'updated_at'])
+            count += 1
+        return count
+
+    @staticmethod
+    @transaction.atomic
+    def resume_kill_switch_orders_for_side(side: str):
+        """فعال‌سازی مجدد سفارشاتی که فقط به‌خاطر kill switch معلق شده‌اند"""
+        side = (side or '').lower()
+        filters = {
+            'status': 'SUSPENDED',
+            'suspended_reason': Order.SUSPENDED_REASON_KILL_SWITCH,
+        }
+        if side == 'buy':
+            filters['order_type'] = 'BUY_LIMIT'
+        elif side == 'sell':
+            filters['order_type'] = 'SELL_LIMIT'
+        else:
+            return 0
+
+        return Order.objects.filter(**filters).update(status='PENDING', suspended_reason='')
+
+    @staticmethod
+    @transaction.atomic
     def suspend_all_pending_orders():
-        """
-        معلق کردن همه سفارشات در انتظار (وقتی معاملات خاموش می‌شود)
-        
-        این متد باید هنگام خاموش کردن معاملات فراخوانی شود
-        """
-        suspended_count = Order.objects.filter(status='PENDING').update(status='SUSPENDED')
-        return suspended_count
-    
+        """Deprecated wrapper — هر دو side"""
+        return (
+            TradeService.suspend_orders_for_side('buy')
+            + TradeService.suspend_orders_for_side('sell')
+        )
+
     @staticmethod
     @transaction.atomic
     def resume_all_suspended_orders():
-        """
-        فعال کردن مجدد همه سفارشات معلق (وقتی معاملات روشن می‌شود)
-        
-        این متد باید هنگام روشن کردن معاملات فراخوانی شود
-        """
-        resumed_count = Order.objects.filter(status='SUSPENDED').update(status='PENDING')
-        return resumed_count
-    
+        """Deprecated wrapper — فقط سفارشات kill switch"""
+        return (
+            TradeService.resume_kill_switch_orders_for_side('buy')
+            + TradeService.resume_kill_switch_orders_for_side('sell')
+        )
+
+    @staticmethod
+    @transaction.atomic
+    def update_market_control(
+        buy_enabled: bool,
+        sell_enabled: bool,
+        admin_notice: str | None = None,
+    ):
+        settings = SystemSettings.get_settings()
+        old_buy = bool(settings.buy_enabled)
+        old_sell = bool(settings.sell_enabled)
+
+        settings.buy_enabled = buy_enabled
+        settings.sell_enabled = sell_enabled
+        settings.trades_enabled = buy_enabled and sell_enabled
+        if admin_notice is not None:
+            settings.market_admin_notice = (admin_notice or '').strip()
+        settings.save()
+
+        suspended_buy = suspended_sell = resumed_buy = resumed_sell = 0
+
+        if old_buy and not buy_enabled:
+            suspended_buy = TradeService.suspend_orders_for_side('buy')
+        elif not old_buy and buy_enabled:
+            resumed_buy = TradeService.resume_kill_switch_orders_for_side('buy')
+
+        if old_sell and not sell_enabled:
+            suspended_sell = TradeService.suspend_orders_for_side('sell')
+        elif not old_sell and sell_enabled:
+            resumed_sell = TradeService.resume_kill_switch_orders_for_side('sell')
+
+        from settings.market_status import build_market_status_payload, get_market_message
+
+        payload = build_market_status_payload(settings)
+        parts = [get_market_message(buy_enabled, sell_enabled)]
+        if suspended_buy or suspended_sell:
+            parts.append(
+                f"{suspended_buy + suspended_sell} سفارش limit معلق شد."
+            )
+        if resumed_buy or resumed_sell:
+            parts.append(
+                f"{resumed_buy + resumed_sell} سفارش limit دوباره فعال شد."
+            )
+
+        return {
+            **payload,
+            'message': ' '.join(parts),
+            'suspended_buy_orders': suspended_buy,
+            'suspended_sell_orders': suspended_sell,
+            'resumed_buy_orders': resumed_buy,
+            'resumed_sell_orders': resumed_sell,
+            'suspended_orders': suspended_buy + suspended_sell,
+            'resumed_orders': resumed_buy + resumed_sell,
+        }
+
     @staticmethod
     @transaction.atomic
     def toggle_trades_status(enabled: bool):
-        """
-        تغییر وضعیت معاملات و مدیریت سفارشات
-        
-        Args:
-            enabled: True برای فعال، False برای غیرفعال
-        """
-        settings = SystemSettings.get_settings()
-        settings.trades_enabled = enabled
-        settings.save()
-        
-        if enabled:
-            # روشن کردن: فعال کردن مجدد سفارشات معلق
-            resumed_count = TradeService.resume_all_suspended_orders()
-            return {
-                'message': f'معاملات فعال شد. {resumed_count} سفارش دوباره فعال شد.',
-                'resumed_orders': resumed_count
-            }
-        else:
-            # خاموش کردن: معلق کردن سفارشات در انتظار
-            suspended_count = TradeService.suspend_all_pending_orders()
-            return {
-                'message': f'معاملات غیرفعال شد. {suspended_count} سفارش معلق شد.',
-                'suspended_orders': suspended_count
-            }
+        """Backward-compatible toggle — هر دو side با هم"""
+        return TradeService.update_market_control(enabled, enabled)
     
     @staticmethod
     @transaction.atomic
@@ -597,40 +696,30 @@ class TradeService:
         این متد باید به صورت دوره‌ای فراخوانی شود (مثلاً هنگام به‌روزرسانی قیمت)
         """
         try:
-            # بررسی فعال بودن معاملات
-            TradeService.check_trades_enabled()
-        except ValueError:
-            # اگر معاملات غیرفعال باشد، کاری نمی‌کنیم
-            return 0
-        
-        # دریافت قیمت‌های فعلی
-        try:
             prices = TradeService.get_current_prices()
-            # استفاده از قیمت‌های نهایی برای مقایسه با target_price
             buy_final_price = prices['buy']
             sell_final_price = prices['sell']
         except ValueError:
-            # اگر قیمت تعریف نشده باشد، کاری نمی‌کنیم
             return 0
         
-        # دریافت همه سفارشات در انتظار
         pending_orders = Order.objects.filter(status='PENDING').select_related('user')
         
         executed_count = 0
         for order in pending_orders:
             try:
-                # تعیین قیمت نهایی فعلی بر اساس نوع سفارش
+                trade_side = 'BUY' if order.order_type == 'BUY_LIMIT' else 'SELL'
+                if not TradeService.is_side_enabled(trade_side):
+                    continue
+
                 if order.order_type == 'BUY_LIMIT':
                     current_final_price = buy_final_price
-                else:  # SELL_LIMIT
+                else:
                     current_final_price = sell_final_price
                 
-                # تلاش برای اجرای سفارش (current_final_price فقط برای بررسی استفاده می‌شود)
                 trade = TradeService.execute_limit_order(order, current_final_price)
                 if trade:
                     executed_count += 1
             except Exception as e:
-                # در صورت خطا، لاگ می‌کنیم و ادامه می‌دهیم
                 import traceback
                 print(f"خطا در اجرای سفارش {order.id}: {e}")
                 print(traceback.format_exc())

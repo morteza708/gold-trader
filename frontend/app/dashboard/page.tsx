@@ -15,6 +15,8 @@ import MarketSnapshotBar from "@/components/dashboard/MarketSnapshotBar";
 import WelcomeOnboardingModal from "@/components/dashboard/WelcomeOnboardingModal";
 import { useGoldPrice } from "@/hooks/useGoldPrice";
 import { useTradesStatus } from "@/hooks/useTradesStatus";
+import { isBuyAllowed, isSellAllowed } from "@/lib/utils/marketStatus";
+import toast from "react-hot-toast";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
 import { walletAPI, Wallet } from "@/lib/api/auth";
 import { tradesAPI, Trade, PendingPurchase } from "@/lib/api/trades";
@@ -22,7 +24,9 @@ import { tradesAPI, Trade, PendingPurchase } from "@/lib/api/trades";
 export default function DashboardPage() {
   const [modalType, setModalType] = useState<"buy" | "sell" | null>(null);
   const { prices, loading: priceLoading } = useGoldPrice(10000); // هر 10 ثانیه
-  const { status: tradesStatus } = useTradesStatus(15000); // هر 15 ثانیه
+  const { status: tradesStatus } = useTradesStatus(15000);
+  const buyAllowed = isBuyAllowed(tradesStatus);
+  const sellAllowed = isSellAllowed(tradesStatus);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [recentTrades, setRecentTrades] = useState<Trade[]>([]);
   const [isLoadingTrades, setIsLoadingTrades] = useState(true);
@@ -135,9 +139,26 @@ export default function DashboardPage() {
               
               {/* باکس راست: خرید (ما می‌فروشیم -> کاربر می‌خرد) */}
               <div 
-                onClick={() => setModalType("buy")}
-                className="w-full md:flex-1 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 rounded-2xl p-5 text-center cursor-pointer transition-all group relative overflow-hidden"
+                onClick={() => {
+                  if (!buyAllowed) {
+                    toast.error(tradesStatus?.message || "خرید در حال حاضر غیرفعال است");
+                    return;
+                  }
+                  setModalType("buy");
+                }}
+                className={`w-full md:flex-1 rounded-2xl p-5 text-center transition-all group relative overflow-hidden border ${
+                  buyAllowed
+                    ? "bg-green-500/10 hover:bg-green-500/20 border-green-500/30 cursor-pointer"
+                    : "bg-slate-800/40 border-slate-600/50 cursor-not-allowed opacity-70"
+                }`}
               >
+                 {!buyAllowed && (
+                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/50 backdrop-blur-[1px]">
+                     <span className="text-[11px] font-bold text-amber-200 bg-amber-500/20 border border-amber-400/30 px-3 py-1 rounded-full">
+                       خرید غیرفعال
+                     </span>
+                   </div>
+                 )}
                  <div className="absolute top-0 left-0 w-1 h-full bg-green-500"></div>
                  <div className="flex items-center justify-center gap-2 mb-2 text-green-400">
                     <span className="text-base font-bold">بخرید</span>
@@ -166,9 +187,26 @@ export default function DashboardPage() {
 
               {/* باکس چپ: فروش (ما می‌خریم -> کاربر می‌فروشد) */}
               <div 
-                onClick={() => setModalType("sell")}
-                className="w-full md:flex-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-2xl p-5 text-center cursor-pointer transition-all group relative overflow-hidden"
+                onClick={() => {
+                  if (!sellAllowed) {
+                    toast.error(tradesStatus?.message || "فروش در حال حاضر غیرفعال است");
+                    return;
+                  }
+                  setModalType("sell");
+                }}
+                className={`w-full md:flex-1 rounded-2xl p-5 text-center transition-all group relative overflow-hidden border ${
+                  sellAllowed
+                    ? "bg-red-500/10 hover:bg-red-500/20 border-red-500/30 cursor-pointer"
+                    : "bg-slate-800/40 border-slate-600/50 cursor-not-allowed opacity-70"
+                }`}
               >
+                 {!sellAllowed && (
+                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/50 backdrop-blur-[1px]">
+                     <span className="text-[11px] font-bold text-amber-200 bg-amber-500/20 border border-amber-400/30 px-3 py-1 rounded-full">
+                       فروش غیرفعال
+                     </span>
+                   </div>
+                 )}
                  <div className="absolute top-0 right-0 w-1 h-full bg-red-500"></div>
                  <div className="flex items-center justify-center gap-2 mb-2 text-red-400">
                     <span className="text-base font-bold">بفروشید</span>
@@ -341,7 +379,8 @@ export default function DashboardPage() {
         onClose={() => setModalType(null)}
         type={modalType || "buy"} // پیش‌فرض buy است تا تایپ‌اسکریپت گیر ندهد
         price={modalType === "buy" ? (prices?.buy || 0) : (prices?.sell || 0)} // قیمت خرید یا فروش از API
-        tradesEnabled={tradesStatus?.trades_enabled ?? true}
+        buyEnabled={buyAllowed}
+        sellEnabled={sellAllowed}
       />
     </div>
   );

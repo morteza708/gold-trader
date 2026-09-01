@@ -1,11 +1,29 @@
 import apiClient from './client';
+import type { MarketStatusData } from '@/lib/utils/marketStatus';
+
+export type TradesStatus = MarketStatusData;
+
+export interface MarketControlResponse extends MarketStatusData {
+  message: string;
+  suspended_buy_orders: number;
+  suspended_sell_orders: number;
+  resumed_buy_orders: number;
+  resumed_sell_orders: number;
+  suspended_orders: number;
+  resumed_orders: number;
+}
 
 // ==================== Interfaces ====================
 
 export interface GoldPrice {
   buy: number;
   sell: number;
+  buy_enabled: boolean;
+  sell_enabled: boolean;
+  market_mode: MarketStatusData['market_mode'];
   trades_enabled: boolean;
+  message: string;
+  admin_notice?: string;
   updated_at: string;
   created_at_jalali: string;
   market_change?: number | null;
@@ -103,17 +121,7 @@ export interface PendingPurchase {
   user_phone?: string;
 }
 
-export interface TradesStatus {
-  trades_enabled: boolean;
-  message: string;
-}
-
-export interface ToggleTradesStatusResponse {
-  trades_enabled: boolean;
-  message: string;
-  suspended_orders: number;
-  resumed_orders: number;
-}
+export interface ToggleTradesStatusResponse extends MarketControlResponse {}
 
 // ==================== User API Functions ====================
 
@@ -237,11 +245,23 @@ export const adminTradesAPI = {
     return response.data;
   },
 
-  // تغییر وضعیت معاملات
+  // تغییر وضعیت معاملات (deprecated)
   toggleTradesStatus: async (enabled: boolean): Promise<ToggleTradesStatusResponse> => {
     const response = await apiClient.post<ToggleTradesStatusResponse>('/admin/trades/status/toggle/', {
       enabled,
     });
+    return response.data;
+  },
+
+  updateMarketControl: async (data: {
+    buy_enabled: boolean;
+    sell_enabled: boolean;
+    admin_notice?: string;
+  }): Promise<MarketControlResponse> => {
+    const response = await apiClient.post<MarketControlResponse>(
+      '/admin/trades/market-control/',
+      data
+    );
     return response.data;
   },
 
