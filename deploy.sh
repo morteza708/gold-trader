@@ -11,7 +11,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # تنظیمات
-PROJECT_DIR="/var/www/gold-trading"
+PROJECT_DIR="/var/www/gold-trader"
 COMPOSE_FILE="docker-compose.production.yml"
 GIT_BRANCH="main"
 
