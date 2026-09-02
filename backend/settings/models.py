@@ -1,6 +1,18 @@
 from django.db import models
 
 
+def default_support_hours():
+    return {
+        'sat': {'enabled': True, 'start': '09:00', 'end': '18:00'},
+        'sun': {'enabled': True, 'start': '09:00', 'end': '18:00'},
+        'mon': {'enabled': True, 'start': '09:00', 'end': '18:00'},
+        'tue': {'enabled': True, 'start': '09:00', 'end': '18:00'},
+        'wed': {'enabled': True, 'start': '09:00', 'end': '18:00'},
+        'thu': {'enabled': True, 'start': '09:00', 'end': '13:00'},
+        'fri': {'enabled': False, 'start': '09:00', 'end': '18:00'},
+    }
+
+
 class SystemSettings(models.Model):
     """تنظیمات سیستم"""
     admin_phone_numbers = models.JSONField(
@@ -85,7 +97,7 @@ class SystemSettings(models.Model):
         verbose_name='محدودیت ساعات پاسخگویی',
     )
     support_hours = models.JSONField(
-        default=dict,
+        default=default_support_hours,
         blank=True,
         verbose_name='ساعات پاسخگویی',
         help_text='برنامه هفتگی — کلیدهای sat..fri',

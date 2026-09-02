@@ -63,7 +63,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='systemsettings',
             name='support_hours',
-            field=models.JSONField(blank=True, default=default_support_hours, verbose_name='ساعات پاسخگویی'),
+            field=models.JSONField(
+                blank=True,
+                default=default_support_hours,
+                help_text='برنامه هفتگی — کلیدهای sat..fri',
+                verbose_name='ساعات پاسخگویی',
+            ),
         ),
         migrations.AddField(
             model_name='systemsettings',
