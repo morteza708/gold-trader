@@ -30,16 +30,7 @@ WEEKDAY_TO_KEY = {
 }
 
 
-def default_support_hours() -> dict[str, dict[str, Any]]:
-    return {
-        'sat': {'enabled': True, 'start': '09:00', 'end': '18:00'},
-        'sun': {'enabled': True, 'start': '09:00', 'end': '18:00'},
-        'mon': {'enabled': True, 'start': '09:00', 'end': '18:00'},
-        'tue': {'enabled': True, 'start': '09:00', 'end': '18:00'},
-        'wed': {'enabled': True, 'start': '09:00', 'end': '18:00'},
-        'thu': {'enabled': True, 'start': '09:00', 'end': '13:00'},
-        'fri': {'enabled': False, 'start': '09:00', 'end': '18:00'},
-    }
+from .defaults import default_support_hours
 
 
 def persian_to_english_numbers(text: str) -> str:
@@ -50,20 +41,6 @@ def persian_to_english_numbers(text: str) -> str:
         text = text.replace(persian_digits[i], english_digits[i])
         text = text.replace(arabic_digits[i], english_digits[i])
     return text
-
-
-def normalize_phone(value: str | None) -> str:
-    if not value:
-        return ''
-    value = persian_to_english_numbers(str(value))
-    return re.sub(r'\s+|-', '', value).strip()
-
-
-def normalize_telegram_username(value: str | None) -> str:
-    if not value:
-        return ''
-    username = str(value).strip().lstrip('@')
-    return re.sub(r'[^a-zA-Z0-9_]', '', username)
 
 
 def parse_hhmm(value: str) -> tuple[int, int] | None:
@@ -90,6 +67,20 @@ def merge_support_hours(raw: dict | None) -> dict[str, dict[str, Any]]:
             'end': end if parse_hhmm(end) else base[day]['end'],
         }
     return merged
+
+
+def normalize_phone(value: str | None) -> str:
+    if not value:
+        return ''
+    value = persian_to_english_numbers(str(value))
+    return re.sub(r'\s+|-', '', value).strip()
+
+
+def normalize_telegram_username(value: str | None) -> str:
+    if not value:
+        return ''
+    username = str(value).strip().lstrip('@')
+    return re.sub(r'[^a-zA-Z0-9_]', '', username)
 
 
 def _day_key(dt: datetime) -> str:
