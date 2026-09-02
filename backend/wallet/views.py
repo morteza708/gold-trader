@@ -615,7 +615,8 @@ def admin_withdrawal_request_detail(request, request_id):
 @permission_classes([IsAuthenticated])
 def admin_approve_withdrawal(request, request_id):
     """
-    تایید درخواست برداشت
+    تایید درخواست برداشت طلا (آماده تحویل)
+    برداشت ریالی از endpoint جداگانه complete-rial تکمیل می‌شود.
     """
     try:
         # بررسی دسترسی
@@ -625,163 +626,67 @@ def admin_approve_withdrawal(request, request_id):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        try:
-            withdrawal_request = WithdrawalRequest.objects.select_related(
-                'user', 'user__customer_profile'
-            ).prefetch_related(
-                'deposit_links__deposit_receipt',
-                'deposit_links__deposit_receipt__deposit_request',
-                'deposit_links__deposit_receipt__deposit_request__user',
-                'deposit_links__deposit_receipt__deposit_request__user__customer_profile'
-            ).get(id=request_id)
-        except WithdrawalRequest.DoesNotExist:
-            return Response(
-                {'error': 'درخواست یافت نشد'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        if withdrawal_request.status != 'PENDING':
-            return Response(
-                {'error': 'این درخواست قبلاً پردازش شده است'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # محاسبه باقی‌مانده
-        remaining_amount = withdrawal_request.get_remaining_amount()
-        
-        # اگر باقی‌مانده <= 0 باشد، یعنی قبلاً پرداخت شده است
-        if remaining_amount <= 0:
-            return Response(
-                {'error': 'این درخواست قبلاً به صورت کامل پرداخت شده است'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # تایید درخواست و حذف از pending (چون قبلاً از موجودی کسر شده)
         from django.db import transaction
-        from django.utils import timezone
-        from datetime import date
-        import uuid
-        
+
         with transaction.atomic():
-            withdrawal_request = WithdrawalRequest.objects.select_for_update().select_related(
-                'user'
-            ).get(pk=withdrawal_request.pk)
+            try:
+                withdrawal_request = WithdrawalRequest.objects.select_for_update().select_related(
+                    'user', 'user__customer_profile'
+                ).get(id=request_id)
+            except WithdrawalRequest.DoesNotExist:
+                return Response(
+                    {'error': 'درخواست یافت نشد'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
             if withdrawal_request.status != 'PENDING':
                 return Response(
                     {'error': 'این درخواست قبلاً پردازش شده است'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            remaining_amount = withdrawal_request.get_remaining_amount()
-            if remaining_amount <= 0:
+            if withdrawal_request.withdrawal_type != 'GOLD':
                 return Response(
-                    {'error': 'این درخواست قبلاً به صورت کامل پرداخت شده است'},
+                    {
+                        'error': (
+                            'برای برداشت ریالی، فیش واریزی را آپلود کرده و '
+                            '«تأیید واریز و تکمیل» را بزنید'
+                        )
+                    },
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
             wallet = Wallet.lock_for_user(withdrawal_request.user)
 
-            # بررسی موجودی مسدود شده (باید موجود باشد)
-            if withdrawal_request.withdrawal_type == 'RIAL':
-                if wallet.pending_withdrawal_rial < withdrawal_request.amount:
-                    return Response(
-                        {'error': 'موجودی ریالی مسدود شده کافی نیست'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            else:  # GOLD
-                if wallet.pending_withdrawal_gold < withdrawal_request.amount:
-                    return Response(
-                        {'error': 'موجودی طلای مسدود شده کافی نیست'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+            if wallet.pending_withdrawal_gold < withdrawal_request.amount:
+                return Response(
+                    {'error': 'موجودی طلای مسدود شده کافی نیست'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-            # اگر فیش واریزی وجود دارد و باقی‌مانده > 0 است، باید یک لینک ایجاد کنیم
-            # این برای حالتی است که مدیر باقی‌مانده را از طریق مودال برداشت پرداخت می‌کند
-            if (withdrawal_request.receipt_image and 
-                withdrawal_request.withdrawal_type == 'RIAL' and 
-                remaining_amount > 0):
-                
-                # ایجاد یک DepositRequest برای مدیر (سیستم)
-                # این برای ردیابی فیش واریزی باقی‌مانده است
-                admin_user = request.user  # مدیر که فیش را آپلود کرده
-                deposit_request_code = f"DR-ADMIN-{uuid.uuid4().hex[:8].upper()}"
-                
-                deposit_request = DepositRequest.objects.create(
-                    user=admin_user,
-                    amount=remaining_amount,
-                    request_code=deposit_request_code,
-                    status='APPROVED',  # مستقیماً تایید می‌شود
-                    receipt_image=withdrawal_request.receipt_image  # کپی فیش
-                )
-                
-                # ایجاد DepositAccountAssignment از نوع WITHDRAWAL
-                assignment = DepositAccountAssignment.objects.create(
-                    deposit_request=deposit_request,
-                    account_type='WITHDRAWAL',
-                    withdrawal_request=withdrawal_request,
-                    amount=remaining_amount,
-                    order=0
-                )
-                
-                # ایجاد DepositReceipt
-                receipt = DepositReceipt.objects.create(
-                    deposit_request=deposit_request,
-                    account_assignment=assignment,
-                    tracking_number=f"ADMIN-{withdrawal_request.request_code}",
-                    deposit_date=date.today(),
-                    receipt_image=withdrawal_request.receipt_image,  # کپی فیش
-                    amount=remaining_amount,
-                    status='APPROVED'  # مستقیماً تایید می‌شود
-                )
-                
-                # ایجاد DepositWithdrawalLink
-                DepositWithdrawalLink.objects.create(
-                    deposit_receipt=receipt,
-                    withdrawal_request=withdrawal_request,
-                    amount=remaining_amount,
-                    auto_approved=False  # تایید دستی توسط مدیر
-                )
-            
-            # آزاد کردن موجودی مسدود شده (کل مبلغ درخواست)
-            if withdrawal_request.withdrawal_type == 'RIAL':
-                wallet.pending_withdrawal_rial -= withdrawal_request.amount
-                wallet.save()
-                withdrawal_request.status = 'COMPLETED'
-                withdrawal_request.save()
-            else:  # GOLD
-                wallet.pending_withdrawal_gold -= withdrawal_request.amount
-                wallet.save()
-                withdrawal_request.status = 'APPROVED'
-                withdrawal_request.save()
+            wallet.pending_withdrawal_gold -= withdrawal_request.amount
+            wallet.save()
+            withdrawal_request.status = 'APPROVED'
+            withdrawal_request.save()
         
-        # ارسال پیامک به کاربر
         account_code = withdrawal_request.user.customer_profile.account_code if hasattr(withdrawal_request.user, 'customer_profile') else 'N/A'
-        
-        if withdrawal_request.withdrawal_type == 'RIAL':
-            template = 'withdrawal-approved-user'
-            token2 = f"{int(withdrawal_request.amount):,}"  # مبلغ به ریال با فرمت جداکننده
-        else:  # GOLD
-            template = 'gold-withdrawal-approved-user'
-            token2 = float(withdrawal_request.amount)
-        
-        # ارسال async SMS
+        token2 = float(withdrawal_request.amount)
+
         send_sms_async.delay(
             phone_number=withdrawal_request.user.phone_number,
-            template=template,
+            template='gold-withdrawal-approved-user',
             token=account_code,
             token2=token2
         )
         
-        # ایجاد notification
         try:
-            if withdrawal_request.withdrawal_type == 'RIAL':
-                message = f'درخواست برداشت شما به مبلغ {int(withdrawal_request.amount):,} ریال تایید شد.'
-            else:
-                message = f'درخواست برداشت طلا شما به مقدار {float(withdrawal_request.amount)} گرم تایید شد.'
-            
+            message = (
+                f'درخواست برداشت طلا شما به مقدار {float(withdrawal_request.amount)} گرم '
+                f'تایید شد. برای دریافت حضوری مراجعه کنید.'
+            )
             create_notification(
                 user=withdrawal_request.user,
-                title='تایید برداشت',
+                title='آماده تحویل طلا',
                 message=message,
                 notification_type='WITHDRAWAL_APPROVED',
                 related_object_type='withdrawal',
@@ -795,13 +700,9 @@ def admin_approve_withdrawal(request, request_id):
         except Exception as e:
             logger.error(f"خطا در ایجاد notification برای تایید برداشت: {e}", exc_info=True)
         
-        # اگر برداشت ناقص بوده و حالا تکمیل شده، پیامک تایید برداشت قبلاً ارسال شده است
-        # فیش‌های مرتبط در پنل کاربری نمایش داده می‌شوند
-        # نیازی به پیامک اضافی نیست چون withdrawal-approved-user قبلاً ارسال شده است
-        
         serializer = WithdrawalRequestSerializer(withdrawal_request, context={'request': request})
         return Response({
-            'message': 'درخواست با موفقیت تایید شد',
+            'message': 'درخواست برداشت طلا تایید شد و آماده تحویل است',
             'withdrawal_request': serializer.data
         }, status=status.HTTP_200_OK)
         
@@ -972,7 +873,7 @@ def admin_complete_gold_withdrawal(request, request_id):
             create_notification(
                 user=withdrawal_request.user,
                 title='تکمیل برداشت طلا',
-                message=f'درخواست برداشت طلا شما به مقدار {float(withdrawal_request.amount)} گرم با موفقیت تسویه شد.',
+                message=f'درخواست برداشت طلا شما به مقدار {float(withdrawal_request.amount)} گرم تحویل داده شد.',
                 notification_type='WITHDRAWAL_COMPLETED',
                 related_object_type='withdrawal',
                 related_object_id=withdrawal_request.id,
@@ -983,17 +884,150 @@ def admin_complete_gold_withdrawal(request, request_id):
                 }
             )
         except Exception as e:
-            logger.error(f"خطا در ایجاد notification برای تکمیل برداشت طلا: {e}", exc_info=True)
+            logger.error(f"خطا در ایجاد notification برای تحویل برداشت طلا: {e}", exc_info=True)
         
         serializer = WithdrawalRequestSerializer(withdrawal_request, context={'request': request})
         return Response({
-            'message': 'درخواست با موفقیت تسویه شد و موجودی طلا کاهش یافت',
+            'message': 'تحویل طلا ثبت شد',
             'withdrawal_request': serializer.data
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
         import traceback
         print(f"خطا در admin_complete_gold_withdrawal: {e}")
+        print(traceback.format_exc())
+        return Response(
+            {'error': f'خطای سرور: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_complete_rial_withdrawal(request, request_id):
+    """
+    تکمیل برداشت ریالی: آپلود فیش واریزی + تأیید در یک مرحله
+    """
+    try:
+        if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
+            return Response(
+                {'error': 'شما دسترسی به این بخش ندارید'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if 'receipt_image' not in request.FILES:
+            return Response(
+                {'error': 'فیش واریزی الزامی است'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        receipt_image = request.FILES['receipt_image']
+        image_error = get_uploaded_image_error(receipt_image)
+        if image_error:
+            return Response(
+                {'error': image_error},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        tracking_number = (request.data.get('tracking_number') or '').strip()
+
+        from django.db import transaction
+        from django.utils import timezone
+
+        with transaction.atomic():
+            try:
+                withdrawal_request = WithdrawalRequest.objects.select_for_update().select_related(
+                    'user', 'user__customer_profile'
+                ).get(id=request_id)
+            except WithdrawalRequest.DoesNotExist:
+                return Response(
+                    {'error': 'درخواست یافت نشد'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            if withdrawal_request.withdrawal_type != 'RIAL':
+                return Response(
+                    {'error': 'این عملیات فقط برای برداشت ریالی است'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if withdrawal_request.status != 'PENDING':
+                return Response(
+                    {'error': 'این درخواست قبلاً پردازش شده است'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            wallet = Wallet.lock_for_user(withdrawal_request.user)
+            if wallet.pending_withdrawal_rial < withdrawal_request.amount:
+                return Response(
+                    {'error': 'موجودی ریالی مسدود شده کافی نیست'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            wallet.pending_withdrawal_rial -= withdrawal_request.amount
+            wallet.save()
+
+            withdrawal_request.receipt_image = receipt_image
+            withdrawal_request.status = 'COMPLETED'
+            withdrawal_request.completed_at = timezone.now()
+            if tracking_number:
+                note = f'پیگیری واریز: {tracking_number}'
+                if withdrawal_request.admin_note:
+                    withdrawal_request.admin_note = f'{withdrawal_request.admin_note}\n{note}'
+                else:
+                    withdrawal_request.admin_note = note
+            withdrawal_request.save()
+
+        account_code = (
+            withdrawal_request.user.customer_profile.account_code
+            if hasattr(withdrawal_request.user, 'customer_profile')
+            else 'N/A'
+        )
+        token2 = f"{int(withdrawal_request.amount):,}"
+
+        try:
+            send_sms_async.delay(
+                phone_number=withdrawal_request.user.phone_number,
+                template='withdrawal-receipt-uploaded-user',
+                token=account_code,
+                token2=token2
+            )
+        except Exception as e:
+            logger.error(
+                f"خطا در queue کردن پیامک تکمیل برداشت ریالی "
+                f"به کاربر {withdrawal_request.user.phone_number}: {e}",
+                exc_info=True
+            )
+
+        try:
+            create_notification(
+                user=withdrawal_request.user,
+                title='واریز برداشت انجام شد',
+                message=(
+                    f'مبلغ {int(withdrawal_request.amount):,} ریال به حساب شما واریز شد. '
+                    f'فیش واریزی در پنل شما قابل مشاهده است.'
+                ),
+                notification_type='WITHDRAWAL_COMPLETED',
+                related_object_type='withdrawal',
+                related_object_id=withdrawal_request.id,
+                metadata={
+                    'amount': str(withdrawal_request.amount),
+                    'withdrawal_type': withdrawal_request.withdrawal_type,
+                    'request_code': withdrawal_request.request_code,
+                }
+            )
+        except Exception as e:
+            logger.error(f"خطا در ایجاد notification برای تکمیل برداشت ریالی: {e}", exc_info=True)
+
+        serializer = WithdrawalRequestSerializer(withdrawal_request, context={'request': request})
+        return Response({
+            'message': 'برداشت ریالی با موفقیت تکمیل شد',
+            'withdrawal_request': serializer.data
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        import traceback
+        print(f"خطا در admin_complete_rial_withdrawal: {e}")
         print(traceback.format_exc())
         return Response(
             {'error': f'خطای سرور: {str(e)}'},

@@ -5,7 +5,7 @@ import {
   CreditCard, Search, Eye, CheckCircle2, 
   XCircle, Clock, ArrowDownCircle, ArrowUpCircle,
   TrendingUp, DollarSign, AlertCircle, Download,
-  User, Calendar, Building2, FileText, RefreshCw, Coins, Upload, Calculator
+  User, Calendar, Building2, FileText, RefreshCw, Coins
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -33,6 +33,7 @@ export default function FinancePage() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(null);
   const [receiptUploadError, setReceiptUploadError] = useState<ImageUploadErrorReason | null>(null);
+  const [trackingNumber, setTrackingNumber] = useState("");
   const [rejectNote, setRejectNote] = useState("");
   const [pendingPurchases, setPendingPurchases] = useState<PendingPurchase[]>([]);
 
@@ -173,8 +174,13 @@ export default function FinancePage() {
         await adminWalletAPI.approveDepositNewFlow((request as DepositRequest).id);
         toast.success("درخواست واریز با موفقیت تایید شد");
       } else {
-        await adminWalletAPI.approveWithdrawal((request as WithdrawalRequest).id);
-        toast.success("درخواست با موفقیت تایید شد");
+        const withdrawal = request as WithdrawalRequest;
+        if (withdrawal.withdrawal_type !== 'GOLD') {
+          toast.error("برای برداشت ریالی، فیش واریزی را آپلود کرده و «تأیید واریز و تکمیل» را بزنید");
+          return;
+        }
+        await adminWalletAPI.approveWithdrawal(withdrawal.id);
+        toast.success("درخواست برداشت طلا تایید شد");
       }
       setIsDetailModalOpen(false);
       await fetchRequests();
@@ -213,28 +219,29 @@ export default function FinancePage() {
     }
   };
 
-  // آپلود فیش واریزی
-  const handleUploadReceipt = async (request: WithdrawalRequest) => {
+  // تکمیل برداشت ریالی (فیش + تأیید یک‌مرحله‌ای)
+  const handleCompleteRialWithdrawal = async (request: WithdrawalRequest) => {
     if (!receiptFile) {
-      toast.error("لطفا فایل فیش واریزی را انتخاب کنید");
+      toast.error("لطفا فیش واریزی را انتخاب کنید");
       return;
     }
 
     setIsProcessing(request.id);
     try {
-      await adminWalletAPI.uploadReceipt(request.id, receiptFile);
-      toast.success("فیش واریزی با موفقیت آپلود شد");
+      await adminWalletAPI.completeRialWithdrawal(request.id, {
+        receipt_image: receiptFile,
+        tracking_number: trackingNumber.trim() || undefined,
+      });
+      toast.success("برداشت ریالی با موفقیت تکمیل شد");
       setReceiptFile(null);
       setReceiptPreviewUrl(null);
       setReceiptUploadError(null);
+      setTrackingNumber("");
+      setIsDetailModalOpen(false);
       await fetchRequests();
-      if (selectedRequest?.id === request.id) {
-        const updated = await adminWalletAPI.getWithdrawalRequestDetail(request.id);
-        setSelectedRequest(updated);
-      }
     } catch (error: any) {
-      console.error('Error uploading receipt:', error);
-      const message = error.response?.data?.error || "خطا در آپلود فیش واریزی";
+      console.error('Error completing rial withdrawal:', error);
+      const message = error.response?.data?.error || "خطا در تکمیل برداشت ریالی";
       toast.error(message, { duration: 6000 });
       if (typeof message === "string" && (message.includes("حجم") || message.includes("فرمت"))) {
         setReceiptUploadError(message.includes("حجم") ? "size" : "format");
@@ -244,17 +251,17 @@ export default function FinancePage() {
     }
   };
 
-  // تسویه درخواست برداشت طلا
+  // ثبت تحویل حضوری برداشت طلا
   const handleCompleteGoldWithdrawal = async (request: WithdrawalRequest) => {
     setIsProcessing(request.id);
     try {
       await adminWalletAPI.completeGoldWithdrawal(request.id);
-      toast.success("درخواست با موفقیت تسویه شد");
+      toast.success("تحویل طلا با موفقیت ثبت شد");
       setIsDetailModalOpen(false);
       await fetchRequests();
     } catch (error: any) {
       console.error('Error completing gold withdrawal:', error);
-      toast.error(error.response?.data?.error || "خطا در تسویه درخواست");
+      toast.error(error.response?.data?.error || "خطا در ثبت تحویل");
     } finally {
       setIsProcessing(null);
     }
@@ -302,7 +309,7 @@ export default function FinancePage() {
           { title: "تایید شده", value: stats.approved, icon: CheckCircle2, color: "text-green-400" },
           { title: "رد شده", value: stats.rejected, icon: XCircle, color: "text-red-400" },
           ...(activeTab === 'gold' ? [
-            { title: "تسویه شده", value: stats.completed, icon: CheckCircle2, color: "text-gold-400" }
+            { title: "تحویل داده شد", value: stats.completed, icon: CheckCircle2, color: "text-gold-400" }
           ] : []),
           { 
             title: activeTab === 'deposit' 
@@ -465,7 +472,7 @@ export default function FinancePage() {
                 )}
                 <th className="px-4 py-3 text-right text-xs font-bold text-slate-400">وضعیت</th>
                 {activeTab === 'gold' && (
-                  <th className="px-4 py-3 text-right text-xs font-bold text-slate-400">تسویه</th>
+                  <th className="px-4 py-3 text-right text-xs font-bold text-slate-400">تحویل</th>
                 )}
                 <th className="px-4 py-3 text-right text-xs font-bold text-slate-400">تاریخ</th>
                 <th className="px-4 py-3 text-center text-xs font-bold text-slate-400">عملیات</th>
@@ -556,11 +563,11 @@ export default function FinancePage() {
                       <td className="px-4 py-4">
                         {(request as WithdrawalRequest).status === 'COMPLETED' ? (
                           <span className="inline-block px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap bg-gold-500/20 text-gold-400">
-                            تسویه شده
+                            تحویل داده شد
                           </span>
                         ) : (request as WithdrawalRequest).status === 'APPROVED' ? (
                           <span className="inline-block px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap bg-orange-500/20 text-orange-400">
-                            تسویه نشده
+                            آماده تحویل
                           </span>
                         ) : (
                           <span className="inline-block px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap bg-slate-500/20 text-slate-400">
@@ -676,15 +683,15 @@ export default function FinancePage() {
                 )}
                 {activeTab === 'gold' && (
                   <div className="flex justify-between">
-                    <span className="text-xs text-slate-400">وضعیت تسویه</span>
+                    <span className="text-xs text-slate-400">وضعیت تحویل</span>
                     <span>
                       {(request as WithdrawalRequest).status === 'COMPLETED' ? (
                         <span className="inline-block px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap bg-gold-500/20 text-gold-400">
-                          تسویه شده
+                          تحویل داده شد
                         </span>
                       ) : (request as WithdrawalRequest).status === 'APPROVED' ? (
                         <span className="inline-block px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap bg-orange-500/20 text-orange-400">
-                          تسویه نشده
+                          آماده تحویل
                         </span>
                       ) : (
                         <span className="inline-block px-3 py-1 rounded-lg text-xs font-bold whitespace-nowrap bg-slate-500/20 text-slate-400">
@@ -742,11 +749,12 @@ export default function FinancePage() {
                 setReceiptFile(null);
                 setReceiptPreviewUrl(null);
                 setReceiptUploadError(null);
+                setTrackingNumber("");
                 setRejectNote("");
               }}
               onApprove={handleApprove}
               onReject={handleReject}
-              onUploadReceipt={handleUploadReceipt}
+              onCompleteRial={handleCompleteRialWithdrawal}
               onCompleteGold={handleCompleteGoldWithdrawal}
               receiptFile={receiptFile}
               setReceiptFile={setReceiptFile}
@@ -754,6 +762,8 @@ export default function FinancePage() {
               setReceiptPreviewUrl={setReceiptPreviewUrl}
               receiptUploadError={receiptUploadError}
               setReceiptUploadError={setReceiptUploadError}
+              trackingNumber={trackingNumber}
+              setTrackingNumber={setTrackingNumber}
               rejectNote={rejectNote}
               setRejectNote={setRejectNote}
             />
@@ -1020,7 +1030,7 @@ function WithdrawalDetailModal({
   onClose,
   onApprove,
   onReject,
-  onUploadReceipt,
+  onCompleteRial,
   onCompleteGold,
   receiptFile,
   setReceiptFile,
@@ -1028,6 +1038,8 @@ function WithdrawalDetailModal({
   setReceiptPreviewUrl,
   receiptUploadError,
   setReceiptUploadError,
+  trackingNumber,
+  setTrackingNumber,
   rejectNote,
   setRejectNote,
 }: {
@@ -1037,7 +1049,7 @@ function WithdrawalDetailModal({
   onClose: () => void;
   onApprove: (request: WithdrawalRequest) => void;
   onReject: (request: WithdrawalRequest) => void;
-  onUploadReceipt: (request: WithdrawalRequest) => void;
+  onCompleteRial: (request: WithdrawalRequest) => void;
   onCompleteGold: (request: WithdrawalRequest) => void;
   receiptFile: File | null;
   setReceiptFile: (file: File | null) => void;
@@ -1045,6 +1057,8 @@ function WithdrawalDetailModal({
   setReceiptPreviewUrl: (url: string | null) => void;
   receiptUploadError: ImageUploadErrorReason | null;
   setReceiptUploadError: (reason: ImageUploadErrorReason | null) => void;
+  trackingNumber: string;
+  setTrackingNumber: (value: string) => void;
   rejectNote: string;
   setRejectNote: (note: string) => void;
 }) {
@@ -1138,27 +1152,21 @@ function WithdrawalDetailModal({
                     }
                   </p>
                 </div>
-                {/* مبلغ پرداخت شده */}
-                {request.paid_amount !== undefined && request.paid_amount > 0 && (
+                {/* مبلغ پرداخت شده — فقط برداشت طلا (در صورت نیاز) */}
+                {request.withdrawal_type === 'GOLD' && request.paid_amount !== undefined && request.paid_amount > 0 && (
                   <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
                     <p className="text-xs text-slate-400 mb-1">مبلغ پرداخت شده</p>
                     <p className="text-sm font-bold text-green-400">
-                      {request.withdrawal_type === 'RIAL'
-                        ? `${toPersianDigits(Number(request.paid_amount || 0).toLocaleString())} ریال`
-                        : `${toPersianDigits(Number(request.paid_amount || 0).toFixed(3))} گرم`
-                      }
+                      {toPersianDigits(Number(request.paid_amount || 0).toFixed(3))} گرم
                     </p>
                   </div>
                 )}
-                {/* باقی‌مانده */}
-                {request.remaining_amount !== undefined && request.remaining_amount > 0 && (
+                {/* باقی‌مانده — فقط برداشت طلا */}
+                {request.withdrawal_type === 'GOLD' && request.remaining_amount !== undefined && request.remaining_amount > 0 && (
                   <div className="bg-slate-900 p-4 rounded-xl border border-yellow-500/50">
                     <p className="text-xs text-slate-400 mb-1">باقی‌مانده</p>
                     <p className="text-sm font-bold text-yellow-400">
-                      {request.withdrawal_type === 'RIAL'
-                        ? `${toPersianDigits(Number(request.remaining_amount || 0).toLocaleString())} ریال`
-                        : `${toPersianDigits(Number(request.remaining_amount || 0).toFixed(3))} گرم`
-                      }
+                      {toPersianDigits(Number(request.remaining_amount || 0).toFixed(3))} گرم
                     </p>
                   </div>
                 )}
@@ -1167,17 +1175,17 @@ function WithdrawalDetailModal({
                   <div className="mt-2">
                     {request.status === 'PENDING' && (
                       <span className="bg-orange-500/20 text-orange-400 px-3 py-1 rounded-lg text-xs font-bold">
-                        در انتظار
+                        {request.withdrawal_type === 'RIAL' ? 'در انتظار واریز' : 'در انتظار'}
                       </span>
                     )}
                     {request.status === 'APPROVED' && (
                       <span className="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-lg text-xs font-bold">
-                        تایید شده
+                        {request.withdrawal_type === 'GOLD' ? 'آماده تحویل' : 'تایید شده'}
                       </span>
                     )}
                     {request.status === 'COMPLETED' && (
                       <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-lg text-xs font-bold">
-                        تکمیل شده
+                        {request.withdrawal_type === 'GOLD' ? 'تحویل داده شد' : 'واریز انجام شد'}
                       </span>
                     )}
                     {request.status === 'REJECTED' && (
@@ -1195,7 +1203,9 @@ function WithdrawalDetailModal({
                 </div>
                 {request.completed_at_jalali && (
                   <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
-                    <p className="text-xs text-slate-400 mb-1">تاریخ تسویه</p>
+                    <p className="text-xs text-slate-400 mb-1">
+                      {request.withdrawal_type === 'GOLD' ? 'تاریخ تحویل' : 'تاریخ تکمیل'}
+                    </p>
                     <p className="text-sm font-bold text-white">
                       {toPersianDigits(request.completed_at_jalali)}
                     </p>
@@ -1243,247 +1253,29 @@ function WithdrawalDetailModal({
               </div>
             )}
 
-            {/* نمایش وضعیت پرداخت برای برداشت‌های ریالی ناقص */}
-            {request.withdrawal_type === 'RIAL' && request.status === 'PENDING' && request.remaining_amount !== undefined && request.paid_amount !== undefined && (
-              <div>
-                <h4 className="text-sm font-bold text-slate-400 mb-4 flex items-center gap-2">
-                  <Calculator size={16} />
-                  وضعیت پرداخت
-                </h4>
-                <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-xs text-slate-400 mb-1">مبلغ کل درخواست</p>
-                      <p className="text-lg font-bold text-white">
-                        {toPersianDigits(Number(request.amount || 0).toLocaleString())} ریال
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400 mb-1">مبلغ پرداخت شده</p>
-                      <p className="text-lg font-bold text-green-400">
-                        {toPersianDigits(Number(request.paid_amount || 0).toLocaleString())} ریال
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400 mb-1">باقی‌مانده</p>
-                      <p className="text-lg font-bold text-orange-400">
-                        {toPersianDigits(Number(request.remaining_amount || 0).toLocaleString())} ریال
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Progress bar */}
-                  {Number(request.amount || 0) > 0 && (
-                    <div className="mt-4">
-                      <div className="w-full bg-slate-700 rounded-full h-3">
-                        <div 
-                          className="bg-green-500 h-3 rounded-full transition-all"
-                          style={{ 
-                            width: `${Math.min(100, (Number(request.paid_amount || 0) / Number(request.amount || 1)) * 100)}%` 
-                          }}
-                        ></div>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-2 text-center">
-                        {toPersianDigits(Math.round((Number(request.paid_amount || 0) / Number(request.amount || 1)) * 100).toString())}% از مبلغ کل پرداخت شده
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* فیش‌های واریزی مرتبط (نمایش همه لینک‌ها، چه تایید شده و چه در انتظار) */}
-            {request.deposit_receipts_info && request.deposit_receipts_info.length > 0 && (
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-sm font-bold text-slate-400 flex items-center gap-2">
-                    <FileText size={16} />
-                    فیش‌های واریزی مرتبط ({request.deposit_receipts_info.length})
-                  </h4>
-                  {request.remaining_amount !== undefined && request.remaining_amount > 0 && (
-                    <div className="bg-yellow-500/20 border border-yellow-500/50 px-3 py-1.5 rounded-lg">
-                      <p className="text-xs text-yellow-400 font-bold">
-                        باقی‌مانده: {toPersianDigits(Number(request.remaining_amount).toLocaleString())} ریال
-                      </p>
-                    </div>
-                  )}
-                  {request.is_fully_paid && (
-                    <div className="bg-green-500/20 border border-green-500/50 px-3 py-1.5 rounded-lg">
-                      <p className="text-xs text-green-400 font-bold">
-                        ✓ پرداخت کامل شده
-                      </p>
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-4">
-                  {request.deposit_receipts_info.map((receiptInfo, idx) => (
-                    <div key={receiptInfo.id} className="bg-slate-900 p-4 rounded-xl border border-slate-700">
-                      <div className="mb-4 pb-4 border-b border-slate-700">
-                        <p className="text-xs text-slate-400 mb-2">اطلاعات واریزکننده</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">نام و نام خانوادگی</p>
-                            <p className="text-sm font-bold text-white">{receiptInfo.depositor_info.full_name}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">شماره موبایل</p>
-                            <p className="text-sm font-bold text-white dir-ltr text-right tracking-wider">
-                              {toPersianDigits(receiptInfo.depositor_info.phone_number)}
-                            </p>
-                          </div>
-                          {receiptInfo.depositor_info.account_code && (
-                            <div>
-                              <p className="text-xs text-slate-500 mb-1">کد حساب</p>
-                              <p className="text-sm font-bold text-white dir-ltr text-right">
-                                {toPersianDigits(receiptInfo.depositor_info.account_code)}
-                              </p>
-                            </div>
-                          )}
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">کد درخواست واریز</p>
-                            <p className="text-sm font-bold text-white font-mono dir-ltr">{receiptInfo.deposit_request_code}</p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="mb-4 pb-4 border-b border-slate-700">
-                        <p className="text-xs text-slate-400 mb-2">اطلاعات فیش</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">مبلغ فیش</p>
-                            <p className="text-sm font-bold text-white">
-                              {toPersianDigits(Number(receiptInfo.amount).toLocaleString())} ریال
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">مبلغ تخصیص یافته به این برداشت</p>
-                            <p className="text-sm font-bold text-green-400">
-                              {toPersianDigits(Number(receiptInfo.link_amount || 0).toLocaleString())} ریال
-                            </p>
-                          </div>
-                          {receiptInfo.tracking_number && (
-                            <div>
-                              <p className="text-xs text-slate-500 mb-1">شماره پیگیری</p>
-                              <p className="text-sm font-bold text-white font-mono dir-ltr">{receiptInfo.tracking_number}</p>
-                            </div>
-                          )}
-                          {receiptInfo.deposit_date_jalali && (
-                            <div>
-                              <p className="text-xs text-slate-500 mb-1">تاریخ واریز</p>
-                              <p className="text-sm font-bold text-white">
-                                {toPersianDigits(receiptInfo.deposit_date_jalali)}
-                              </p>
-                            </div>
-                          )}
-                          {receiptInfo.created_at_jalali && (
-                            <div>
-                              <p className="text-xs text-slate-500 mb-1">تاریخ ثبت</p>
-                              <p className="text-sm font-bold text-white">
-                                {toPersianDigits(receiptInfo.created_at_jalali)}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {receiptInfo.receipt_image_url && (
-                        <div>
-                          <p className="text-xs text-slate-400 mb-2">عکس فیش</p>
-                          <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
-                            <img 
-                              src={receiptInfo.receipt_image_url} 
-                              alt={`فیش واریزی ${idx + 1}`}
-                              className="w-full h-auto rounded-lg border border-slate-600 cursor-pointer hover:opacity-90 transition-opacity"
-                              onClick={() => window.open(receiptInfo.receipt_image_url || '', '_blank')}
-                              onError={(e) => {
-                                console.error('Error loading receipt image:', receiptInfo.receipt_image_url);
-                                e.currentTarget.style.display = 'none';
-                                const parent = e.currentTarget.parentElement;
-                                if (parent) {
-                                  parent.innerHTML = '<div class="text-center text-slate-400 text-sm py-4">خطا در بارگذاری تصویر</div>';
-                                }
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* فیش واریزی (فقط برای برداشت وجه) */}
-            {request.withdrawal_type === 'RIAL' && (
+            {/* فیش واریزی (برداشت ریالی تکمیل‌شده) */}
+            {request.withdrawal_type === 'RIAL' && request.receipt_image && request.receipt_image.trim() !== '' && (
               <div>
                 <h4 className="text-sm font-bold text-slate-400 mb-4 flex items-center gap-2">
                   <FileText size={16} />
                   فیش واریزی
                 </h4>
-                {request.receipt_image && request.receipt_image.trim() !== '' ? (
-                  <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
-                    <img 
-                      src={request.receipt_image} 
-                      alt="فیش واریزی" 
-                      className="w-full h-auto rounded-lg border border-slate-600"
-                      onError={(e) => {
-                        console.error('Error loading receipt image:', request.receipt_image);
-                        e.currentTarget.style.display = 'none';
-                        const parent = e.currentTarget.parentElement;
-                        if (parent) {
-                          parent.innerHTML = '<div class="text-center text-slate-400 text-sm py-4">خطا در بارگذاری تصویر</div>';
-                        }
-                      }}
-                    />
-                  </div>
-                ) : request.status === 'APPROVED' || request.status === 'COMPLETED' ? (
-                  <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
-                    <ImageUploadZone
-                      purpose="document"
-                      variant="dark"
-                      file={receiptFile}
-                      previewUrl={receiptPreviewUrl}
-                      emptyHint="انتخاب فایل فیش واریزی"
-                      onFileChange={(file, url) => {
-                        setReceiptFile(file);
-                        setReceiptPreviewUrl(url);
-                        if (file) setReceiptUploadError(null);
-                      }}
-                      onError={(msg) => {
-                        setReceiptFile(null);
-                        setReceiptPreviewUrl(null);
-                        setReceiptUploadError("general");
-                        toast.error(msg, { duration: 5000 });
-                      }}
-                    />
-                    {receiptUploadError && (
-                      <ImageCompressHelp reason={receiptUploadError} variant="dark" compact />
-                    )}
-                    {receiptFile && (
-                      <button
-                        onClick={() => onUploadReceipt(request)}
-                        disabled={isLoading}
-                        className="w-full px-4 py-2 bg-gold-500 hover:bg-gold-600 disabled:opacity-50 rounded-lg text-sm font-bold text-white transition-colors flex items-center justify-center gap-2"
-                      >
-                        {isLoading ? (
-                          <>
-                            <RefreshCw size={16} className="animate-spin" />
-                            در حال آپلود...
-                          </>
-                        ) : (
-                          <>
-                            <Upload size={16} />
-                            آپلود فیش واریزی
-                          </>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 text-center text-slate-400 text-sm">
-                    فیش واریزی آپلود نشده است
-                  </div>
-                )}
+                <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                  <img 
+                    src={request.receipt_image} 
+                    alt="فیش واریزی" 
+                    className="w-full h-auto rounded-lg border border-slate-600 cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => window.open(request.receipt_image || '', '_blank')}
+                    onError={(e) => {
+                      console.error('Error loading receipt image:', request.receipt_image);
+                      e.currentTarget.style.display = 'none';
+                      const parent = e.currentTarget.parentElement;
+                      if (parent) {
+                        parent.innerHTML = '<div class="text-center text-slate-400 text-sm py-4">خطا در بارگذاری تصویر</div>';
+                      }
+                    }}
+                  />
+                </div>
               </div>
             )}
 
@@ -1504,7 +1296,45 @@ function WithdrawalDetailModal({
         {/* Footer */}
         {request.status === 'PENDING' && (
           <div className="p-6 border-t border-slate-700 space-y-4 bg-slate-900">
-            {/* فیلد یادداشت رد */}
+            {request.withdrawal_type === 'RIAL' && (
+              <>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-2">فیش واریزی (الزامی)</label>
+                  <ImageUploadZone
+                    purpose="document"
+                    variant="dark"
+                    file={receiptFile}
+                    previewUrl={receiptPreviewUrl}
+                    emptyHint="انتخاب فایل فیش واریزی"
+                    onFileChange={(file, url) => {
+                      setReceiptFile(file);
+                      setReceiptPreviewUrl(url);
+                      if (file) setReceiptUploadError(null);
+                    }}
+                    onError={(msg) => {
+                      setReceiptFile(null);
+                      setReceiptPreviewUrl(null);
+                      setReceiptUploadError("general");
+                      toast.error(msg, { duration: 5000 });
+                    }}
+                  />
+                  {receiptUploadError && (
+                    <ImageCompressHelp reason={receiptUploadError} variant="dark" compact />
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-2">شماره پیگیری واریز (اختیاری)</label>
+                  <input
+                    type="text"
+                    value={trackingNumber}
+                    onChange={(e) => setTrackingNumber(toEnglishDigits(e.target.value))}
+                    placeholder="شماره پیگیری بانکی..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-gold-500 transition-colors dir-ltr text-right font-mono"
+                  />
+                </div>
+              </>
+            )}
+
             <div>
               <label className="block text-xs text-slate-400 mb-2">یادداشت رد (اختیاری)</label>
               <textarea
@@ -1516,7 +1346,7 @@ function WithdrawalDetailModal({
               />
             </div>
             
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-3 flex-wrap">
               <button
                 onClick={onClose}
                 className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm font-bold transition-colors"
@@ -1540,23 +1370,43 @@ function WithdrawalDetailModal({
                   </>
                 )}
               </button>
-              <button
-                onClick={() => onApprove(request)}
-                disabled={isLoading}
-                className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
-              >
-                {isLoading ? (
-                  <>
-                    <RefreshCw size={16} className="animate-spin" />
-                    در حال پردازش...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 size={16} />
-                    تایید درخواست
-                  </>
-                )}
-              </button>
+              {request.withdrawal_type === 'RIAL' ? (
+                <button
+                  onClick={() => onCompleteRial(request)}
+                  disabled={isLoading || !receiptFile}
+                  className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw size={16} className="animate-spin" />
+                      در حال پردازش...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={16} />
+                      تأیید واریز و تکمیل
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={() => onApprove(request)}
+                  disabled={isLoading}
+                  className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+                >
+                  {isLoading ? (
+                    <>
+                      <RefreshCw size={16} className="animate-spin" />
+                      در حال پردازش...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={16} />
+                      تایید درخواست
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -1571,12 +1421,12 @@ function WithdrawalDetailModal({
                 {isLoading ? (
                   <>
                     <RefreshCw size={16} className="animate-spin" />
-                    در حال تسویه...
+                    در حال ثبت...
                   </>
                 ) : (
                   <>
                     <CheckCircle2 size={16} />
-                    تسویه درخواست
+                    ثبت تحویل حضوری
                   </>
                 )}
               </button>

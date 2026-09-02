@@ -375,6 +375,24 @@ function WalletContent() {
     );
   };
 
+  const getWithdrawalStatusBadge = (status: string, withdrawalType: 'RIAL' | 'GOLD') => {
+    const statusMap: Record<string, { text: string; className: string }> = {
+      'RIAL_PENDING': { text: 'در انتظار واریز', className: 'bg-orange-100 text-orange-700' },
+      'RIAL_COMPLETED': { text: 'واریز انجام شد', className: 'bg-green-100 text-green-700' },
+      'GOLD_PENDING': { text: 'در انتظار', className: 'bg-orange-100 text-orange-700' },
+      'GOLD_APPROVED': { text: 'آماده تحویل', className: 'bg-blue-100 text-blue-700' },
+      'GOLD_COMPLETED': { text: 'تحویل داده شد', className: 'bg-green-100 text-green-700' },
+      'REJECTED': { text: 'رد شده', className: 'bg-red-100 text-red-700' },
+    };
+    const key = status === 'REJECTED' ? 'REJECTED' : `${withdrawalType}_${status}`;
+    const statusInfo = statusMap[key] || { text: status, className: 'bg-gray-100 text-gray-700' };
+    return (
+      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${statusInfo.className}`}>
+        {statusInfo.text}
+      </span>
+    );
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24 md:pb-0">
       
@@ -1210,7 +1228,7 @@ function WalletContent() {
                                                   {toPersianDigits(request.created_at_jalali || 'تاریخ نامعتبر')}
                                                </p>
                                             </div>
-                                            {getStatusBadge(request.status)}
+                                            {getWithdrawalStatusBadge(request.status, request.withdrawal_type)}
                                          </div>
                                          
                                          <div className="bg-gray-50 rounded-xl p-3 space-y-2">
@@ -1227,40 +1245,6 @@ function WalletContent() {
                                                   }
                                                </span>
                                             </div>
-                                            
-                                            {/* نمایش وضعیت پرداخت برای برداشت‌های ریالی ناقص */}
-                                            {request.withdrawal_type === 'RIAL' && request.status === 'PENDING' && request.remaining_amount !== undefined && request.paid_amount !== undefined && (
-                                               <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
-                                                  <div className="flex justify-between text-sm">
-                                                     <span className="text-gray-400">پرداخت شده:</span>
-                                                     <span className="font-bold text-green-600">
-                                                        {toPersianDigits(Number(request.paid_amount || 0).toLocaleString())} ریال
-                                                     </span>
-                                                  </div>
-                                                  <div className="flex justify-between text-sm">
-                                                     <span className="text-gray-400">باقی‌مانده:</span>
-                                                     <span className="font-bold text-orange-600">
-                                                        {toPersianDigits(Number(request.remaining_amount || 0).toLocaleString())} ریال
-                                                     </span>
-                                                  </div>
-                                                  {/* Progress bar */}
-                                                  {Number(request.amount || 0) > 0 && (
-                                                     <div className="mt-2">
-                                                        <div className="w-full bg-gray-200 rounded-full h-2">
-                                                           <div 
-                                                              className="bg-green-500 h-2 rounded-full transition-all"
-                                                              style={{ 
-                                                                 width: `${Math.min(100, (Number(request.paid_amount || 0) / Number(request.amount || 1)) * 100)}%` 
-                                                              }}
-                                                           ></div>
-                                                        </div>
-                                                        <p className="text-xs text-gray-500 mt-1 text-center">
-                                                           {toPersianDigits(Math.round((Number(request.paid_amount || 0) / Number(request.amount || 1)) * 100).toString())}% تکمیل شده
-                                                        </p>
-                                                     </div>
-                                                  )}
-                                               </div>
-                                            )}
                                             
                                             {request.bank_card && (
                                                <div className="flex justify-between text-sm">
@@ -1280,48 +1264,10 @@ function WalletContent() {
                                                </div>
                                             )}
                                             
-                                            {/* فیش‌های واریزی مرتبط (نمایش همه لینک‌ها) */}
-                                            {request.deposit_receipts_info && request.deposit_receipts_info.length > 0 && (
-                                               <div className="mt-3 pt-3 border-t border-gray-200">
-                                                  <p className="text-xs text-gray-400 mb-2 font-bold">فیش‌های واریزی مرتبط:</p>
-                                                  <div className="space-y-3">
-                                                     {request.deposit_receipts_info.map((receiptInfo, idx) => (
-                                                        <div key={receiptInfo.id} className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-                                                           <div className="mb-2">
-                                                              <p className="text-xs text-gray-500 mb-1">واریزکننده:</p>
-                                                              <p className="text-sm font-bold text-gray-800">{receiptInfo.depositor_info.full_name}</p>
-                                                              {receiptInfo.depositor_info.account_code && (
-                                                                 <p className="text-xs text-gray-500 mt-1">
-                                                                    کد حساب: {toPersianDigits(receiptInfo.depositor_info.account_code)}
-                                                                 </p>
-                                                              )}
-                                                           </div>
-                                                           <div className="mb-2 grid grid-cols-2 gap-2">
-                                                              <div>
-                                                                 <p className="text-xs text-gray-500 mb-1">مبلغ فیش:</p>
-                                                                 <p className="text-sm font-bold text-gray-800">
-                                                                    {toPersianDigits(Number(receiptInfo.amount).toLocaleString())} ریال
-                                                                 </p>
-                                                              </div>
-                                                              <div>
-                                                                 <p className="text-xs text-gray-500 mb-1">مبلغ تخصیص یافته:</p>
-                                                                 <p className="text-sm font-bold text-green-600">
-                                                                    {toPersianDigits(Number(receiptInfo.link_amount || 0).toLocaleString())} ریال
-                                                                 </p>
-                                                              </div>
-                                                           </div>
-                                                           {receiptInfo.receipt_image_url && (
-                                                              <button
-                                                                 onClick={() => setSelectedReceiptImage(receiptInfo.receipt_image_url || null)}
-                                                                 className="w-full flex items-center justify-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 bg-white border border-blue-200 rounded-lg py-2 px-3 hover:bg-blue-50 transition-colors"
-                                                              >
-                                                                 <Eye size={14} />
-                                                                 مشاهده فیش واریزی
-                                                              </button>
-                                                           )}
-                                                        </div>
-                                                     ))}
-                                                  </div>
+                                            {request.withdrawal_type === 'GOLD' && request.status === 'APPROVED' && request.gold_pickup_address && (
+                                               <div className="mt-2 pt-2 border-t border-gray-200">
+                                                  <p className="text-xs text-gray-400 mb-1">آدرس مراجعه حضوری:</p>
+                                                  <p className="text-sm font-bold text-gray-800 whitespace-pre-line">{request.gold_pickup_address}</p>
                                                </div>
                                             )}
                                             

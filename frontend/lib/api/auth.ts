@@ -755,7 +755,30 @@ export const adminWalletAPI = {
     return response.data;
   },
 
-  // تسویه درخواست برداشت طلا
+  // تکمیل برداشت ریالی (فیش + تأیید یک‌مرحله‌ای)
+  completeRialWithdrawal: async (
+    requestId: number,
+    data: { receipt_image: File; tracking_number?: string }
+  ): Promise<{ message: string; withdrawal_request: WithdrawalRequest }> => {
+    const formData = new FormData();
+    formData.append('receipt_image', data.receipt_image);
+    if (data.tracking_number?.trim()) {
+      formData.append('tracking_number', data.tracking_number.trim());
+    }
+
+    const response = await apiClient.post<{ message: string; withdrawal_request: WithdrawalRequest }>(
+      `/admin/wallet/withdrawals/${requestId}/complete-rial/`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data;
+  },
+
+  // ثبت تحویل حضوری برداشت طلا
   completeGoldWithdrawal: async (requestId: number): Promise<{ message: string; withdrawal_request: WithdrawalRequest }> => {
     const response = await apiClient.patch<{ message: string; withdrawal_request: WithdrawalRequest }>(
       `/admin/wallet/withdrawals/${requestId}/complete/`

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { X, CreditCard, Check } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import toast from "react-hot-toast";
 import { toEnglishDigits } from "@/lib/utils/numberUtils";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AddCardModalProps {
   isOpen: boolean;
@@ -25,10 +26,17 @@ const BANK_PREFIXES: Record<string, { name: string, color: string }> = {
 };
 
 export default function AddCardModal({ isOpen, onClose, onAdd }: AddCardModalProps) {
+  const { user } = useAuth();
   const [cardNumber, setCardNumber] = useState("");
   const [shebaNumber, setShebaNumber] = useState("");
   const [bankInfo, setBankInfo] = useState({ name: "نامشخص", color: "from-gray-700 to-gray-900" });
   const [isLoading, setIsLoading] = useState(false);
+
+  const holderName = useMemo(() => {
+    if (!user) return "—";
+    const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
+    return fullName || user.phone_number || "نامشخص";
+  }, [user]);
 
   // ریست کردن فرم
   useEffect(() => {
@@ -131,7 +139,7 @@ export default function AddCardModal({ isOpen, onClose, onAdd }: AddCardModalPro
                  <div className="flex justify-between items-end">
                     <div>
                        <p className="text-[10px] opacity-70 mb-0.5">نام دارنده</p>
-                       <p className="text-xs font-bold truncate">ALI MOHAMMADI</p>
+                       <p className="text-xs font-bold truncate max-w-[180px]">{holderName}</p>
                     </div>
                     <div className="text-left">
                        <p className="text-[10px] opacity-70 mb-0.5">CVV2</p>

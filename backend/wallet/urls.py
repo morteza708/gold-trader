@@ -20,6 +20,7 @@ urlpatterns = [
     path('admin/wallet/withdrawals/<int:request_id>/approve/', views.admin_approve_withdrawal, name='admin-approve-withdrawal'),
     path('admin/wallet/withdrawals/<int:request_id>/reject/', views.admin_reject_withdrawal, name='admin-reject-withdrawal'),
     path('admin/wallet/withdrawals/<int:request_id>/complete/', views.admin_complete_gold_withdrawal, name='admin-complete-gold-withdrawal'),
+    path('admin/wallet/withdrawals/<int:request_id>/complete-rial/', views.admin_complete_rial_withdrawal, name='admin-complete-rial-withdrawal'),
     path('admin/wallet/withdrawals/<int:request_id>/upload-receipt/', views.admin_upload_receipt, name='admin-upload-receipt'),
     
     # Deposit - Admin
