@@ -1,6 +1,8 @@
-# Gold Trader
+# OpalBox (Gold Trader)
 
-An online melted-gold trading platform with a customer dashboard, admin panel, and full backend infrastructure. Built for gold businesses and domestic exchanges, it supports instant buy/sell, limit orders, wallet management, deposits/withdrawals, and OTP-based authentication.
+An online melted-gold trading platform (**OpalBox / گلد تریدر**) with a customer dashboard, admin panel, and full backend infrastructure. Built for gold businesses and domestic exchanges: instant buy/sell, smart orders, wallet management, simplified deposit/withdrawal flows, Support Hub, and OTP-based authentication.
+
+**Repository:** [github.com/morteza708/gold-trader](https://github.com/morteza708/gold-trader)
 
 ---
 
@@ -9,25 +11,59 @@ An online melted-gold trading platform with a customer dashboard, admin panel, a
 ### End Users
 - OTP login via SMS (Kavenegar)
 - Profile completion and KYC with national ID card upload
-- Dual wallet (Rial + gold in grams)
-- Instant gold buy/sell at live prices
-- Smart orders (buy at lower price / sell at higher price)
-- Multi-account deposit flow with receipt upload
-- Rial withdrawals and physical gold pickup
-- Trade and transaction history
-- Persian PDF invoice download
-- In-app and push notifications (PWA)
-- RTL UI with Jalali calendar and Persian digits
+- Dual wallet (Rial + gold in grams) with locked balance for pending trades/withdrawals
+- Instant gold buy/sell at live or admin-set prices
+- **Smart orders** (buy at lower price / sell at higher price) — formerly “limit orders”
+- **Pending purchase** flow: lock price, deposit later within expiry window
+- **One-step deposit:** amount + destination account + receipt + tracking + date in a single request
+- Rial withdrawal to bank card; physical gold withdrawal with pickup address
+- Bank card management (add card with live preview showing account holder name)
+- Trade and transaction history with Persian PDF invoice download
+- In-app notifications (bell) + PWA install prompt
+- **Support Hub:** floating help button, phone / WhatsApp / Telegram / email, business hours
+- RTL UI, Jalali calendar, Persian digits
+- Public CMS pages: About, Contact
 
 ### Admin Panel
-- Statistics dashboard
-- User management and phone verification
-- Gold price management (base price + margin)
-- Kill switch to enable/disable trading
-- Trade and order monitoring
-- Deposit/withdrawal management with auto-approval via peer deposits
-- Deposit bank account management
-- System settings (admin phone numbers, gold pickup address)
+- Statistics dashboard and **Command Room** (market control)
+- User management and mobile verification approval
+- Gold price management (manual base + margin, or **live feed from Viragold API**)
+- Separate **buy / sell kill switches** + public market notice banner
+- Trade, order, and pending-purchase monitoring
+- **Finance:** deposits, Rial withdrawals, gold withdrawals (separate tabs)
+- **One-step Rial withdrawal:** upload transfer receipt + optional tracking → complete in one action
+- **Gold withdrawal (two steps):** approve → ready for pickup → mark in-person delivery complete
+- **Deposit bank accounts** tab with active/inactive toggle
+- **Support Hub** settings: channels, weekly schedule, online/offline messages, live preview
+- **Site pages** CMS (About / Contact — text and images)
+- System settings: admin SMS numbers (internal alerts), gold pickup address
+- Auto-refresh on finance pages when tab is visible (polling)
+
+---
+
+## Business Flows
+
+### Deposit (user → admin)
+1. User submits **one form**: amount, platform deposit account, receipt image, tracking number, deposit date.
+2. Admin reviews receipt in finance panel → **Approve** → user balance credited.
+3. SMS: admin notified on receipt upload; user notified on approval.
+
+### Rial withdrawal (user → admin)
+1. User requests withdrawal to a saved bank card; balance locked immediately.
+2. Admin opens request → sees bank card → uploads **transfer receipt** → **Confirm & complete** (single step).
+3. SMS: `withdrawal-receipt-uploaded-user` only (no separate “approved” SMS).
+
+### Gold withdrawal (user → admin)
+1. User requests gold withdrawal in grams.
+2. Admin **approves** → status **Ready for pickup**; user sees pickup address.
+3. Admin **registers in-person delivery** after handover → **Delivered**.
+4. SMS on approve and on delivery complete.
+
+### Support Hub
+- Configured in **Admin → Settings → Support**.
+- Public API: `GET /api/support/info/` (online/offline, channels, hours).
+- Dashboard floating button; also shown on public Contact and dashboard About pages.
+- Phone calls disabled outside business hours; WhatsApp/Telegram remain available for async messages.
 
 ---
 
@@ -50,13 +86,13 @@ An online melted-gold trading platform with a customer dashboard, admin panel, a
 
 | Layer | Stack |
 |-------|-------|
-| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4, Framer Motion |
 | Backend | Django 5.2, Django REST Framework, SimpleJWT |
 | Database | PostgreSQL 15 |
 | Cache / Queue | Redis 7, Celery 5 |
-| SMS | Kavenegar |
+| SMS | Kavenegar (template-based) |
 | PDF | WeasyPrint |
-| Deploy | Docker Compose, Nginx, Gunicorn |
+| Deploy | Docker Compose, Nginx, Gunicorn, WhiteNoise |
 
 ---
 
@@ -64,21 +100,25 @@ An online melted-gold trading platform with a customer dashboard, admin panel, a
 
 ```
 gold-trader/
-├── backend/          # Django API
-│   ├── accounts/     # Auth, users, OTP
-│   ├── wallet/       # Wallet, deposits, withdrawals
-│   ├── trades/       # Trades, pricing, limit orders
-│   ├── settings/     # System settings, bank accounts
-│   ├── notifications/# Notifications and push
-│   └── config/       # Django & Celery config
-├── frontend/         # Next.js App Router
-│   ├── app/          # Pages (dashboard, adminpanel, auth)
-│   ├── components/   # UI components
-│   ├── contexts/     # AuthContext
-│   ├── hooks/        # Custom hooks
-│   └── lib/api/      # API client
-├── nginx/            # Reverse proxy config
-├── docker-compose.yml
+├── backend/
+│   ├── accounts/       # Auth, users, OTP, image upload helpers
+│   ├── wallet/         # Wallet, deposits, withdrawals, bank cards
+│   ├── trades/         # Trades, pricing, smart orders, pending purchase
+│   ├── settings/       # System settings, deposit accounts, site pages, Support Hub
+│   ├── notifications/  # In-app notifications
+│   └── config/         # Django & Celery config
+├── frontend/
+│   ├── app/            # dashboard, adminpanel, auth, contact, about
+│   ├── components/
+│   │   ├── support/    # SupportFab, SupportHubPanel
+│   │   ├── admin/      # DepositDetailModal, SupportSettingsTab, MarketControlPanel
+│   │   └── ui/         # ImageUploadZone, shared inputs
+│   ├── hooks/          # useSupportInfo, useVisibilityPolling, useGoldPrice, …
+│   └── lib/api/        # auth, trades, support, pages
+├── nginx/
+├── docker-compose.yml              # Local development
+├── docker-compose.production.yml   # Production
+├── deploy.sh                       # Server deploy helper
 └── .env.example
 ```
 
@@ -86,95 +126,125 @@ gold-trader/
 
 ## Prerequisites
 
-- Docker 20.10+
-- Docker Compose 2.0+
+- Docker 20.10+ and Docker Compose 2.0+
 
-For local development without Docker:
-- Python 3.11+
-- Node.js 20+
-- PostgreSQL 15+
-- Redis 7+
+For local development without Docker: Python 3.11+, Node.js 20+, PostgreSQL 15+, Redis 7+.
 
 ---
 
-## Quick Start (Docker)
-
-### 1. Clone the repository
+## Quick Start (Docker — local)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/gold-trader.git
+git clone https://github.com/morteza708/gold-trader.git
 cd gold-trader
-```
-
-### 2. Configure environment variables
-
-```bash
 cp .env.example .env
-```
+# Edit .env (SECRET_KEY, KAVENEGAR_API_KEY, DB passwords, …)
 
-Key variables in `.env`:
-
-| Variable | Description |
-|----------|-------------|
-| `DJANGO_SECRET_KEY` | Django secret key (change in production) |
-| `DJANGO_DEBUG` | `True` for development, `False` for production |
-| `DB_*` | PostgreSQL connection settings |
-| `KAVENEGAR_API_KEY` | Kavenegar SMS API key |
-| `NEXT_PUBLIC_API_URL` | API URL for the frontend |
-| `ALLOWED_HOSTS` | Allowed domains (comma-separated) |
-| `CORS_ALLOWED_ORIGINS` | Allowed CORS origins |
-
-### 3. Start services
-
-```bash
 docker compose build
 docker compose up -d
-```
 
-### 4. Create an admin user
-
-```bash
+docker compose exec backend python manage.py migrate
 docker compose exec backend python manage.py createsuperuser
 ```
 
-### 5. Access
-
 | Service | URL |
 |---------|-----|
-| Website (via Nginx) | http://localhost |
+| Website (Nginx) | http://localhost |
 | API | http://localhost/api |
 | Django Admin | http://localhost/admin |
-| Frontend direct (dev) | http://localhost:3000 |
+
+---
+
+## Production Deployment
+
+Production uses `docker-compose.production.yml`. Typical server path: `/var/www/gold-trader`.
+
+```bash
+cd /var/www/gold-trader
+git pull origin main
+
+# Frontend is baked into the image — rebuild when UI changes
+docker compose -f docker-compose.production.yml build frontend backend celery_worker celery_beat
+docker compose -f docker-compose.production.yml up -d frontend backend celery_worker celery_beat
+
+docker compose -f docker-compose.production.yml exec -T backend python manage.py migrate --noinput
+```
+
+Backend code is volume-mounted in production, so **backend-only changes** often need only:
+
+```bash
+docker compose -f docker-compose.production.yml restart backend celery_worker
+```
+
+Or use the included script:
+
+```bash
+bash deploy.sh
+```
+
+> **Note:** `deploy.sh` restarts services but does **not** rebuild the frontend image. After UI changes, run `build frontend` manually.
+
+### Key environment variables
+
+| Variable | Description |
+|----------|-------------|
+| `DJANGO_SECRET_KEY` | Django secret (required in production) |
+| `DJANGO_DEBUG` | `False` in production |
+| `DB_*` | PostgreSQL credentials |
+| `KAVENEGAR_API_KEY` | SMS API key |
+| `NEXT_PUBLIC_API_URL` | e.g. `https://opalbox.ir/api` |
+| `NEXT_PUBLIC_SITE_URL` | Public site URL |
+| `NEXT_PUBLIC_BRAND_*` | Brand name, logo, theme color |
+| `ALLOWED_HOSTS` | Comma-separated domains |
+| `CORS_ALLOWED_ORIGINS` | Allowed frontend origins |
 
 ---
 
 ## API Endpoints (Summary)
 
-### Authentication
-- `POST /api/auth/send-otp/` — Send OTP code
-- `POST /api/auth/verify-otp/` — Verify OTP and receive JWT
-- `GET /api/auth/user/` — Current user info
+### Auth
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/auth/send-otp/` | Send OTP |
+| POST | `/api/auth/verify-otp/` | Verify OTP → JWT |
+| GET | `/api/auth/user/` | Current user |
 
 ### Trades
-- `GET /api/trades/price/` — Current gold price
-- `POST /api/trades/buy/` — Instant buy
-- `POST /api/trades/sell/` — Instant sell
-- `GET/POST /api/trades/orders/` — Limit orders
-- `GET /api/trades/` — Trade history
-- `GET /api/trades/<id>/invoice/` — Download PDF invoice
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/trades/price/` | Current gold price |
+| POST | `/api/trades/buy/` | Instant buy |
+| POST | `/api/trades/sell/` | Instant sell |
+| GET/POST | `/api/trades/orders/` | Smart orders |
+| GET | `/api/trades/<id>/invoice/` | PDF invoice |
 
-### Wallet
-- `GET /api/wallet/` — Balance
-- `POST /api/wallet/deposit/` — Create deposit request
-- `POST /api/wallet/withdraw/` — Create withdrawal request
-- `GET /api/wallet/cards/` — Bank cards
+### Wallet (user)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/wallet/` | Balances |
+| POST | `/api/wallet/deposit/` | Create deposit (one-step) |
+| POST | `/api/wallet/withdraw/` | Create withdrawal |
+| GET | `/api/wallet/cards/` | Bank cards |
+| GET | `/api/wallet/gold-pickup-address/` | Pickup address |
 
-### Admin
-- `GET /api/admin/dashboard/stats/` — Dashboard stats
-- `GET/POST /api/admin/trades/price/update/` — Price management
-- `POST /api/admin/trades/status/toggle/` — Enable/disable trading
+### Wallet (admin)
+| Method | Path | Description |
+|--------|------|-------------|
+| PATCH | `/api/admin/wallet/deposits/<id>/approve-new/` | Approve deposit |
+| POST | `/api/admin/wallet/withdrawals/<id>/complete-rial/` | Complete Rial withdrawal + receipt |
+| PATCH | `/api/admin/wallet/withdrawals/<id>/approve/` | Approve gold withdrawal |
+| PATCH | `/api/admin/wallet/withdrawals/<id>/complete/` | Mark gold delivered |
 
-> Full routes are defined in `backend/*/urls.py`.
+### Settings & Support
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/support/info/` | Public Support Hub info |
+| GET/PUT | `/api/admin/settings/` | System + Support Hub settings |
+| GET/PUT | `/api/admin/wallet/deposit-accounts/` | Deposit bank accounts |
+| GET | `/api/pages/<slug>/` | Public site page (`about`, `contact`) |
+| GET/PUT | `/api/admin/pages/<slug>/` | Edit site pages |
+
+Full routes: `backend/*/urls.py`.
 
 ---
 
@@ -182,61 +252,41 @@ docker compose exec backend python manage.py createsuperuser
 
 | Role | Access |
 |------|--------|
-| `CUSTOMER` | User dashboard, trades, wallet |
+| `CUSTOMER` | Dashboard, trades, wallet |
 | `SITE_ADMIN` | Admin panel |
 | `SUPER_ADMIN` | Full access + Django Admin |
 
 ---
 
-## Celery Tasks
+## Celery & Background Jobs
 
-Celery Beat checks pending limit orders every 30 seconds and executes them when the target price is reached.
-
-```python
-# config/settings.py
-CELERY_BEAT_SCHEDULE = {
-    'check-and-execute-pending-orders': {
-        'task': 'trades.tasks.check_and_execute_pending_orders',
-        'schedule': 30.0,
-    },
-}
-```
+- **Smart orders:** Beat checks pending orders every 30s and executes at target price.
+- **Gold price sync:** Optional live feed from Viragold API (when enabled).
+- **SMS:** Async via Celery (`send_sms_async`) for withdrawal/deposit notifications.
 
 ---
 
 ## PWA
 
-This project supports Progressive Web App features:
-- `manifest.json` for mobile installation
-- Service Worker for push notifications
+- `manifest.json` for install on mobile/desktop
+- Service Worker (`public/sw.js`)
+- Browser notification permission prompt
 
 ---
 
 ## Local Development (without Docker)
 
-### Backend
-
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate
+# Backend
+cd backend && python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp ../.env.example .env
-python manage.py migrate
-python manage.py runserver
-```
+python manage.py migrate && python manage.py runserver
 
-### Frontend
+# Frontend
+cd frontend && npm install && npm run dev
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Celery (optional)
-
-```bash
+# Celery (optional)
 cd backend
 celery -A config worker --loglevel=info
 celery -A config beat --loglevel=info
@@ -244,315 +294,154 @@ celery -A config beat --loglevel=info
 
 ---
 
-## Security
-
-Before going public or deploying to production:
+## Security Checklist (production)
 
 - [ ] Change `DJANGO_SECRET_KEY`
 - [ ] Set `DJANGO_DEBUG=False`
-- [ ] Keep real Kavenegar keys only in server `.env` (never in Git)
-- [ ] Use a strong database password
-- [ ] Enable SSL/TLS
+- [ ] Keep Kavenegar keys only in server `.env`
+- [ ] Strong database password
+- [ ] Enable SSL/TLS (Let's Encrypt + Nginx)
 - [ ] Never commit `.env` files
 
 ---
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+MIT — see [LICENSE](LICENSE).
 
 ---
 
-## Contributing
+## Contributing & Issues
 
-1. Fork the repository
-2. Create a branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes
-4. Open a Pull Request
+[github.com/morteza708/gold-trader/issues](https://github.com/morteza708/gold-trader/issues)
 
 ---
 
-## Contact
+<br>
 
-Report bugs or suggest features via [GitHub Issues](https://github.com/YOUR_USERNAME/gold-trader/issues).
+# اپال‌باکس (گلد تریدر)
 
----
----
+پلتفرم معاملات آنلاین طلای آب‌شده با پنل کاربری، پنل مدیریت و API کامل Django. شامل خرید/فروش فوری، **سفارش هوشمند**، کیف پول، واریز/برداشت ساده‌شده، **Support Hub** و احراز هویت OTP.
 
-# گلد تریدر
-
-پلتفرم معاملات آنلاین طلای آب‌شده با پنل کاربری، پنل مدیریت و زیرساخت کامل بک‌اند. این پروژه برای کسب‌وکارهای طلا و صرافی‌های داخلی طراحی شده و امکان خرید/فروش فوری، سفارش هوشمند (Limit Order)، مدیریت کیف پول، واریز/برداشت و احراز هویت با OTP را فراهم می‌کند.
+**مخزن:** [github.com/morteza708/gold-trader](https://github.com/morteza708/gold-trader)
 
 ---
 
 ## ویژگی‌ها
 
-### کاربر نهایی
-- ورود با OTP از طریق پیامک (Kavenegar)
-- تکمیل پروفایل و احراز هویت (KYC) با کارت ملی
-- کیف پول دوگانه (ریال + طلا به گرم)
-- خرید و فروش فوری طلا با قیمت لحظه‌ای
-- سفارش هوشمند (خرید در قیمت پایین‌تر / فروش در قیمت بالاتر)
-- واریز وجه با تخصیص چند حساب مقصد و آپلود فیش
-- برداشت ریالی و برداشت فیزیکی طلا
-- تاریخچه معاملات و تراکنش‌ها
-- دانلود فاکتور PDF فارسی
-- اعلان‌های درون‌برنامه‌ای و Push Notification (PWA)
-- رابط کاربری RTL، تاریخ شمسی و اعداد فارسی
+### کاربر
+- ورود OTP (کاوه‌نگار)، KYC با کارت ملی
+- کیف پول ریال + طلا (گرم)، موجودی قفل‌شده برای معامله/برداشت معلق
+- خرید/فروش فوری، **سفارش هوشمند**، خرید معلق با قیمت قفل
+- **واریز یک‌مرحله‌ای:** مبلغ + حساب + فیش + پیگیری + تاریخ
+- برداشت ریالی به کارت؛ برداشت طلا با آدرس تحویل
+- مدیریت کارت بانکی (پیش‌نمایش با نام کاربر)
+- تاریخچه، فاکتور PDF فارسی، اعلان in-app
+- **Support Hub:** دکمه شناور، تماس / واتساپ / تلگرام / ایمیل، ساعات کاری
+- UI راست‌چین، تاریخ شمسی، صفحات درباره ما و تماس
 
 ### پنل مدیریت
-- داشبورد آماری
-- مدیریت کاربران و تایید شماره موبایل
-- مدیریت قیمت طلا (پایه + حاشیه سود)
-- Kill Switch برای فعال/غیرفعال کردن معاملات
-- مانیتورینگ معاملات و سفارشات
-- مدیریت واریز، برداشت و تایید خودکار برداشت از طریق واریز سایر کاربران
-- مدیریت حساب‌های بانکی واریز
-- تنظیمات سیستم (شماره مدیران، آدرس تحویل طلا)
+- اتاق فرمان: قیمت، **قطع جداگانه خرید/فروش**، پیام بنر بازار
+- کاربران، تأیید موبایل، مانیتورینگ معاملات
+- مالی: واریز، برداشت ریال، برداشت طلا
+- **برداشت ریال یک‌مرحله‌ای:** فیش + تأیید و تکمیل
+- **برداشت طلا دو مرحله:** تأیید → آماده تحویل → ثبت تحویل حضوری
+- **تعریف کارت** (حساب‌های واریز) با سوئیچ فعال/غیرفعال
+- **تب پشتیبانی:** کانال‌ها، برنامه هفتگی، پیش‌نمایش زنده
+- **صفحات سایت** (CMS): درباره ما / تماس با ما
+- تنظیمات: شماره SMS مدیران (داخلی)، آدرس تحویل طلا
+- رفرش خودکار لیست مالی هنگام باز بودن تب
 
 ---
 
-## معماری
+## فرآیندهای اصلی
 
-```
-┌─────────────┐     ┌─────────────┐     ┌──────────────────────────────┐
-│   Next.js   │────▶│    Nginx    │────▶│  Django REST API (Gunicorn)  │
-│  Frontend   │     │ Reverse Proxy│     │  accounts · wallet · trades  │
-│   (PWA)     │     └─────────────┘     │  settings · notifications    │
-└─────────────┘                         └──────────────┬───────────────┘
-                                                       │
-                        ┌──────────────────────────────┼──────────────────┐
-                        ▼                              ▼                  ▼
-                 ┌─────────────┐              ┌─────────────┐    ┌─────────────┐
-                 │ PostgreSQL  │              │    Redis    │    │   Celery    │
-                 │             │              │             │    │ Worker+Beat │
-                 └─────────────┘              └─────────────┘    └─────────────┘
-```
-
-| لایه | تکنولوژی |
-|------|----------|
-| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
-| Backend | Django 5.2, Django REST Framework, SimpleJWT |
-| Database | PostgreSQL 15 |
-| Cache / Queue | Redis 7, Celery 5 |
-| SMS | Kavenegar |
-| PDF | WeasyPrint |
-| Deploy | Docker Compose, Nginx, Gunicorn |
+| فرآیند | خلاصه |
+|--------|--------|
+| **واریز** | کاربر یک فرم → مدیر فیش را می‌بیند → تأیید → شارژ کیف پول |
+| **برداشت ریال** | کاربر درخواست → مدیر فیش واریز آپلود + «تأیید واریز و تکمیل» |
+| **برداشت طلا** | تأیید → آماده تحویل (نمایش آدرس) → تحویل حضوری |
+| **Support Hub** | تنظیم از پنل → API عمومی → دکمه شناور dashboard |
 
 ---
 
-## ساختار پروژه
+## استقرار Production
 
-```
-gold-trader/
-├── backend/          # Django API
-│   ├── accounts/     # احراز هویت، کاربران، OTP
-│   ├── wallet/       # کیف پول، واریز، برداشت
-│   ├── trades/       # معاملات، قیمت، سفارش هوشمند
-│   ├── settings/     # تنظیمات سیستم، حساب‌های بانکی
-│   ├── notifications/# اعلان‌ها و Push
-│   └── config/       # تنظیمات Django، Celery
-├── frontend/         # Next.js App Router
-│   ├── app/          # صفحات (dashboard, adminpanel, auth)
-│   ├── components/   # کامپوننت‌های UI
-│   ├── contexts/     # AuthContext
-│   ├── hooks/        # Custom hooks
-│   └── lib/api/      # API client
-├── nginx/            # پیکربندی Reverse Proxy
-├── docker-compose.yml
-└── .env.example
-```
-
----
-
-## پیش‌نیازها
-
-- Docker 20.10+
-- Docker Compose 2.0+
-
-برای اجرای بدون Docker:
-- Python 3.11+
-- Node.js 20+
-- PostgreSQL 15+
-- Redis 7+
-
----
-
-## راه‌اندازی سریع (Docker)
-
-### ۱. کلون کردن مخزن
+مسیر سرور: `/var/www/gold-trader`
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/gold-trader.git
-cd gold-trader
+cd /var/www/gold-trader
+git pull origin main
+
+docker compose -f docker-compose.production.yml build frontend backend celery_worker celery_beat
+docker compose -f docker-compose.production.yml up -d frontend backend celery_worker celery_beat
+
+docker compose -f docker-compose.production.yml exec -T backend python manage.py migrate --noinput
 ```
 
-### ۲. تنظیم متغیرهای محیطی
+تغییرات فقط backend (با volume mount):
 
 ```bash
-cp .env.example .env
+docker compose -f docker-compose.production.yml restart backend celery_worker
 ```
 
-مقادیر مهم در `.env`:
-
-| متغیر | توضیح |
-|-------|-------|
-| `DJANGO_SECRET_KEY` | کلید امنیتی Django (در production حتماً تغییر دهید) |
-| `DJANGO_DEBUG` | `True` برای توسعه، `False` برای production |
-| `DB_*` | اطلاعات اتصال PostgreSQL |
-| `KAVENEGAR_API_KEY` | کلید API سرویس پیامک کاوه‌نگار |
-| `NEXT_PUBLIC_API_URL` | آدرس API برای فرانت‌اند |
-| `ALLOWED_HOSTS` | دامنه‌های مجاز (جدا شده با کاما) |
-| `CORS_ALLOWED_ORIGINS` | Originهای مجاز CORS |
-
-### ۳. اجرای سرویس‌ها
-
-```bash
-docker compose build
-docker compose up -d
-```
-
-### ۴. ایجاد ادمین
-
-```bash
-docker compose exec backend python manage.py createsuperuser
-```
-
-### ۵. دسترسی
-
-| سرویس | آدرس |
-|-------|------|
-| وب‌سایت (از طریق Nginx) | http://localhost |
-| API | http://localhost/api |
-| Django Admin | http://localhost/admin |
-| Frontend مستقیم (dev) | http://localhost:3000 |
+تغییرات UI حتماً نیاز به `build frontend` دارد.
 
 ---
 
-## API Endpoints (خلاصه)
+## API (خلاصه)
 
-### احراز هویت
-- `POST /api/auth/send-otp/` — ارسال کد OTP
-- `POST /api/auth/verify-otp/` — تایید OTP و دریافت JWT
-- `GET /api/auth/user/` — اطلاعات کاربر جاری
+| بخش | نمونه مسیر |
+|-----|-----------|
+| احراز هویت | `POST /api/auth/send-otp/` |
+| قیمت / معامله | `GET /api/trades/price/` |
+| واریز | `POST /api/wallet/deposit/` |
+| Support Hub | `GET /api/support/info/` |
+| تنظیمات ادمین | `GET/PUT /api/admin/settings/` |
+| تکمیل برداشت ریال | `POST /api/admin/wallet/withdrawals/<id>/complete-rial/` |
+| تحویل طلا | `PATCH /api/admin/wallet/withdrawals/<id>/complete/` |
 
-### معاملات
-- `GET /api/trades/price/` — قیمت فعلی طلا
-- `POST /api/trades/buy/` — خرید فوری
-- `POST /api/trades/sell/` — فروش فوری
-- `GET/POST /api/trades/orders/` — سفارشات هوشمند
-- `GET /api/trades/` — تاریخچه معاملات
-- `GET /api/trades/<id>/invoice/` — دانلود فاکتور PDF
-
-### کیف پول
-- `GET /api/wallet/` — موجودی
-- `POST /api/wallet/deposit/` — درخواست واریز
-- `POST /api/wallet/withdraw/` — درخواست برداشت
-- `GET /api/wallet/cards/` — کارت‌های بانکی
-
-### مدیریت
-- `GET /api/admin/dashboard/stats/` — آمار داشبورد
-- `GET/POST /api/admin/trades/price/update/` — مدیریت قیمت
-- `POST /api/admin/trades/status/toggle/` — فعال/غیرفعال معاملات
-
-> مسیرهای کامل در فایل‌های `backend/*/urls.py` تعریف شده‌اند.
+مسیرهای کامل: `backend/*/urls.py`
 
 ---
 
-## نقش‌های کاربری
+## نقش‌ها
 
 | نقش | دسترسی |
 |-----|--------|
-| `CUSTOMER` | پنل کاربری، معاملات، کیف پول |
+| `CUSTOMER` | پنل کاربری |
 | `SITE_ADMIN` | پنل مدیریت |
 | `SUPER_ADMIN` | دسترسی کامل + Django Admin |
 
 ---
 
-## Celery Tasks
+## Celery
 
-Celery Beat هر ۳۰ ثانیه سفارشات هوشمند در انتظار را بررسی و در صورت رسیدن قیمت به هدف، اجرا می‌کند.
-
-```python
-# config/settings.py
-CELERY_BEAT_SCHEDULE = {
-    'check-and-execute-pending-orders': {
-        'task': 'trades.tasks.check_and_execute_pending_orders',
-        'schedule': 30.0,
-    },
-}
-```
+- بررسی سفارش هوشمند هر ۳۰ ثانیه
+- همگام‌سازی قیمت از API (در صورت فعال بودن)
+- ارسال SMS غیرهمزمان
 
 ---
 
-## PWA
-
-پروژه از Progressive Web App پشتیبانی می‌کند:
-- `manifest.json` برای نصب روی موبایل
-- Service Worker برای Push Notification
-
----
-
-## توسعه محلی (بدون Docker)
-
-### Backend
+## توسعه محلی
 
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-cp ../.env.example .env
-python manage.py migrate
-python manage.py runserver
-```
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Celery (اختیاری)
-
-```bash
-cd backend
-celery -A config worker --loglevel=info
-celery -A config beat --loglevel=info
+docker compose build && docker compose up -d          # Docker
+# یا backend: runserver + frontend: npm run dev         # بدون Docker
 ```
 
 ---
 
 ## امنیت
 
-قبل از انتشار عمومی یا استقرار Production:
-
-- [ ] `DJANGO_SECRET_KEY` را تغییر دهید
-- [ ] `DJANGO_DEBUG=False` تنظیم شود
-- [ ] کلید Kavenegar واقعی فقط در `.env` سرور باشد (نه در Git)
-- [ ] رمز عبور دیتابیس قوی انتخاب شود
-- [ ] SSL/TLS فعال شود
-- [ ] فایل `.env` هرگز commit نشود
+- `DJANGO_DEBUG=False` در production
+- کلید Kavenegar فقط در `.env` سرور
+- SSL فعال
+- commit نکردن `.env`
 
 ---
 
-## مجوز
+## مجوز و مشارکت
 
-این پروژه تحت مجوز [MIT](LICENSE) منتشر شده است.
-
----
-
-## مشارکت
-
-1. Fork کنید
-2. یک branch جدید بسازید (`git checkout -b feature/amazing-feature`)
-3. تغییرات را commit کنید
-4. Pull Request ارسال کنید
-
----
-
-## تماس
-
-برای گزارش باگ یا پیشنهاد، از بخش [Issues](https://github.com/YOUR_USERNAME/gold-trader/issues) گیت‌هاب استفاده کنید.
+MIT — [LICENSE](LICENSE)  
+Issues: [github.com/morteza708/gold-trader/issues](https://github.com/morteza708/gold-trader/issues)
