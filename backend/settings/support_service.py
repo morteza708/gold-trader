@@ -7,6 +7,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Any
 
+from django.conf import settings as django_settings
 from django.utils import timezone
 
 DAY_ORDER = ('sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri')
@@ -31,6 +32,13 @@ WEEKDAY_TO_KEY = {
 
 
 from .defaults import default_support_hours
+
+
+def get_local_now() -> datetime:
+    """زمان محلی — سازگار با USE_TZ=True و USE_TZ=False"""
+    if django_settings.USE_TZ:
+        return timezone.localtime(timezone.now())
+    return datetime.now()
 
 
 def persian_to_english_numbers(text: str) -> str:
@@ -107,7 +115,7 @@ def compute_support_online(settings, now: datetime | None = None) -> bool:
         return False
     if not settings.support_hours_enabled:
         return True
-    now = now or timezone.localtime()
+    now = now if now is not None else get_local_now()
     schedule = merge_support_hours(settings.support_hours)
     return _is_within_slot(now, schedule.get(_day_key(now), {}))
 
@@ -188,7 +196,7 @@ def build_mailto_url(email: str) -> str | None:
 
 
 def build_public_support_info(settings, now: datetime | None = None) -> dict[str, Any]:
-    now = now or timezone.localtime()
+    now = now if now is not None else get_local_now()
     schedule = merge_support_hours(settings.support_hours)
     is_online = compute_support_online(settings, now)
     next_open = None if is_online else _next_open_datetime(now, schedule)
