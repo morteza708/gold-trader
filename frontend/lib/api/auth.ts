@@ -1,4 +1,5 @@
 import apiClient from './client';
+import type { SupportInfo } from './support';
 
 export interface SendOTPResponse {
   message: string;
@@ -455,6 +456,20 @@ export interface WithdrawalRequest {
 export interface SystemSettings {
   admin_phone_numbers: string[];
   gold_pickup_address: string | null;
+  support_enabled?: boolean;
+  support_phone?: string;
+  support_phone_secondary?: string;
+  support_landline?: string;
+  whatsapp_number?: string;
+  telegram_username?: string;
+  support_email?: string;
+  support_hours_enabled?: boolean;
+  support_hours?: Record<string, { enabled: boolean; start: string; end: string }>;
+  support_offline_message?: string;
+  support_online_message?: string;
+  support_show_floating_button?: boolean;
+  support_show_on_public_site?: boolean;
+  support_preview?: SupportInfo;
   updated_at: string;
 }
 
@@ -859,6 +874,19 @@ export const systemSettingsAPI = {
   updateSettings: async (data: {
     admin_phone_numbers?: string[];
     gold_pickup_address?: string;
+    support_enabled?: boolean;
+    support_phone?: string;
+    support_phone_secondary?: string;
+    support_landline?: string;
+    whatsapp_number?: string;
+    telegram_username?: string;
+    support_email?: string;
+    support_hours_enabled?: boolean;
+    support_hours?: Record<string, { enabled: boolean; start: string; end: string }>;
+    support_offline_message?: string;
+    support_online_message?: string;
+    support_show_floating_button?: boolean;
+    support_show_on_public_site?: boolean;
   }): Promise<{ message: string; settings: SystemSettings }> => {
     const response = await apiClient.put<{ message: string; settings: SystemSettings }>('/admin/settings/', data);
     return response.data;

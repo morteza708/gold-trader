@@ -5,6 +5,7 @@ app_name = 'settings'
 
 urlpatterns = [
     path('admin/settings/', views.system_settings, name='system-settings'),
+    path('support/info/', views.public_support_info, name='public-support-info'),
     # Deposit Accounts - User
     path('wallet/deposit-accounts/', views.deposit_accounts_list, name='deposit-accounts-list'),
     # Deposit Accounts - Admin

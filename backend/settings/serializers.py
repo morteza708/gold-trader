@@ -1,6 +1,7 @@
 from rest_framework import serializers
 import re
 from .models import SystemSettings, DepositAccount, SitePage
+from . import support_service
 
 
 def persian_to_english_numbers(text):
@@ -18,11 +19,72 @@ def persian_to_english_numbers(text):
 
 class SystemSettingsSerializer(serializers.ModelSerializer):
     """Serializer برای تنظیمات سیستم"""
-    
+    support_hours = serializers.JSONField(required=False)
+    support_preview = serializers.SerializerMethodField()
+
     class Meta:
         model = SystemSettings
-        fields = ['admin_phone_numbers', 'gold_pickup_address', 'updated_at']
-        read_only_fields = ['updated_at']
+        fields = [
+            'admin_phone_numbers',
+            'gold_pickup_address',
+            'support_enabled',
+            'support_phone',
+            'support_phone_secondary',
+            'support_landline',
+            'whatsapp_number',
+            'telegram_username',
+            'support_email',
+            'support_hours_enabled',
+            'support_hours',
+            'support_offline_message',
+            'support_online_message',
+            'support_show_floating_button',
+            'support_show_on_public_site',
+            'support_preview',
+            'updated_at',
+        ]
+        read_only_fields = ['updated_at', 'support_preview']
+
+    def get_support_preview(self, obj):
+        return support_service.build_public_support_info(obj)
+
+    def _validate_optional_mobile(self, value, field_label, required=False):
+        value = support_service.normalize_phone(value)
+        if not value:
+            if required:
+                raise serializers.ValidationError(f'{field_label} الزامی است')
+            return ''
+        if not re.match(r'^09\d{9}$', value):
+            raise serializers.ValidationError(f'{field_label} نامعتبر است (مثال: 09123456789)')
+        return value
+
+    def validate_support_phone(self, value):
+        if self.partial and not value:
+            return support_service.normalize_phone(value)
+        enabled = self.initial_data.get('support_enabled', True)
+        if enabled in (True, 'true', '1', 1):
+            return self._validate_optional_mobile(value, 'شماره پشتیبانی', required=False)
+        return self._validate_optional_mobile(value, 'شماره پشتیبانی')
+
+    def validate_support_phone_secondary(self, value):
+        return self._validate_optional_mobile(value, 'شماره پشتیبانی دوم')
+
+    def validate_whatsapp_number(self, value):
+        return self._validate_optional_mobile(value, 'شماره واتساپ')
+
+    def validate_support_landline(self, value):
+        value = support_service.normalize_phone(value)
+        if not value:
+            return ''
+        if not re.match(r'^0\d{6,11}$', value):
+            raise serializers.ValidationError('شماره تلفن ثابت نامعتبر است')
+        return value
+
+    def validate_telegram_username(self, value):
+        return support_service.normalize_telegram_username(value)
+
+    def validate_support_hours(self, value):
+        return support_service.merge_support_hours(value)
     
     def validate_admin_phone_numbers(self, value):
         """اعتبارسنجی شماره مدیران"""

@@ -7,19 +7,21 @@ import {
   Trash2, Edit2, CheckCircle2, XCircle, 
   Clock, CreditCard, Lock, 
   Phone, MapPin, Radio,
-  AlertTriangle, X, Loader2, Power, AlertCircle
+  AlertTriangle, X, Loader2, Power, AlertCircle, Headphones
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { toPersianDigits, toEnglishDigits, validateMobile } from "@/lib/utils/numberUtils";
 import { systemSettingsAPI, depositAccountsAPI, DepositAccount } from "@/lib/api/auth";
+import { SupportSettings } from "@/lib/api/support";
+import SupportSettingsTab, { buildSupportSettingsFromApi } from "@/components/admin/SupportSettingsTab";
 import { adminTradesAPI, GoldPriceAdmin } from "@/lib/api/trades";
 import { useGoldPrice } from "@/hooks/useGoldPrice";
 
 // تایپ‌ها (DepositAccount از API import شده است)
 
 export default function SystemSettingsPage() {
-  const [activeTab, setActiveTab] = useState<"price" | "financial" | "general" | "notifications">("price");
+  const [activeTab, setActiveTab] = useState<"price" | "financial" | "general" | "support" | "notifications">("price");
   const [isSaving, setIsSaving] = useState(false);
   const [isAddPhoneModalOpen, setIsAddPhoneModalOpen] = useState(false);
   const [newPhoneNumber, setNewPhoneNumber] = useState("");
@@ -52,6 +54,10 @@ export default function SystemSettingsPage() {
     goldPickupAddress: "",
   });
 
+  const [supportSettings, setSupportSettings] = useState<SupportSettings>(
+    buildSupportSettingsFromApi({})
+  );
+
   // بارگذاری تنظیمات سیستم و همگام‌سازی قیمت پایه زنده
   useEffect(() => {
     fetchSystemSettings();
@@ -70,6 +76,7 @@ export default function SystemSettingsPage() {
         adminPhoneNumbers: settings.admin_phone_numbers || [],
         goldPickupAddress: settings.gold_pickup_address || "",
       }));
+      setSupportSettings(buildSupportSettingsFromApi(settings));
     } catch (error: any) {
       console.error('Error fetching system settings:', error);
       // در صورت خطا، از مقادیر پیش‌فرض استفاده می‌شود
@@ -300,6 +307,7 @@ export default function SystemSettingsPage() {
     { id: "price", name: "قیمت و بازار", icon: DollarSign },
     { id: "financial", name: "تعریف کارت", icon: CreditCard },
     { id: "general", name: "عمومی", icon: Globe },
+    { id: "support", name: "پشتیبانی", icon: Headphones },
     { id: "notifications", name: "اعلان‌ها", icon: Bell },
   ];
 
@@ -763,6 +771,18 @@ export default function SystemSettingsPage() {
                   )}
                 </button>
               </div>
+            </motion.div>
+          )}
+
+          {/* تب: Support Hub */}
+          {activeTab === "support" && (
+            <motion.div
+              key="support"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <SupportSettingsTab settings={supportSettings} onChange={setSupportSettings} />
             </motion.div>
           )}
 

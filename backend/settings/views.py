@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from accounts.models import UserRole
 from .models import SystemSettings, DepositAccount, SitePage
 from .serializers import SystemSettingsSerializer, DepositAccountSerializer, SitePageSerializer
+from . import support_service
 
 
 def _is_admin(user):
@@ -45,6 +46,26 @@ def system_settings(request):
     except Exception as e:
         import traceback
         print(f"خطا در system_settings: {e}")
+        print(traceback.format_exc())
+        return Response(
+            {'error': f'خطای سرور: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def public_support_info(request):
+    """اطلاعات عمومی Support Hub برای کاربران و سایت"""
+    try:
+        settings = SystemSettings.get_settings()
+        info = support_service.build_public_support_info(settings)
+        if not info['enabled']:
+            return Response({'enabled': False}, status=status.HTTP_200_OK)
+        return Response(info, status=status.HTTP_200_OK)
+    except Exception as e:
+        import traceback
+        print(f"خطا در public_support_info: {e}")
         print(traceback.format_exc())
         return Response(
             {'error': f'خطای سرور: {str(e)}'},

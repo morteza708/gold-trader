@@ -40,6 +40,74 @@ class SystemSettings(models.Model):
         verbose_name='مهلت تسویه خرید معلق (ساعت)',
         help_text='پس از ثبت خرید معلق، کاربر چند ساعت فرصت تکمیل واریز دارد'
     )
+    # --- Support Hub ---
+    support_enabled = models.BooleanField(
+        default=True,
+        verbose_name='فعال بودن پشتیبانی',
+    )
+    support_phone = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        verbose_name='شماره پشتیبانی (اصلی)',
+    )
+    support_phone_secondary = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        verbose_name='شماره پشتیبانی (دوم)',
+    )
+    support_landline = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        verbose_name='تلفن ثابت پشتیبانی',
+    )
+    whatsapp_number = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        verbose_name='شماره واتساپ',
+    )
+    telegram_username = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        verbose_name='نام کاربری تلگرام',
+    )
+    support_email = models.EmailField(
+        blank=True,
+        default='',
+        verbose_name='ایمیل پشتیبانی',
+    )
+    support_hours_enabled = models.BooleanField(
+        default=False,
+        verbose_name='محدودیت ساعات پاسخگویی',
+    )
+    support_hours = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='ساعات پاسخگویی',
+        help_text='برنامه هفتگی — کلیدهای sat..fri',
+    )
+    support_offline_message = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='پیام خارج از ساعت کاری',
+    )
+    support_online_message = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='پیام داخل ساعت کاری',
+    )
+    support_show_floating_button = models.BooleanField(
+        default=True,
+        verbose_name='نمایش دکمه شناور در داشبورد',
+    )
+    support_show_on_public_site = models.BooleanField(
+        default=True,
+        verbose_name='نمایش در سایت عمومی',
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='تاریخ ایجاد'

@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import SitePageView from "@/components/site/SitePageView";
+import SupportHubPanel from "@/components/support/SupportHubPanel";
 import { pagesAPI, SitePage } from "@/lib/api/pages";
+import { supportAPI, SupportInfo } from "@/lib/api/support";
 import { pageTitle } from "@/lib/brand";
-import { Loader2 } from "lucide-react";
+import { Headphones, Loader2 } from "lucide-react";
 
 export default function AboutPage() {
   const [page, setPage] = useState<SitePage | null>(null);
+  const [supportInfo, setSupportInfo] = useState<SupportInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -16,8 +19,14 @@ export default function AboutPage() {
     let cancelled = false;
     (async () => {
       try {
-        const data = await pagesAPI.getPublic("about");
-        if (!cancelled) setPage(data);
+        const [pageData, supportData] = await Promise.all([
+          pagesAPI.getPublic("about"),
+          supportAPI.getInfo().catch(() => null),
+        ]);
+        if (!cancelled) {
+          setPage(pageData);
+          setSupportInfo(supportData);
+        }
       } catch {
         if (!cancelled) setError("بارگذاری صفحه با مشکل مواجه شد.");
       } finally {
@@ -28,6 +37,11 @@ export default function AboutPage() {
       cancelled = true;
     };
   }, []);
+
+  const showSupportHub =
+    supportInfo?.enabled &&
+    supportInfo.show_on_public_site &&
+    supportInfo.has_any_channel;
 
   if (loading) {
     return (
@@ -45,5 +59,18 @@ export default function AboutPage() {
     );
   }
 
-  return <SitePageView page={page} variant="dashboard" showContactBlock />;
+  return (
+    <div className="space-y-6 max-w-3xl mx-auto">
+      {showSupportHub && supportInfo && (
+        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+          <h2 className="font-black text-gray-900 mb-4 flex items-center gap-2">
+            <Headphones size={20} className="text-gold-600" />
+            پشتیبانی
+          </h2>
+          <SupportHubPanel info={supportInfo} variant="light" compact />
+        </div>
+      )}
+      <SitePageView page={page} variant="dashboard" showContactBlock />
+    </div>
+  );
 }
