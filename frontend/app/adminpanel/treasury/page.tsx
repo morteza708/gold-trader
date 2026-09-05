@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   XCircle,
   Info,
+  TrendingUp,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -27,9 +28,23 @@ import {
   JournalRow,
   GoldDebtor,
   OpenWithdrawal,
+  PnlSnapshot,
 } from "@/lib/api/treasury";
 
-type TabId = "overview" | "vault" | "parties" | "journal" | "alerts" | "guide";
+type TabId = "overview" | "pnl" | "vault" | "parties" | "journal" | "alerts" | "guide";
+
+function formatIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatRial(value: string | number): string {
+  const n = Number(value);
+  if (Number.isNaN(n)) return toPersianDigits("0");
+  return toPersianDigits(n.toLocaleString());
+}
 
 export default function TreasuryPage() {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
@@ -44,6 +59,11 @@ export default function TreasuryPage() {
     total_pending_gold_delivery: string;
     open_rial_withdrawals: string;
   } | null>(null);
+
+  const [pnl, setPnl] = useState<PnlSnapshot | null>(null);
+  const [pnlLoading, setPnlLoading] = useState(false);
+  const [pnlFrom, setPnlFrom] = useState(() => formatIsoDate(new Date()));
+  const [pnlTo, setPnlTo] = useState(() => formatIsoDate(new Date()));
 
   const [movementType, setMovementType] = useState<"IN" | "OUT" | "ADJUST">("IN");
   const [amount, setAmount] = useState("");
@@ -78,6 +98,19 @@ export default function TreasuryPage() {
       toast.error(err.response?.data?.error || "خطا در دریافت وضعیت خزانه");
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const loadPnl = useCallback(async (from: string, to: string) => {
+    setPnlLoading(true);
+    try {
+      const data = await adminTreasuryAPI.getPnl({ from, to });
+      setPnl(data);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || "خطا در دریافت سود و زیان");
+    } finally {
+      setPnlLoading(false);
     }
   }, []);
 
@@ -127,9 +160,26 @@ export default function TreasuryPage() {
     if (activeTab === "vault") loadVault();
     if (activeTab === "parties") loadParties();
     if (activeTab === "journal") loadJournal();
+    if (activeTab === "pnl") loadPnl(pnlFrom, pnlTo);
     if (activeTab === "overview" || activeTab === "alerts") loadOverview();
-  }, [activeTab, loadVault, loadParties, loadJournal, loadOverview]);
+    // pnlFrom/pnlTo فقط هنگام ورود به تب خوانده می‌شوند؛ محاسبه دستی با دکمه است
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, loadVault, loadParties, loadJournal, loadOverview, loadPnl]);
 
+  const setPnlPreset = (preset: "today" | "month") => {
+    const now = new Date();
+    const to = formatIsoDate(now);
+    if (preset === "today") {
+      setPnlFrom(to);
+      setPnlTo(to);
+      void loadPnl(to, to);
+      return;
+    }
+    const from = formatIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    setPnlFrom(from);
+    setPnlTo(to);
+    void loadPnl(from, to);
+  };
   const handleCreateMovement = async () => {
     const amt = Number(toEnglishDigits(amount));
     if (!amt || (movementType !== "ADJUST" && amt <= 0)) {
@@ -194,6 +244,7 @@ export default function TreasuryPage() {
 
   const tabs: { id: TabId; name: string; icon: typeof Scale }[] = [
     { id: "overview", name: "نمای کلی", icon: Scale },
+    { id: "pnl", name: "سود و زیان", icon: TrendingUp },
     { id: "vault", name: "ورود و خروج خزانه", icon: Landmark },
     { id: "parties", name: "بدهکاران و بستانکاران", icon: Users },
     { id: "journal", name: "دفتر عملیات", icon: BookOpen },
@@ -217,7 +268,7 @@ export default function TreasuryPage() {
             خزانه و حسابرسی
           </h1>
           <p className="text-sm text-slate-400">
-            موجودی طلای شرکت، بدهی به مشتریان، دفتر عملیات و هشدار کمبود
+            موجودی طلای شرکت، سود و زیان عملیاتی، بدهی به مشتریان و هشدار کمبود
           </p>
         </div>
         <button
@@ -226,10 +277,11 @@ export default function TreasuryPage() {
             if (activeTab === "vault") loadVault();
             if (activeTab === "parties") loadParties();
             if (activeTab === "journal") loadJournal();
+            if (activeTab === "pnl") loadPnl(pnlFrom, pnlTo);
           }}
           className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm font-bold"
         >
-          <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+          <RefreshCw size={16} className={loading || pnlLoading ? "animate-spin" : ""} />
           به‌روزرسانی
         </button>
       </div>
@@ -351,6 +403,118 @@ export default function TreasuryPage() {
                   </p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === "pnl" && (
+            <div className="space-y-6">
+              <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPnlPreset("today")}
+                    className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-200 hover:bg-slate-700"
+                  >
+                    امروز
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPnlPreset("month")}
+                    className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-200 hover:bg-slate-700"
+                  >
+                    این ماه
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">از تاریخ</label>
+                    <input
+                      type="date"
+                      value={pnlFrom}
+                      onChange={(e) => setPnlFrom(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">تا تاریخ</label>
+                    <input
+                      type="date"
+                      value={pnlTo}
+                      onChange={(e) => setPnlTo(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => loadPnl(pnlFrom, pnlTo)}
+                    disabled={pnlLoading}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 disabled:opacity-50 rounded-xl text-sm font-bold text-white"
+                  >
+                    {pnlLoading ? <RefreshCw size={16} className="animate-spin" /> : <TrendingUp size={16} />}
+                    محاسبه
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-sm text-blue-200 leading-7">
+                <strong className="text-white">سه عدد جدا:</strong> سود حاشیه از معاملات کاربران است؛
+                سود تحقق‌یافته موجودی فقط وقتی طلا را با قیمت از خزانه به بازار خارج می‌کنید ثبت
+                می‌شود؛ سود تحقق‌نیافته ارزش‌گذاری فعلی موجودی نسبت به قیمت بازار است و داخل جمع
+                عملیاتی دوره نمی‌آید.
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  {
+                    title: "سود حاشیه معاملات",
+                    value: pnl ? `${formatRial(pnl.spread_pnl)} ریال` : "—",
+                    hint: "جمع حاشیه خرید و فروش کاربران در بازه",
+                  },
+                  {
+                    title: "سود تحقق‌یافته موجودی",
+                    value: pnl ? `${formatRial(pnl.inventory_realized_pnl)} ریال` : "—",
+                    hint: "خروج از خزانه با قیمت نسبت به میانگین تمام‌شده",
+                  },
+                  {
+                    title: "جمع عملیاتی دوره",
+                    value: pnl ? `${formatRial(pnl.operating_total)} ریال` : "—",
+                    hint: "حاشیه + تحقق‌یافته موجودی",
+                  },
+                  {
+                    title: "سود تحقق‌نیافته",
+                    value: pnl ? `${formatRial(pnl.inventory_unrealized_pnl)} ریال` : "—",
+                    hint: "موجودی فعلی × (قیمت بازار − میانگین تمام‌شده)",
+                  },
+                ].map((card) => (
+                  <div
+                    key={card.title}
+                    className="bg-slate-900 border border-slate-700 rounded-xl p-4"
+                  >
+                    <p className="text-xs text-slate-400 mb-2">{card.title}</p>
+                    <p className="text-lg font-black text-white mb-2">{card.value}</p>
+                    <p className="text-[11px] text-slate-500 leading-5">{card.hint}</p>
+                  </div>
+                ))}
+              </div>
+
+              {pnl && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                  <div className="bg-slate-900 border border-slate-700 rounded-xl p-4">
+                    <p className="text-xs text-slate-400 mb-1">موجودی فعلی خزانه</p>
+                    <p className="font-bold text-white">
+                      {toPersianDigits(Number(pnl.company_gold_balance).toFixed(3))} گرم
+                    </p>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-700 rounded-xl p-4">
+                    <p className="text-xs text-slate-400 mb-1">میانگین قیمت تمام‌شده</p>
+                    <p className="font-bold text-white">{formatRial(pnl.avg_cost_per_gram)} ریال</p>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-700 rounded-xl p-4">
+                    <p className="text-xs text-slate-400 mb-1">{pnl.market_ref_label}</p>
+                    <p className="font-bold text-white">{formatRial(pnl.market_ref_price)} ریال</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -742,6 +906,32 @@ export default function TreasuryPage() {
                   <li>
                     <strong className="text-white">تحویل حضوری:</strong> طلا از خزانه فیزیکی خارج
                     می‌شود.
+                  </li>
+                </ul>
+              </section>
+              <section>
+                <h3 className="text-white font-black text-lg mb-2">
+                  سود حاشیه در مقابل سود موجودی
+                </h3>
+                <ul className="list-disc pr-5 space-y-2">
+                  <li>
+                    <strong className="text-white">سود حاشیه:</strong> اختلاف قیمت نهایی کاربر با
+                    قیمت پایه بازار روی هر معامله خرید/فروش — همان مبلغی که در اتاق فرمان به‌عنوان
+                    «سود حاشیه امروز» دیده می‌شود.
+                  </li>
+                  <li>
+                    <strong className="text-white">سود تحقق‌یافته موجودی:</strong> وقتی طلا را از
+                    خزانه با قیمت مشخص به بازار/تأمین‌کننده می‌فروشید، نسبت به میانگین قیمت تمام‌شده
+                    سود یا زیان ثبت می‌شود.
+                  </li>
+                  <li>
+                    <strong className="text-white">سود تحقق‌نیافته:</strong> ارزش‌گذاری فعلی موجودی
+                    خزانه نسبت به قیمت پایه خرید بازار؛ هنوز نقد نشده است.
+                  </li>
+                  <li>
+                    تحویل حضوری به کاربر و خرید کاربر رویداد سود موجودی نیستند. در این فاز از
+                    میانگین موزون استفاده می‌شود؛ روش لات‌به‌لات (اولین ورود، اولین خروج) پیاده
+                    نشده است.
                   </li>
                 </ul>
               </section>

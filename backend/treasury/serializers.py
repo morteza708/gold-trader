@@ -98,6 +98,7 @@ class VaultMovementSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'created_at', 'created_at_jalali', 'movement_type', 'movement_type_display',
             'amount', 'unit_price', 'counterparty', 'note', 'created_by_name',
+            'avg_cost_before', 'realized_inventory_pnl',
         ]
 
     def get_created_by_name(self, obj):
@@ -112,6 +113,19 @@ class VaultMovementSerializer(serializers.ModelSerializer):
             return None
         from jalali_date import datetime2jalali
         return datetime2jalali(obj.created_at).strftime('%Y/%m/%d %H:%M')
+
+
+class PnlSnapshotSerializer(serializers.Serializer):
+    date_from = serializers.CharField()
+    date_to = serializers.CharField()
+    spread_pnl = serializers.DecimalField(max_digits=18, decimal_places=0)
+    inventory_realized_pnl = serializers.DecimalField(max_digits=18, decimal_places=0)
+    inventory_unrealized_pnl = serializers.DecimalField(max_digits=18, decimal_places=0)
+    operating_total = serializers.DecimalField(max_digits=18, decimal_places=0)
+    company_gold_balance = serializers.DecimalField(max_digits=18, decimal_places=6)
+    avg_cost_per_gram = serializers.DecimalField(max_digits=18, decimal_places=0)
+    market_ref_price = serializers.DecimalField(max_digits=18, decimal_places=0)
+    market_ref_label = serializers.CharField()
 
 
 class OperationalJournalSerializer(serializers.ModelSerializer):

@@ -650,13 +650,13 @@ def admin_dashboard_stats(request):
         ).aggregate(total_volume=Sum('amount'))
         total_volume_grams = float(trades_today_volume['total_volume'] or 0.0)
         
-        # 5. درآمد امروز (کارمزد - فقط موفق)
+        # 5. سود حاشیه امروز (معاملات موفق)
         revenue_today = Trade.objects.filter(
             created_at__gte=today_start,
             created_at__lt=today_end,
             status='SUCCESS'
-        ).aggregate(total_fee=Sum('fee'))
-        total_revenue = int(revenue_today['total_fee'] or 0)
+        ).aggregate(total_margin=Sum('margin_profit'))
+        total_revenue = int(revenue_today['total_margin'] or 0)
         
         # 6. منتظر تایید (واریز + برداشت)
         pending_deposits = DepositRequest.objects.filter(status='PENDING').count()

@@ -178,6 +178,19 @@ class VaultMovement(models.Model):
         related_name='vault_movement',
         verbose_name='ردیف دفتر',
     )
+    avg_cost_before = models.DecimalField(
+        max_digits=18,
+        decimal_places=0,
+        default=Decimal('0'),
+        verbose_name='میانگین تمام‌شده قبل از حرکت',
+    )
+    realized_inventory_pnl = models.DecimalField(
+        max_digits=18,
+        decimal_places=0,
+        default=Decimal('0'),
+        verbose_name='سود/زیان تحقق‌یافته موجودی (ریال)',
+        help_text='فقط برای خروج/تعدیل منفی با قیمت فروش محاسبه می‌شود',
+    )
 
     class Meta:
         verbose_name = 'حرکت خزانه'

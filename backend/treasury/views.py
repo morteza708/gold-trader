@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import datetime
 
 from django.db.models import Q, Sum
 from rest_framework import status
@@ -17,11 +18,21 @@ from .serializers import (
     VaultMovementCreateSerializer,
     VaultMovementSerializer,
     OperationalJournalSerializer,
+    PnlSnapshotSerializer,
 )
 
 
 def _is_admin(user):
     return getattr(user, 'role', None) in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]
+
+
+def _parse_date_param(value: str | None):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value.strip(), '%Y-%m-%d').date()
+    except ValueError:
+        return None
 
 
 @api_view(['GET'])
@@ -33,6 +44,25 @@ def admin_treasury_overview(request):
     snap = services.get_coverage_snapshot()
     serializer = CoverageSnapshotSerializer(snap)
     return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_treasury_pnl(request):
+    if not _is_admin(request.user):
+        return Response({'error': 'شما دسترسی به این بخش ندارید'}, status=status.HTTP_403_FORBIDDEN)
+
+    raw_from = request.query_params.get('from')
+    raw_to = request.query_params.get('to')
+    date_from = _parse_date_param(raw_from)
+    date_to = _parse_date_param(raw_to)
+    if raw_from and date_from is None:
+        return Response({'error': 'فرمت تاریخ شروع نامعتبر است (YYYY-MM-DD)'}, status=status.HTTP_400_BAD_REQUEST)
+    if raw_to and date_to is None:
+        return Response({'error': 'فرمت تاریخ پایان نامعتبر است (YYYY-MM-DD)'}, status=status.HTTP_400_BAD_REQUEST)
+
+    snap = services.get_pnl_snapshot(date_from=date_from, date_to=date_to)
+    return Response(PnlSnapshotSerializer(snap).data)
 
 
 @api_view(['GET', 'PUT'])

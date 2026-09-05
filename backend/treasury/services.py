@@ -3,6 +3,7 @@
 """
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
@@ -204,9 +205,16 @@ def apply_vault_movement(
         raise TreasuryError('نوع حرکت نامعتبر است.')
 
     treasury = CompanyTreasury.objects.select_for_update().get(pk=CompanyTreasury.get_solo().pk)
+    avg_cost_before = _q0(treasury.avg_cost_per_gram)
+
+    realized_pnl = ZERO
+    if delta < ZERO and unit_price > ZERO:
+        grams_out = abs(delta)
+        realized_pnl = _q0((unit_price - avg_cost_before) * grams_out)
+
     new_balance, new_avg = _apply_weighted_avg(
         _q6(treasury.gold_balance),
-        _q0(treasury.avg_cost_per_gram),
+        avg_cost_before,
         delta,
         unit_price if delta > ZERO else ZERO,
     )
@@ -233,11 +241,73 @@ def apply_vault_movement(
         note=note or '',
         created_by=created_by,
         journal_entry=journal,
+        avg_cost_before=avg_cost_before,
+        realized_inventory_pnl=realized_pnl,
     )
     journal.reference_id = movement.id
     journal.save(update_fields=['reference_id'])
 
     return movement
+
+
+def get_pnl_snapshot(
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> dict[str, Any]:
+    """گزارش سود و زیان عملیاتی برای بازه تاریخ (شامل ابتدا و انتها)."""
+    now = timezone.now()
+    today = now.date()
+    if date_from is None:
+        date_from = today
+    if date_to is None:
+        date_to = today
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+
+    start = datetime.combine(date_from, datetime.min.time())
+    end = datetime.combine(date_to, datetime.min.time()) + timedelta(days=1)
+
+    from trades.models import Trade, GoldPrice
+
+    spread = Trade.objects.filter(
+        status='SUCCESS',
+        created_at__gte=start,
+        created_at__lt=end,
+    ).aggregate(s=Sum('margin_profit'))['s']
+    spread_pnl = _q0(spread or ZERO)
+
+    inventory_realized = VaultMovement.objects.filter(
+        created_at__gte=start,
+        created_at__lt=end,
+    ).aggregate(s=Sum('realized_inventory_pnl'))['s']
+    inventory_realized_pnl = _q0(inventory_realized or ZERO)
+
+    treasury = CompanyTreasury.get_solo()
+    vault = _q6(treasury.gold_balance)
+    avg_cost = _q0(treasury.avg_cost_per_gram)
+
+    price_obj = GoldPrice.get_current_price()
+    market_ref = _q0(price_obj.buy_base_price) if price_obj else ZERO
+
+    if vault > ZERO and market_ref > ZERO:
+        inventory_unrealized_pnl = _q0((market_ref - avg_cost) * vault)
+    else:
+        inventory_unrealized_pnl = ZERO
+
+    operating_total = _q0(spread_pnl + inventory_realized_pnl)
+
+    return {
+        'date_from': date_from.isoformat(),
+        'date_to': date_to.isoformat(),
+        'spread_pnl': spread_pnl,
+        'inventory_realized_pnl': inventory_realized_pnl,
+        'inventory_unrealized_pnl': inventory_unrealized_pnl,
+        'operating_total': operating_total,
+        'company_gold_balance': vault,
+        'avg_cost_per_gram': avg_cost,
+        'market_ref_price': market_ref,
+        'market_ref_label': 'قیمت پایه خرید بازار (جایگزینی)',
+    }
 
 
 @transaction.atomic

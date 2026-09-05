@@ -29,6 +29,8 @@ export interface VaultMovement {
   counterparty: string;
   note: string;
   created_by_name: string | null;
+  avg_cost_before?: string;
+  realized_inventory_pnl?: string;
 }
 
 export interface JournalRow {
@@ -72,9 +74,31 @@ export interface OpenWithdrawal {
   account_code: string | null;
 }
 
+export interface PnlSnapshot {
+  date_from: string;
+  date_to: string;
+  spread_pnl: string;
+  inventory_realized_pnl: string;
+  inventory_unrealized_pnl: string;
+  operating_total: string;
+  company_gold_balance: string;
+  avg_cost_per_gram: string;
+  market_ref_price: string;
+  market_ref_label: string;
+}
+
 export const adminTreasuryAPI = {
   getOverview: async (): Promise<CoverageSnapshot> => {
     const res = await apiClient.get<CoverageSnapshot>('/admin/treasury/overview/');
+    return res.data;
+  },
+
+  getPnl: async (params?: { from?: string; to?: string }): Promise<PnlSnapshot> => {
+    const query = new URLSearchParams();
+    if (params?.from) query.append('from', params.from);
+    if (params?.to) query.append('to', params.to);
+    const q = query.toString();
+    const res = await apiClient.get<PnlSnapshot>(`/admin/treasury/pnl/${q ? `?${q}` : ''}`);
     return res.data;
   },
 

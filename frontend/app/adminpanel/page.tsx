@@ -153,7 +153,7 @@ export default function AdminDashboard() {
             color: "text-gold-400",
           },
           {
-            title: "درآمد امروز",
+            title: "سود حاشیه امروز",
             value: statsLoading
               ? "..."
               : `${toPersianDigits(stats.revenue_today.toLocaleString())} ریال`,
