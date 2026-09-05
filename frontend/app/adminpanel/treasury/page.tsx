@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import {
   Scale,
   Landmark,
@@ -17,10 +17,15 @@ import {
   XCircle,
   Info,
   TrendingUp,
+  Calendar,
+  X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
+import DatePicker, { DateObject } from "react-multi-date-picker";
+import persian from "react-date-object/calendars/persian";
+import persian_fa from "react-date-object/locales/persian_fa";
+import { toPersianDigits, toEnglishDigits, formatNumber } from "@/lib/utils/numberUtils";
 import {
   adminTreasuryAPI,
   CoverageSnapshot,
@@ -38,6 +43,25 @@ function formatIsoDate(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function jalaliToday(): DateObject {
+  return new DateObject({ calendar: persian, locale: persian_fa });
+}
+
+function rangeToIso(range: DateObject[]): { from: string; to: string } {
+  if (range.length >= 2 && range[0] && range[1]) {
+    return {
+      from: formatIsoDate(range[0].toDate()),
+      to: formatIsoDate(range[1].toDate()),
+    };
+  }
+  if (range.length === 1 && range[0]) {
+    const iso = formatIsoDate(range[0].toDate());
+    return { from: iso, to: iso };
+  }
+  const today = formatIsoDate(new Date());
+  return { from: today, to: today };
 }
 
 function formatRial(value: string | number): string {
@@ -62,8 +86,10 @@ export default function TreasuryPage() {
 
   const [pnl, setPnl] = useState<PnlSnapshot | null>(null);
   const [pnlLoading, setPnlLoading] = useState(false);
-  const [pnlFrom, setPnlFrom] = useState(() => formatIsoDate(new Date()));
-  const [pnlTo, setPnlTo] = useState(() => formatIsoDate(new Date()));
+  const [pnlDateRange, setPnlDateRange] = useState<DateObject[]>(() => {
+    const today = jalaliToday();
+    return [today, today];
+  });
 
   const [movementType, setMovementType] = useState<"IN" | "OUT" | "ADJUST">("IN");
   const [amount, setAmount] = useState("");
@@ -160,28 +186,57 @@ export default function TreasuryPage() {
     if (activeTab === "vault") loadVault();
     if (activeTab === "parties") loadParties();
     if (activeTab === "journal") loadJournal();
-    if (activeTab === "pnl") loadPnl(pnlFrom, pnlTo);
+    if (activeTab === "pnl") {
+      const { from, to } = rangeToIso(pnlDateRange);
+      loadPnl(from, to);
+    }
     if (activeTab === "overview" || activeTab === "alerts") loadOverview();
-    // pnlFrom/pnlTo فقط هنگام ورود به تب خوانده می‌شوند؛ محاسبه دستی با دکمه است
+    // بازه تاریخ فقط هنگام ورود به تب خوانده می‌شود
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, loadVault, loadParties, loadJournal, loadOverview, loadPnl]);
 
   const setPnlPreset = (preset: "today" | "month") => {
-    const now = new Date();
-    const to = formatIsoDate(now);
+    const today = jalaliToday();
     if (preset === "today") {
-      setPnlFrom(to);
-      setPnlTo(to);
-      void loadPnl(to, to);
+      const range = [today, today];
+      setPnlDateRange(range);
+      const { from, to } = rangeToIso(range);
+      void loadPnl(from, to);
       return;
     }
-    const from = formatIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
-    setPnlFrom(from);
-    setPnlTo(to);
+    const start = jalaliToday().toFirstOfMonth();
+    const range = [start, today];
+    setPnlDateRange(range);
+    const { from, to } = rangeToIso(range);
     void loadPnl(from, to);
   };
+
+  const handlePnlDateChange = (dates: DateObject | DateObject[] | null) => {
+    const arr = (Array.isArray(dates) ? dates : dates ? [dates] : []) as DateObject[];
+    setPnlDateRange(arr);
+  };
+
+  const handleGramsChange = (e: ChangeEvent<HTMLInputElement>) => {
+    let englishValue = toEnglishDigits(e.target.value).replace(/٫/g, ".");
+    englishValue = englishValue.replace(/,/g, "");
+    if (/^-?\d*\.?\d*$/.test(englishValue)) {
+      setAmount(englishValue);
+    }
+  };
+
+  const handleUnitPriceChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const englishValue = toEnglishDigits(e.target.value);
+    setUnitPrice(formatNumber(englishValue));
+  };
+
+  const handlePercentChange =
+    (setter: (v: string) => void) => (e: ChangeEvent<HTMLInputElement>) => {
+      const cleaned = toEnglishDigits(e.target.value).replace(/\D/g, "");
+      setter(cleaned);
+    };
+
   const handleCreateMovement = async () => {
-    const amt = Number(toEnglishDigits(amount));
+    const amt = Number(toEnglishDigits(amount).replace(/,/g, "").replace(/٫/g, ".") || "0");
     if (!amt || (movementType !== "ADJUST" && amt <= 0)) {
       return toast.error("مقدار را به‌درستی وارد کنید");
     }
@@ -193,7 +248,9 @@ export default function TreasuryPage() {
       const result = await adminTreasuryAPI.createVaultMovement({
         movement_type: movementType,
         amount: amt,
-        unit_price: Number(toEnglishDigits(unitPrice) || "0"),
+        unit_price: Number(
+          toEnglishDigits(unitPrice).replace(/,/g, "") || "0"
+        ),
         counterparty,
         note,
       });
@@ -277,7 +334,10 @@ export default function TreasuryPage() {
             if (activeTab === "vault") loadVault();
             if (activeTab === "parties") loadParties();
             if (activeTab === "journal") loadJournal();
-            if (activeTab === "pnl") loadPnl(pnlFrom, pnlTo);
+            if (activeTab === "pnl") {
+              const { from, to } = rangeToIso(pnlDateRange);
+              loadPnl(from, to);
+            }
           }}
           className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm font-bold"
         >
@@ -425,30 +485,51 @@ export default function TreasuryPage() {
                     این ماه
                   </button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                  <div>
-                    <label className="text-xs text-slate-400 mb-1 block">از تاریخ</label>
-                    <input
-                      type="date"
-                      value={pnlFrom}
-                      onChange={(e) => setPnlFrom(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+                  <div className="relative flex-1 z-20">
+                    <label className="text-xs text-slate-400 mb-1 block">بازه تاریخ (شمسی)</label>
+                    <DatePicker
+                      range
+                      calendar={persian}
+                      locale={persian_fa}
+                      value={pnlDateRange}
+                      onChange={handlePnlDateChange}
+                      format="YYYY/MM/DD"
+                      placeholder="انتخاب بازه تاریخ..."
+                      containerClassName="w-full"
+                      inputClass="w-full bg-slate-800 border border-slate-700 rounded-lg px-10 py-2.5 text-white text-center text-sm font-bold outline-none focus:border-gold-500 cursor-pointer"
                     />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 mb-1 block">تا تاریخ</label>
-                    <input
-                      type="date"
-                      value={pnlTo}
-                      onChange={(e) => setPnlTo(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                    <Calendar
+                      size={16}
+                      className="absolute left-3 top-[2.15rem] text-slate-400 pointer-events-none"
                     />
+                    {pnlDateRange.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const today = jalaliToday();
+                          setPnlDateRange([today, today]);
+                        }}
+                        className="absolute right-3 top-[2.15rem] text-slate-400 hover:text-red-400"
+                        title="بازنشانی به امروز"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
                   </div>
                   <button
                     type="button"
-                    onClick={() => loadPnl(pnlFrom, pnlTo)}
+                    onClick={() => {
+                      if (pnlDateRange.length < 1) {
+                        toast.error("بازه تاریخ را انتخاب کنید");
+                        return;
+                      }
+                      const { from, to } = rangeToIso(pnlDateRange);
+                      void loadPnl(from, to);
+                    }}
                     disabled={pnlLoading}
-                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 disabled:opacity-50 rounded-xl text-sm font-bold text-white"
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 disabled:opacity-50 rounded-xl text-sm font-bold text-white shrink-0"
                   >
                     {pnlLoading ? <RefreshCw size={16} className="animate-spin" /> : <TrendingUp size={16} />}
                     محاسبه
@@ -556,10 +637,12 @@ export default function TreasuryPage() {
                   <div>
                     <label className="text-xs text-slate-400 mb-1 block">مقدار (گرم)</label>
                     <input
-                      value={amount}
-                      onChange={(e) => setAmount(toEnglishDigits(e.target.value))}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white dir-ltr text-right"
+                      value={amount ? toPersianDigits(amount) : ""}
+                      onChange={handleGramsChange}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white dir-ltr text-center font-bold"
                       placeholder="مثلاً ۱۰.۵۰۰"
+                      dir="ltr"
+                      inputMode="decimal"
                     />
                   </div>
                   <div>
@@ -567,10 +650,12 @@ export default function TreasuryPage() {
                       قیمت واحد (ریال بر گرم)
                     </label>
                     <input
-                      value={unitPrice}
-                      onChange={(e) => setUnitPrice(toEnglishDigits(e.target.value))}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white dir-ltr text-right"
-                      placeholder="برای ورود توصیه می‌شود"
+                      value={unitPrice ? toPersianDigits(unitPrice) : ""}
+                      onChange={handleUnitPriceChange}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white dir-ltr text-center font-bold"
+                      placeholder="مثلاً ۵٬۵۰۰٬۰۰۰"
+                      dir="ltr"
+                      inputMode="numeric"
                     />
                   </div>
                   <div>
@@ -623,7 +708,18 @@ export default function TreasuryPage() {
                         {m.note && <p className="text-xs text-slate-500 mt-1">{m.note}</p>}
                       </div>
                       <div className="text-left dir-ltr font-mono text-gold-400 font-bold">
-                        {toPersianDigits(Number(m.amount).toFixed(3))} g
+                        <div>
+                          {toPersianDigits(Number(m.amount).toLocaleString(undefined, {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 6,
+                          }))}{" "}
+                          گرم
+                        </div>
+                        {Number(m.unit_price) > 0 && (
+                          <div className="text-xs text-slate-400 font-normal mt-0.5">
+                            {toPersianDigits(Number(m.unit_price).toLocaleString())} ریال/گرم
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
@@ -827,18 +923,22 @@ export default function TreasuryPage() {
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">آستانه هشدار (درصد)</label>
                 <input
-                  value={warningRatio}
-                  onChange={(e) => setWarningRatio(toEnglishDigits(e.target.value))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  value={warningRatio ? toPersianDigits(warningRatio) : ""}
+                  onChange={handlePercentChange(setWarningRatio)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white dir-ltr text-center font-bold"
+                  dir="ltr"
+                  inputMode="numeric"
                 />
                 <p className="text-[11px] text-slate-500 mt-1">پیشنهاد: ۹۸</p>
               </div>
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">آستانه بحرانی (درصد)</label>
                 <input
-                  value={criticalRatio}
-                  onChange={(e) => setCriticalRatio(toEnglishDigits(e.target.value))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
+                  value={criticalRatio ? toPersianDigits(criticalRatio) : ""}
+                  onChange={handlePercentChange(setCriticalRatio)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white dir-ltr text-center font-bold"
+                  dir="ltr"
+                  inputMode="numeric"
                 />
                 <p className="text-[11px] text-slate-500 mt-1">پیشنهاد: ۱۰۰</p>
               </div>
