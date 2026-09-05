@@ -19,6 +19,7 @@ import {
   TrendingUp,
   Calendar,
   X,
+  Download,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -36,7 +37,7 @@ import {
   PnlSnapshot,
 } from "@/lib/api/treasury";
 
-type TabId = "overview" | "pnl" | "vault" | "parties" | "journal" | "alerts" | "guide";
+type TabId = "overview" | "pnl" | "vault" | "parties" | "journal" | "export" | "alerts" | "guide";
 
 function formatIsoDate(d: Date): string {
   const y = d.getFullYear();
@@ -90,6 +91,15 @@ export default function TreasuryPage() {
     const today = jalaliToday();
     return [today, today];
   });
+
+  const [exportDateRange, setExportDateRange] = useState<DateObject[]>(() => {
+    const end = jalaliToday();
+    const start = jalaliToday().toFirstOfMonth();
+    return [start, end];
+  });
+  const [exportEvent, setExportEvent] = useState("");
+  const [exportAsset, setExportAsset] = useState("");
+  const [exportingKind, setExportingKind] = useState<"journal" | "vault" | null>(null);
 
   const [movementType, setMovementType] = useState<"IN" | "OUT" | "ADJUST">("IN");
   const [amount, setAmount] = useState("");
@@ -216,6 +226,43 @@ export default function TreasuryPage() {
     setPnlDateRange(arr);
   };
 
+  const handleExportDateChange = (dates: DateObject | DateObject[] | null) => {
+    const arr = (Array.isArray(dates) ? dates : dates ? [dates] : []) as DateObject[];
+    setExportDateRange(arr);
+  };
+
+  const handleDownloadExport = async (kind: "journal" | "vault") => {
+    if (exportDateRange.length < 1) {
+      toast.error("بازه تاریخ را انتخاب کنید");
+      return;
+    }
+    const { from, to } = rangeToIso(exportDateRange);
+    setExportingKind(kind);
+    try {
+      const { blob, filename } = await adminTreasuryAPI.downloadExport({
+        kind,
+        from,
+        to,
+        event_type: kind === "journal" ? exportEvent || undefined : undefined,
+        asset: kind === "journal" ? exportAsset || undefined : undefined,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("فایل با موفقیت دانلود شد");
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      toast.error(err.message || "خطا در دانلود خروجی");
+    } finally {
+      setExportingKind(null);
+    }
+  };
+
   const handleGramsChange = (e: ChangeEvent<HTMLInputElement>) => {
     let englishValue = toEnglishDigits(e.target.value).replace(/٫/g, ".");
     englishValue = englishValue.replace(/,/g, "");
@@ -305,6 +352,7 @@ export default function TreasuryPage() {
     { id: "vault", name: "ورود و خروج خزانه", icon: Landmark },
     { id: "parties", name: "بدهکاران و بستانکاران", icon: Users },
     { id: "journal", name: "دفتر عملیات", icon: BookOpen },
+    { id: "export", name: "خروجی حسابداری", icon: Download },
     { id: "alerts", name: "هشدار و توقف", icon: AlertTriangle },
     { id: "guide", name: "راهنما", icon: HelpCircle },
   ];
@@ -913,6 +961,122 @@ export default function TreasuryPage() {
             </div>
           )}
 
+          {activeTab === "export" && (
+            <div className="space-y-6 max-w-2xl">
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-sm text-blue-200 leading-7">
+                این خروجی برای انتقال دستی یا نیمه‌خودکار به نرم‌افزار حسابداری است. اعداد در فایل
+                با رقم انگلیسی و بدون جداکننده هزارگان ذخیره می‌شوند تا import پایدار باشد. اتصال
+                اختصاصی به یک نرم‌افزار خاص در این مرحله وجود ندارد.
+              </div>
+
+              <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-4">
+                <div className="relative z-20">
+                  <label className="text-xs text-slate-400 mb-1 block">بازه تاریخ (شمسی)</label>
+                  <DatePicker
+                    range
+                    calendar={persian}
+                    locale={persian_fa}
+                    value={exportDateRange}
+                    onChange={handleExportDateChange}
+                    format="YYYY/MM/DD"
+                    placeholder="انتخاب بازه تاریخ..."
+                    containerClassName="w-full"
+                    inputClass="w-full bg-slate-800 border border-slate-700 rounded-lg px-10 py-2.5 text-white text-center text-sm font-bold outline-none focus:border-gold-500 cursor-pointer"
+                  />
+                  <Calendar
+                    size={16}
+                    className="absolute left-3 top-[2.15rem] text-slate-400 pointer-events-none"
+                  />
+                  {exportDateRange.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const end = jalaliToday();
+                        const start = jalaliToday().toFirstOfMonth();
+                        setExportDateRange([start, end]);
+                      }}
+                      className="absolute right-3 top-[2.15rem] text-slate-400 hover:text-red-400"
+                      title="بازنشانی به این ماه"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">
+                      نوع رویداد (فقط دفتر — اختیاری)
+                    </label>
+                    <select
+                      value={exportEvent}
+                      onChange={(e) => setExportEvent(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+                    >
+                      <option value="">همه</option>
+                      <option value="OPENING">مانده افتتاحیه</option>
+                      <option value="DEPOSIT">واریز</option>
+                      <option value="BUY">خرید</option>
+                      <option value="SELL">فروش</option>
+                      <option value="WITHDRAW_RIAL">برداشت ریال</option>
+                      <option value="GOLD_DELIVERY">تحویل طلا</option>
+                      <option value="VAULT_IN">ورود خزانه</option>
+                      <option value="VAULT_OUT">خروج خزانه</option>
+                      <option value="ADJUSTMENT">تعدیل</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">
+                      دارایی (فقط دفتر — اختیاری)
+                    </label>
+                    <select
+                      value={exportAsset}
+                      onChange={(e) => setExportAsset(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+                    >
+                      <option value="">همه</option>
+                      <option value="RIAL">ریال</option>
+                      <option value="GOLD">طلا</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadExport("journal")}
+                    disabled={exportingKind !== null}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 disabled:opacity-50 rounded-xl text-sm font-bold text-white"
+                  >
+                    {exportingKind === "journal" ? (
+                      <RefreshCw size={16} className="animate-spin" />
+                    ) : (
+                      <Download size={16} />
+                    )}
+                    دانلود دفتر عملیات
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadExport("vault")}
+                    disabled={exportingKind !== null}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-xl text-sm font-bold text-white"
+                  >
+                    {exportingKind === "vault" ? (
+                      <RefreshCw size={16} className="animate-spin" />
+                    ) : (
+                      <Download size={16} />
+                    )}
+                    دانلود حرکت‌های خزانه
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-5">
+                  سقف هر دانلود ۵۰٬۰۰۰ ردیف است. برای بازه‌های خیلی بزرگ، تاریخ را کوتاه‌تر کنید.
+                </p>
+              </div>
+            </div>
+          )}
+
           {activeTab === "alerts" && (
             <div className="space-y-6 max-w-xl">
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-sm text-amber-100 leading-7">
@@ -1034,6 +1198,15 @@ export default function TreasuryPage() {
                     نشده است.
                   </li>
                 </ul>
+              </section>
+              <section>
+                <h3 className="text-white font-black text-lg mb-2">خروجی حسابداری</h3>
+                <p>
+                  از تب «خروجی حسابداری» می‌توانید دفتر عملیات یا حرکت‌های خزانه را در بازه تاریخ
+                  شمسی دانلود کنید. فایل با رمزگذاری مناسب اکسل ویندوز ساخته می‌شود. اعداد داخل فایل
+                  عمداً انگلیسی و بدون کاما هستند تا ورود به نرم‌افزار حسابداری راحت‌تر باشد. اتصال
+                  مستقیم به سپیدار یا نرم‌افزارهای دیگر بعداً به‌صورت جداگانه اضافه می‌شود.
+                </p>
               </section>
               <section>
                 <h3 className="text-white font-black text-lg mb-2">راه‌اندازی اولیه روی سرور</h3>

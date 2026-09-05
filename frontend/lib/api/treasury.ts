@@ -102,6 +102,50 @@ export const adminTreasuryAPI = {
     return res.data;
   },
 
+  downloadExport: async (params: {
+    kind: 'journal' | 'vault';
+    from: string;
+    to: string;
+    event_type?: string;
+    asset?: string;
+  }): Promise<{ blob: Blob; filename: string }> => {
+    const query = new URLSearchParams();
+    query.append('kind', params.kind);
+    query.append('from', params.from);
+    query.append('to', params.to);
+    if (params.event_type) query.append('event_type', params.event_type);
+    if (params.asset) query.append('asset', params.asset);
+    try {
+      const res = await apiClient.get(`/admin/treasury/export/?${query.toString()}`, {
+        responseType: 'blob',
+      });
+      const disposition = res.headers['content-disposition'] as string | undefined;
+      let filename =
+        params.kind === 'journal'
+          ? `daftar-amaliyat-${params.from}-${params.to}.csv`
+          : `harekat-khazane-${params.from}-${params.to}.csv`;
+      if (disposition) {
+        const match = /filename="?([^";]+)"?/i.exec(disposition);
+        if (match?.[1]) filename = match[1];
+      }
+      return { blob: res.data as Blob, filename };
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: Blob } };
+      if (axiosErr.response?.data instanceof Blob) {
+        const text = await axiosErr.response.data.text();
+        let message = 'خطا در دانلود خروجی';
+        try {
+          const parsed = JSON.parse(text) as { error?: string };
+          if (parsed.error) message = parsed.error;
+        } catch {
+          if (text) message = text;
+        }
+        throw new Error(message);
+      }
+      throw err;
+    }
+  },
+
   getSettings: async (): Promise<{
     warning_cover_ratio: string;
     critical_cover_ratio: string;

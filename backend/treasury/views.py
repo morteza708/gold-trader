@@ -2,6 +2,7 @@ from decimal import Decimal
 from datetime import datetime
 
 from django.db.models import Q, Sum
+from django.http import StreamingHttpResponse
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -12,6 +13,7 @@ from wallet.models import Wallet, WithdrawalRequest
 
 from .models import CompanyTreasury, OperationalJournal, VaultMovement
 from . import services
+from . import export as treasury_export
 from .serializers import (
     CoverageSnapshotSerializer,
     TreasurySettingsSerializer,
@@ -63,6 +65,63 @@ def admin_treasury_pnl(request):
 
     snap = services.get_pnl_snapshot(date_from=date_from, date_to=date_to)
     return Response(PnlSnapshotSerializer(snap).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_treasury_export(request):
+    if not _is_admin(request.user):
+        return Response({'error': 'شما دسترسی به این بخش ندارید'}, status=status.HTTP_403_FORBIDDEN)
+
+    kind = (request.query_params.get('kind') or 'journal').strip().lower()
+    if kind not in ('journal', 'vault'):
+        return Response(
+            {'error': 'نوع خروجی نامعتبر است'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    raw_from = request.query_params.get('from')
+    raw_to = request.query_params.get('to')
+    date_from = _parse_date_param(raw_from)
+    date_to = _parse_date_param(raw_to)
+    if date_from is None or date_to is None:
+        return Response(
+            {'error': 'بازه تاریخ (از و تا) به‌صورت YYYY-MM-DD الزامی است'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    event_type = (request.query_params.get('event_type') or '').strip() or None
+    asset = (request.query_params.get('asset') or '').strip() or None
+
+    try:
+        if kind == 'journal':
+            qs = treasury_export.journal_queryset(
+                date_from=date_from,
+                date_to=date_to,
+                event_type=event_type,
+                asset=asset,
+            )
+            treasury_export.assert_export_count(qs, 'دفتر عملیات')
+            row_iter = treasury_export.iter_journal_csv(
+                date_from=date_from,
+                date_to=date_to,
+                event_type=event_type,
+                asset=asset,
+            )
+        else:
+            qs = treasury_export.vault_queryset(date_from=date_from, date_to=date_to)
+            treasury_export.assert_export_count(qs, 'حرکت خزانه')
+            row_iter = treasury_export.iter_vault_csv(
+                date_from=date_from,
+                date_to=date_to,
+            )
+    except services.TreasuryError as e:
+        return Response({'error': e.message}, status=status.HTTP_400_BAD_REQUEST)
+
+    filename = treasury_export.export_filename(kind, date_from, date_to)
+    response = StreamingHttpResponse(row_iter, content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
 @api_view(['GET', 'PUT'])

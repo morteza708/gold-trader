@@ -124,6 +124,9 @@ class OperationalJournal(models.Model):
         verbose_name = 'ردیف دفتر عملیات'
         verbose_name_plural = 'دفتر عملیات'
         ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['-created_at', 'event_type'], name='treasury_oj_created_event_idx'),
+        ]
 
     def __str__(self):
         return f'{self.get_event_type_display()} — {self.amount}'
@@ -137,7 +140,7 @@ class VaultMovement(models.Model):
         OUT = 'OUT', 'خروج از خزانه'
         ADJUST = 'ADJUST', 'تعدیل'
 
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='زمان ثبت')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='زمان ثبت', db_index=True)
     movement_type = models.CharField(
         max_length=8,
         choices=MovementType.choices,
