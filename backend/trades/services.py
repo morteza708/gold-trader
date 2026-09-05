@@ -237,6 +237,13 @@ class TradeService:
         # 0. بررسی فعال بودن side
         TradeService.check_side_enabled(trade_type)
 
+        if trade_type == 'BUY':
+            from treasury.services import assert_user_buy_allowed, TreasuryError
+            try:
+                assert_user_buy_allowed()
+            except TreasuryError as e:
+                raise ValueError(e.message)
+
         from trades.pending_purchase_service import PendingPurchaseService
         active = PendingPurchaseService.get_active_for_user(user)
         if active:
@@ -315,6 +322,25 @@ class TradeService:
         # 9. تغییر وضعیت به موفق
         trade.status = 'SUCCESS'
         trade.save()
+
+        from treasury import services as treasury_services
+        if trade_type == 'BUY':
+            treasury_services.on_user_buy(
+                user=user,
+                gold_amount=amount,
+                rial_total=total,
+                unit_price=final_price,
+                trade_id=trade.id,
+            )
+            treasury_services.maybe_notify_critical_coverage()
+        else:
+            treasury_services.on_user_sell(
+                user=user,
+                gold_amount=amount,
+                rial_total=total,
+                unit_price=final_price,
+                trade_id=trade.id,
+            )
         
         return trade
     
@@ -339,6 +365,13 @@ class TradeService:
         """
         # 0. بررسی فعال بودن side
         TradeService.check_side_enabled(trade_type)
+
+        if trade_type == 'BUY':
+            from treasury.services import assert_user_buy_allowed, TreasuryError
+            try:
+                assert_user_buy_allowed()
+            except TreasuryError as e:
+                raise ValueError(e.message)
         
         # 1. دریافت قیمت فعلی برای محاسبه سود حاشیه
         price_obj = GoldPrice.get_current_price()
@@ -406,6 +439,25 @@ class TradeService:
         # 9. تغییر وضعیت به موفق
         trade.status = 'SUCCESS'
         trade.save()
+
+        from treasury import services as treasury_services
+        if trade_type == 'BUY':
+            treasury_services.on_user_buy(
+                user=user,
+                gold_amount=amount,
+                rial_total=total,
+                unit_price=price,
+                trade_id=trade.id,
+            )
+            treasury_services.maybe_notify_critical_coverage()
+        else:
+            treasury_services.on_user_sell(
+                user=user,
+                gold_amount=amount,
+                rial_total=total,
+                unit_price=price,
+                trade_id=trade.id,
+            )
         
         return trade
     
@@ -428,6 +480,13 @@ class TradeService:
             ValueError: اگر معاملات غیرفعال باشند
         """
         TradeService.check_order_type_enabled(order_type)
+
+        if order_type == 'BUY_LIMIT':
+            from treasury.services import assert_user_buy_allowed, TreasuryError
+            try:
+                assert_user_buy_allowed()
+            except TreasuryError as e:
+                raise ValueError(e.message)
 
         from trades.pending_purchase_service import PendingPurchaseService
         active = PendingPurchaseService.get_active_for_user(user)

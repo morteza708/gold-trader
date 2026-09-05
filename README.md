@@ -26,6 +26,7 @@ An online melted-gold trading platform (**OpalBox / گلد تریدر**) with a 
 
 ### Admin Panel
 - Statistics dashboard and **Command Room** (market control)
+- **Treasury & audit:** company gold vault, coverage ratio, operational journal, debtors/creditors, auto-block user buy on shortfall
 - User management and mobile verification approval
 - Gold price management (manual base + margin, or **live feed from Viragold API**)
 - Separate **buy / sell kill switches** + public market notice banner
@@ -342,6 +343,7 @@ MIT — see [LICENSE](LICENSE).
 
 ### پنل مدیریت
 - اتاق فرمان: قیمت، **قطع جداگانه خرید/فروش**، پیام بنر بازار
+- **خزانه و حسابرسی:** موجودی طلای شرکت، نسبت پوشش، دفتر عملیات، بدهکار/بستانکار، توقف خودکار خرید در کمبود
 - کاربران، تأیید موبایل، مانیتورینگ معاملات
 - مالی: واریز، برداشت ریال، برداشت طلا
 - **برداشت ریال یک‌مرحله‌ای:** فیش + تأیید و تکمیل

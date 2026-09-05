@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
   LayoutDashboard, Users, CreditCard, Banknote, 
-  Settings, LogOut, Menu, X, ShieldCheck, Phone, FileText
+  Settings, LogOut, Menu, X, ShieldCheck, Phone, FileText, Scale
 } from "lucide-react";
 import MobileHeader from "@/components/admin/MobileHeader";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -28,6 +28,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "اتاق فرمان", href: "/adminpanel", icon: LayoutDashboard },
     { name: "مدیریت کاربران", href: "/adminpanel/users", icon: Users },
     { name: "تراکنش‌های مالی", href: "/adminpanel/finance", icon: CreditCard },
+    { name: "خزانه و حسابرسی", href: "/adminpanel/treasury", icon: Scale },
     { name: "مانیتورینگ معاملات", href: "/adminpanel/trades", icon: Banknote },
     { name: "تایید شماره موبایل", href: "/adminpanel/mobile-verification", icon: Phone },
     { name: "صفحات سایت", href: "/adminpanel/pages", icon: FileText },

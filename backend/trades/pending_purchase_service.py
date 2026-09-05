@@ -84,9 +84,14 @@ class PendingPurchaseService:
     @transaction.atomic
     def create_pending_purchase(user: CustomUser, gold_amount: Decimal) -> PendingPurchase:
         from wallet.tasks import send_sms_async
+        from trades.services import TradeService
 
-        TradeService = __import__('trades.services', fromlist=['TradeService']).TradeService
         TradeService.check_side_enabled('BUY')
+        from treasury.services import assert_user_buy_allowed, TreasuryError
+        try:
+            assert_user_buy_allowed()
+        except TreasuryError as e:
+            raise ValueError(e.message)
 
         gold_amount = Decimal(str(gold_amount)).quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
         if gold_amount <= 0:
@@ -317,6 +322,16 @@ class PendingPurchaseService:
         pending.status = PendingPurchase.STATUS_COMPLETED
         pending.completed_at = timezone.now()
         pending.save(update_fields=['trade', 'status', 'completed_at', 'updated_at'])
+
+        from treasury import services as treasury_services
+        treasury_services.on_user_buy(
+            user=pending.user,
+            gold_amount=pending.gold_amount,
+            rial_total=pending.locked_total,
+            unit_price=pending.locked_unit_price,
+            trade_id=trade.id,
+        )
+        treasury_services.maybe_notify_critical_coverage()
 
         create_notification(
             user=pending.user,

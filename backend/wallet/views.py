@@ -848,6 +848,17 @@ def admin_complete_gold_withdrawal(request, request_id):
                     {'error': 'فقط درخواست‌های تایید شده قابل تسویه هستند'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+
+            from treasury.services import on_gold_delivery_completed, TreasuryError
+            try:
+                on_gold_delivery_completed(
+                    user=withdrawal_request.user,
+                    amount=withdrawal_request.amount,
+                    withdrawal_id=withdrawal_request.id,
+                    created_by=request.user,
+                )
+            except TreasuryError as e:
+                return Response({'error': e.message}, status=status.HTTP_400_BAD_REQUEST)
             
             withdrawal_request.status = 'COMPLETED'
             withdrawal_request.completed_at = timezone.now()
@@ -966,6 +977,13 @@ def admin_complete_rial_withdrawal(request, request_id):
 
             wallet.pending_withdrawal_rial -= withdrawal_request.amount
             wallet.save()
+
+            from treasury.services import on_rial_withdrawal_completed
+            on_rial_withdrawal_completed(
+                user=withdrawal_request.user,
+                amount=withdrawal_request.amount,
+                withdrawal_id=withdrawal_request.id,
+            )
 
             withdrawal_request.receipt_image = receipt_image
             withdrawal_request.status = 'COMPLETED'
@@ -2027,6 +2045,13 @@ def admin_approve_deposit_new_flow(request, request_id):
             wallet = Wallet.lock_for_user(deposit_request.user)
             wallet.rial_balance += deposit_request.amount
             wallet.save()
+
+            from treasury.services import on_deposit_approved
+            on_deposit_approved(
+                user=deposit_request.user,
+                amount=deposit_request.amount,
+                deposit_id=deposit_request.id,
+            )
 
             from trades.pending_purchase_service import PendingPurchaseService
             PendingPurchaseService.complete_after_deposit_approved(deposit_request)

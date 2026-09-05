@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'settings',
     'trades.apps.TradesConfig',
     'notifications.apps.NotificationsConfig',
+    'treasury.apps.TreasuryConfig',
 ]
 
 REST_FRAMEWORK = {

@@ -8,6 +8,7 @@ import {
 import LiveClock from "@/components/dashboard/LiveClock";
 import MarketSnapshotBar from "@/components/dashboard/MarketSnapshotBar";
 import MarketControlPanel from "@/components/admin/MarketControlPanel";
+import TreasuryCoverageBanner from "@/components/admin/TreasuryCoverageBanner";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
 import { adminAPI } from "@/lib/api/auth";
 import { useGoldPrice } from "@/hooks/useGoldPrice";
@@ -58,6 +59,8 @@ export default function AdminDashboard() {
           <LiveClock />
         </div>
       </div>
+
+      <TreasuryCoverageBanner />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <MarketControlPanel
