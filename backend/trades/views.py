@@ -1012,7 +1012,8 @@ def admin_search_customers(request):
         return Response({'error': 'شما دسترسی به این بخش ندارید'}, status=status.HTTP_403_FORBIDDEN)
 
     from . import manual_trade_service as mts
-    q = request.query_params.get('q', '')
+    from accounts.services import persian_to_english_numbers
+    q = persian_to_english_numbers(request.query_params.get('q', ''))
     users = mts.search_customers(q, limit=20)
     results = []
     for u in users:

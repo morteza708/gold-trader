@@ -34,19 +34,41 @@ def _q3(value) -> Decimal:
 
 
 def search_customers(query: str, limit: int = 20):
-    """جستجوی سبک مشتریان با موبایل / نام — سقف محدود برای UI"""
+    """جستجوی سبک مشتریان با موبایل / نام / نام‌خانوادگی / کد ملی — سقف محدود برای UI"""
+    from django.db.models import Value, CharField
+    from django.db.models.functions import Concat, Coalesce
+    from accounts.services import persian_to_english_numbers
+
     q = (query or '').strip()
     if len(q) < 2:
         return CustomUser.objects.none()
 
+    q_en = persian_to_english_numbers(q)
+    parts = [p for p in q.split() if p]
+
+    filters = (
+        Q(phone_number__icontains=q_en)
+        | Q(first_name__icontains=q)
+        | Q(last_name__icontains=q)
+        | Q(national_id__icontains=q_en)
+        | Q(full_name_search__icontains=q)
+    )
+    # جستجوی چندکلمه‌ای مثل «علی رضایی»
+    if len(parts) >= 2:
+        filters |= Q(first_name__icontains=parts[0], last_name__icontains=parts[-1])
+        filters |= Q(first_name__icontains=parts[-1], last_name__icontains=parts[0])
+
     qs = (
         CustomUser.objects.filter(role=UserRole.CUSTOMER)
-        .filter(
-            Q(phone_number__icontains=q)
-            | Q(first_name__icontains=q)
-            | Q(last_name__icontains=q)
+        .annotate(
+            full_name_search=Concat(
+                Coalesce('first_name', Value('')),
+                Value(' '),
+                Coalesce('last_name', Value('')),
+                output_field=CharField(),
+            )
         )
-        .only('id', 'phone_number', 'first_name', 'last_name', 'national_id', 'is_phone_verified', 'is_active', 'profile_completed')
+        .filter(filters)
         .order_by('-id')[:limit]
     )
     return qs
@@ -109,7 +131,7 @@ def create_manual_trade(
     user: CustomUser,
     trade_type: str,
     amount: Decimal,
-    unit_price: Decimal,
+    unit_price: Decimal | None = None,
     settlement_mode: str,
     payment_status: str,
     delivery_status: str,
@@ -122,18 +144,26 @@ def create_manual_trade(
         raise ManualTradeError('نوع معامله نامعتبر است')
 
     amount = _q3(amount)
-    unit_price = _q0(unit_price)
     if amount <= ZERO:
         raise ManualTradeError('مقدار باید بیشتر از صفر باشد')
-    if unit_price <= ZERO:
-        raise ManualTradeError('قیمت واحد باید بیشتر از صفر باشد')
 
     if settlement_mode not in (Trade.SETTLEMENT_WALLET, Trade.SETTLEMENT_OFFPLATFORM):
         raise ManualTradeError('حالت تسویه نامعتبر است')
 
+    price_obj = GoldPrice.get_current_price()
+    if unit_price is None or Decimal(str(unit_price)) <= ZERO:
+        if not price_obj:
+            raise ManualTradeError('قیمت طلا تعریف نشده است')
+        unit_price = (
+            price_obj.buy_final_price if trade_type == 'BUY' else price_obj.sell_final_price
+        )
+
+    unit_price = _q0(unit_price)
+    if unit_price <= ZERO:
+        raise ManualTradeError('قیمت واحد باید بیشتر از صفر باشد')
+
     total = _q0(amount * unit_price)
 
-    price_obj = GoldPrice.get_current_price()
     if price_obj:
         if trade_type == 'BUY':
             margin_profit = _q0(price_obj.buy_margin * amount)
