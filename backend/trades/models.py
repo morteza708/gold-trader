@@ -440,7 +440,7 @@ class Trade(models.Model):
             models.Index(fields=['user', '-created_at'], name='trades_trad_user_id_1f28fa_idx'),
             models.Index(fields=['status', '-created_at'], name='trades_trad_status_2a01b5_idx'),
             models.Index(fields=['trade_type', '-created_at'], name='trades_trad_trade_t_e0cc67_idx'),
-            models.Index(fields=['channel', '-created_at'], name='trades_trad_channel_created_idx'),
+            models.Index(fields=['channel', '-created_at'], name='trades_channel_created_idx'),
         ]
     
     def __str__(self):
