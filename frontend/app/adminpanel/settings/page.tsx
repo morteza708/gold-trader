@@ -7,7 +7,7 @@ import {
   Trash2, Edit2, CheckCircle2, XCircle, 
   Clock, CreditCard, Lock, 
   Phone, MapPin, Radio,
-  AlertTriangle, X, Loader2, Power, AlertCircle, Headphones
+  AlertTriangle, X, Loader2, Power, AlertCircle, Headphones, FileText
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -15,13 +15,14 @@ import { toPersianDigits, toEnglishDigits, validateMobile } from "@/lib/utils/nu
 import { systemSettingsAPI, depositAccountsAPI, DepositAccount } from "@/lib/api/auth";
 import { SupportSettings } from "@/lib/api/support";
 import SupportSettingsTab, { buildSupportSettingsFromApi } from "@/components/admin/SupportSettingsTab";
+import InvoiceIssuerSettingsTab from "@/components/admin/InvoiceIssuerSettingsTab";
 import { adminTradesAPI, GoldPriceAdmin } from "@/lib/api/trades";
 import { useGoldPrice } from "@/hooks/useGoldPrice";
 
 // تایپ‌ها (DepositAccount از API import شده است)
 
 export default function SystemSettingsPage() {
-  const [activeTab, setActiveTab] = useState<"price" | "financial" | "general" | "support" | "notifications">("price");
+  const [activeTab, setActiveTab] = useState<"price" | "financial" | "general" | "invoice" | "support" | "notifications">("price");
   const [isSaving, setIsSaving] = useState(false);
   const [isAddPhoneModalOpen, setIsAddPhoneModalOpen] = useState(false);
   const [newPhoneNumber, setNewPhoneNumber] = useState("");
@@ -307,6 +308,7 @@ export default function SystemSettingsPage() {
     { id: "price", name: "قیمت و بازار", icon: DollarSign },
     { id: "financial", name: "تعریف کارت", icon: CreditCard },
     { id: "general", name: "عمومی", icon: Globe },
+    { id: "invoice", name: "مشخصات فاکتور", icon: FileText },
     { id: "support", name: "پشتیبانی", icon: Headphones },
     { id: "notifications", name: "اعلان‌ها", icon: Bell },
   ];
@@ -771,6 +773,18 @@ export default function SystemSettingsPage() {
                   )}
                 </button>
               </div>
+            </motion.div>
+          )}
+
+          {/* تب: مشخصات صدور فاکتور */}
+          {activeTab === "invoice" && (
+            <motion.div
+              key="invoice"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <InvoiceIssuerSettingsTab />
             </motion.div>
           )}
 

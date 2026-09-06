@@ -486,3 +486,84 @@ def maybe_notify_critical_coverage(previous_status: str | None = None) -> None:
         )
     except Exception:
         pass
+
+
+@transaction.atomic
+def on_manual_buy_offplatform(
+    *,
+    user,
+    gold_amount: Decimal,
+    unit_price: Decimal,
+    trade_id: int,
+    created_by=None,
+) -> None:
+    """خرید دستی خارج از سامانه: فقط بدهی طلا↑ — ریال از کیف کم نمی‌شود."""
+    gold_amount = _q6(gold_amount)
+    from wallet.models import Wallet
+
+    wallet = Wallet.objects.select_for_update().get(user=user)
+    record_journal(
+        asset=OperationalJournal.Asset.GOLD,
+        amount=gold_amount,
+        event_type=OperationalJournal.EventType.MANUAL_BUY,
+        user=user,
+        unit_price=_q0(unit_price),
+        balance_after=_q6(wallet.gold_balance),
+        reference_type='trade',
+        reference_id=trade_id,
+        note='خرید دستی — تسویه ریال خارج از سامانه',
+        created_by=created_by,
+    )
+
+
+@transaction.atomic
+def on_manual_sell_offplatform(
+    *,
+    user,
+    gold_amount: Decimal,
+    unit_price: Decimal,
+    trade_id: int,
+    created_by=None,
+) -> None:
+    """فروش دستی خارج از سامانه: بدهی طلا↓، ورود به خزانه، بدون واریز ریال به کیف."""
+    gold_amount = _q6(gold_amount)
+    unit_price = _q0(unit_price)
+    from wallet.models import Wallet
+
+    wallet = Wallet.objects.select_for_update().get(user=user)
+    record_journal(
+        asset=OperationalJournal.Asset.GOLD,
+        amount=-gold_amount,
+        event_type=OperationalJournal.EventType.MANUAL_SELL,
+        user=user,
+        unit_price=unit_price,
+        balance_after=_q6(wallet.gold_balance),
+        reference_type='trade',
+        reference_id=trade_id,
+        note='فروش دستی — تسویه ریال خارج از سامانه',
+        created_by=created_by,
+    )
+
+    treasury = CompanyTreasury.objects.select_for_update().get(pk=CompanyTreasury.get_solo().pk)
+    new_balance, new_avg = _apply_weighted_avg(
+        _q6(treasury.gold_balance),
+        _q0(treasury.avg_cost_per_gram),
+        gold_amount,
+        unit_price,
+    )
+    treasury.gold_balance = new_balance
+    treasury.avg_cost_per_gram = new_avg
+    treasury.save(update_fields=['gold_balance', 'avg_cost_per_gram', 'updated_at'])
+
+    record_journal(
+        asset=OperationalJournal.Asset.GOLD,
+        amount=gold_amount,
+        event_type=OperationalJournal.EventType.VAULT_IN,
+        user=user,
+        unit_price=unit_price,
+        balance_after=new_balance,
+        reference_type='trade',
+        reference_id=trade_id,
+        note='ورود طلای فروش دستی به خزانه',
+        created_by=created_by,
+    )

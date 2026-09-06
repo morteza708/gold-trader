@@ -21,6 +21,7 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
     """Serializer برای تنظیمات سیستم"""
     support_hours = serializers.JSONField(required=False)
     support_preview = serializers.SerializerMethodField()
+    invoice_logo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = SystemSettings
@@ -41,12 +42,47 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             'support_show_floating_button',
             'support_show_on_public_site',
             'support_preview',
+            'invoice_brand_name',
+            'invoice_company_name',
+            'invoice_national_id',
+            'invoice_address',
+            'invoice_phone',
+            'invoice_tagline',
+            'invoice_logo',
+            'invoice_logo_url',
             'updated_at',
         ]
-        read_only_fields = ['updated_at', 'support_preview']
+        read_only_fields = ['updated_at', 'support_preview', 'invoice_logo_url']
+        extra_kwargs = {
+            'invoice_logo': {'write_only': True, 'required': False},
+        }
 
     def get_support_preview(self, obj):
         return support_service.build_public_support_info(obj)
+
+    def get_invoice_logo_url(self, obj):
+        if not obj.invoice_logo:
+            return None
+        request = self.context.get('request')
+        try:
+            url = obj.invoice_logo.url
+        except ValueError:
+            return None
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
+    def validate_invoice_logo(self, value):
+        if not value:
+            return value
+        from accounts.image_upload import get_uploaded_image_error, ensure_optimized_upload
+        error = get_uploaded_image_error(value)
+        if error:
+            raise serializers.ValidationError(error)
+        try:
+            return ensure_optimized_upload(value, purpose='page')
+        except ValueError as e:
+            raise serializers.ValidationError(str(e))
 
     def _validate_optional_mobile(self, value, field_label, required=False):
         value = support_service.normalize_phone(value)

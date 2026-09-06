@@ -153,6 +153,11 @@ class TradeSerializer(serializers.ModelSerializer):
     user_name = serializers.SerializerMethodField()
     user_mobile = serializers.SerializerMethodField()
     created_at_jalali = serializers.SerializerMethodField()
+    channel_display = serializers.CharField(source='get_channel_display', read_only=True)
+    settlement_mode_display = serializers.CharField(source='get_settlement_mode_display', read_only=True)
+    payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
+    delivery_status_display = serializers.CharField(source='get_delivery_status_display', read_only=True)
+    created_by_name = serializers.SerializerMethodField()
     
     def get_user_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.phone_number
@@ -165,6 +170,13 @@ class TradeSerializer(serializers.ModelSerializer):
             jalali_date = datetime2jalali(obj.created_at)
             return jalali_date.strftime('%Y/%m/%d %H:%M')
         return None
+
+    def get_created_by_name(self, obj):
+        if not obj.created_by_id:
+            return None
+        u = obj.created_by
+        name = f"{u.first_name or ''} {u.last_name or ''}".strip()
+        return name or u.phone_number
     
     class Meta:
         model = Trade
@@ -172,7 +184,12 @@ class TradeSerializer(serializers.ModelSerializer):
             'id', 'user', 'user_name', 'user_mobile',
             'trade_type', 'amount', 'price', 'total', 'fee', 'margin_profit',
             'status', 'tracking_code', 'invoice_number',
-            'admin_note', 'created_at', 'created_at_jalali'
+            'admin_note', 'created_at', 'created_at_jalali',
+            'channel', 'channel_display',
+            'settlement_mode', 'settlement_mode_display',
+            'payment_status', 'payment_status_display',
+            'delivery_status', 'delivery_status_display',
+            'settlement_note', 'created_by_name',
         ]
 
 

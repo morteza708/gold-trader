@@ -13,6 +13,14 @@ def _is_admin(user):
     return getattr(user, 'role', None) in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def invoice_issuer_info(request):
+    """مشخصات صدور فاکتور برای پیش‌نمایش فاکتور کاربر و ادمین"""
+    from .invoice_issuer import get_invoice_issuer
+    return Response(get_invoice_issuer(request), status=status.HTTP_200_OK)
+
+
 @api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated])
 def system_settings(request):
@@ -30,16 +38,32 @@ def system_settings(request):
         settings = SystemSettings.get_settings()
         
         if request.method == 'GET':
-            serializer = SystemSettingsSerializer(settings)
+            serializer = SystemSettingsSerializer(settings, context={'request': request})
             return Response(serializer.data, status=status.HTTP_200_OK)
         
         elif request.method == 'PUT':
-            serializer = SystemSettingsSerializer(settings, data=request.data, partial=True)
+            data = request.data.copy() if hasattr(request.data, 'copy') else request.data
+            clear_logo = False
+            if hasattr(data, 'pop'):
+                clear_raw = data.pop('clear_invoice_logo', None)
+                if clear_raw is not None:
+                    if isinstance(clear_raw, (list, tuple)):
+                        clear_raw = clear_raw[0] if clear_raw else None
+                    clear_logo = str(clear_raw).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+            serializer = SystemSettingsSerializer(
+                settings, data=data, partial=True, context={'request': request}
+            )
             if serializer.is_valid():
-                serializer.save()
+                obj = serializer.save()
+                if clear_logo and obj.invoice_logo:
+                    obj.invoice_logo.delete(save=False)
+                    obj.invoice_logo = None
+                    obj.save(update_fields=['invoice_logo', 'updated_at'])
+                out = SystemSettingsSerializer(obj, context={'request': request})
                 return Response({
                     'message': 'تنظیمات با موفقیت به‌روزرسانی شد',
-                    'settings': serializer.data
+                    'settings': out.data
                 }, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         

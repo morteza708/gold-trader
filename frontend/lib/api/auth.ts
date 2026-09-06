@@ -470,7 +470,25 @@ export interface SystemSettings {
   support_show_floating_button?: boolean;
   support_show_on_public_site?: boolean;
   support_preview?: SupportInfo;
+  invoice_brand_name?: string;
+  invoice_company_name?: string;
+  invoice_national_id?: string;
+  invoice_address?: string;
+  invoice_phone?: string;
+  invoice_tagline?: string;
+  invoice_logo_url?: string | null;
   updated_at: string;
+}
+
+export interface InvoiceIssuer {
+  brand_name: string;
+  company_name: string;
+  national_id: string;
+  address: string;
+  phone: string;
+  tagline: string;
+  logo_url: string | null;
+  has_custom_logo: boolean;
 }
 
 // Wallet API Functions
@@ -870,6 +888,11 @@ export const systemSettingsAPI = {
     return response.data;
   },
 
+  getInvoiceIssuer: async (): Promise<InvoiceIssuer> => {
+    const response = await apiClient.get<InvoiceIssuer>('/invoice-issuer/');
+    return response.data;
+  },
+
   // به‌روزرسانی تنظیمات
   updateSettings: async (data: {
     admin_phone_numbers?: string[];
@@ -889,6 +912,33 @@ export const systemSettingsAPI = {
     support_show_on_public_site?: boolean;
   }): Promise<{ message: string; settings: SystemSettings }> => {
     const response = await apiClient.put<{ message: string; settings: SystemSettings }>('/admin/settings/', data);
+    return response.data;
+  },
+
+  updateInvoiceIssuer: async (data: {
+    invoice_brand_name?: string;
+    invoice_company_name?: string;
+    invoice_national_id?: string;
+    invoice_address?: string;
+    invoice_phone?: string;
+    invoice_tagline?: string;
+    invoice_logo?: File | null;
+    clear_invoice_logo?: boolean;
+  }): Promise<{ message: string; settings: SystemSettings }> => {
+    const form = new FormData();
+    if (data.invoice_brand_name !== undefined) form.append('invoice_brand_name', data.invoice_brand_name);
+    if (data.invoice_company_name !== undefined) form.append('invoice_company_name', data.invoice_company_name);
+    if (data.invoice_national_id !== undefined) form.append('invoice_national_id', data.invoice_national_id);
+    if (data.invoice_address !== undefined) form.append('invoice_address', data.invoice_address);
+    if (data.invoice_phone !== undefined) form.append('invoice_phone', data.invoice_phone);
+    if (data.invoice_tagline !== undefined) form.append('invoice_tagline', data.invoice_tagline);
+    if (data.invoice_logo) form.append('invoice_logo', data.invoice_logo);
+    if (data.clear_invoice_logo) form.append('clear_invoice_logo', 'true');
+    const response = await apiClient.put<{ message: string; settings: SystemSettings }>(
+      '/admin/settings/',
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
     return response.data;
   },
 };

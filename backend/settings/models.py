@@ -110,6 +110,48 @@ class SystemSettings(models.Model):
         default=True,
         verbose_name='نمایش در سایت عمومی',
     )
+    # --- مشخصات صدور فاکتور ---
+    invoice_brand_name = models.CharField(
+        max_length=120,
+        blank=True,
+        default='',
+        verbose_name='نام تجاری روی فاکتور',
+    )
+    invoice_company_name = models.CharField(
+        max_length=200,
+        blank=True,
+        default='',
+        verbose_name='نام حقوقی روی فاکتور',
+    )
+    invoice_national_id = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        verbose_name='شناسه ملی / کد اقتصادی',
+    )
+    invoice_address = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='آدرس روی فاکتور',
+    )
+    invoice_phone = models.CharField(
+        max_length=40,
+        blank=True,
+        default='',
+        verbose_name='تلفن روی فاکتور',
+    )
+    invoice_tagline = models.CharField(
+        max_length=200,
+        blank=True,
+        default='',
+        verbose_name='شعار کوتاه فاکتور',
+    )
+    invoice_logo = models.ImageField(
+        upload_to='invoice_logos/',
+        null=True,
+        blank=True,
+        verbose_name='لوگوی فاکتور',
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='تاریخ ایجاد'

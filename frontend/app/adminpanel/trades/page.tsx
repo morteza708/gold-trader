@@ -21,6 +21,7 @@ export default function TradesMonitoringPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "buy" | "sell">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failed" | "pending" | "cancelled">("all");
+  const [channelFilter, setChannelFilter] = useState<"all" | "PLATFORM" | "MANUAL">("all");
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Trade | null>(null);
@@ -68,8 +69,10 @@ export default function TradesMonitoringPage() {
     };
     const tradeStatus = statusMap[trade.status] || "pending";
     const matchesStatus = statusFilter === "all" || tradeStatus === statusFilter;
+    const matchesChannel =
+      channelFilter === "all" || (trade.channel || "PLATFORM") === channelFilter;
     
-    return matchesSearch && matchesType && matchesStatus;
+    return matchesSearch && matchesType && matchesStatus && matchesChannel;
   });
 
   // آمار کلی
@@ -216,6 +219,16 @@ export default function TradesMonitoringPage() {
               <option value="failed">ناموفق</option>
               <option value="cancelled">لغو شده</option>
             </select>
+
+            <select
+              value={channelFilter}
+              onChange={(e) => setChannelFilter(e.target.value as "all" | "PLATFORM" | "MANUAL")}
+              className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-slate-200 text-sm font-bold focus:outline-none focus:border-gold-500 transition-colors"
+            >
+              <option value="all">همه کانال‌ها</option>
+              <option value="PLATFORM">پلتفرم</option>
+              <option value="MANUAL">فاکتور دستی</option>
+            </select>
           </div>
         </div>
       </div>
@@ -272,7 +285,14 @@ export default function TradesMonitoringPage() {
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <TradeTypeBadge type={tradeType as "buy" | "sell"} />
+                        <div className="flex flex-col items-start gap-1">
+                          <TradeTypeBadge type={tradeType as "buy" | "sell"} />
+                          {trade.channel === "MANUAL" && (
+                            <span className="text-[10px] font-bold text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded">
+                              دستی
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-4">
                         <span className="text-sm font-bold text-slate-200">
@@ -361,8 +381,13 @@ export default function TradesMonitoringPage() {
                     <p className="text-sm font-bold text-white">{trade.user_name}</p>
                     <p className="text-xs text-slate-400 dir-ltr text-right mt-1">{toPersianDigits(trade.user_mobile)}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
                     <TradeTypeBadge type={tradeType as "buy" | "sell"} />
+                    {trade.channel === "MANUAL" && (
+                      <span className="text-[10px] font-bold text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded">
+                        دستی
+                      </span>
+                    )}
                     <TradeStatusBadge status={displayStatus} />
                   </div>
                 </div>
@@ -575,6 +600,40 @@ function TradeDetailModal({
                     <TradeStatusBadge status={displayStatus} />
                   </div>
                 </div>
+                {trade.channel === "MANUAL" && (
+                  <>
+                    <div className="bg-amber-500/10 p-4 rounded-xl border border-amber-500/30">
+                      <p className="text-xs text-slate-400 mb-1">کانال</p>
+                      <p className="text-sm font-bold text-amber-300">
+                        {trade.channel_display || "فاکتور دستی"}
+                      </p>
+                    </div>
+                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                      <p className="text-xs text-slate-400 mb-1">حالت تسویه</p>
+                      <p className="text-sm font-bold text-white">
+                        {trade.settlement_mode_display || "—"}
+                      </p>
+                    </div>
+                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                      <p className="text-xs text-slate-400 mb-1">وضعیت پرداخت</p>
+                      <p className="text-sm font-bold text-white">
+                        {trade.payment_status_display || "—"}
+                      </p>
+                    </div>
+                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                      <p className="text-xs text-slate-400 mb-1">وضعیت تحویل</p>
+                      <p className="text-sm font-bold text-white">
+                        {trade.delivery_status_display || "—"}
+                      </p>
+                    </div>
+                    {trade.created_by_name && (
+                      <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 md:col-span-2">
+                        <p className="text-xs text-slate-400 mb-1">صادرکننده</p>
+                        <p className="text-sm font-bold text-white">{trade.created_by_name}</p>
+                      </div>
+                    )}
+                  </>
+                )}
                 <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
                   <p className="text-xs text-slate-400 mb-1">مقدار طلا</p>
                   <p className="text-xl font-black text-gold-400">

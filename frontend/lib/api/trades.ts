@@ -82,6 +82,28 @@ export interface Trade {
   admin_note?: string | null;
   created_at: string;
   created_at_jalali: string;
+  channel?: 'PLATFORM' | 'MANUAL';
+  channel_display?: string;
+  settlement_mode?: 'WALLET' | 'OFFPLATFORM';
+  settlement_mode_display?: string;
+  payment_status?: string;
+  payment_status_display?: string;
+  delivery_status?: string;
+  delivery_status_display?: string;
+  settlement_note?: string;
+  created_by_name?: string | null;
+}
+
+export interface ManualCustomer {
+  id: number;
+  phone_number: string;
+  first_name: string;
+  last_name: string;
+  full_name: string | null;
+  national_id: string;
+  is_phone_verified: boolean;
+  is_active?: boolean;
+  profile_completed?: boolean;
 }
 
 export interface Order {
@@ -297,14 +319,70 @@ export const adminTradesAPI = {
   getTrades: async (params?: {
     status?: 'SUCCESS' | 'FAILED' | 'PENDING' | 'CANCELLED';
     type?: 'BUY' | 'SELL';
+    channel?: 'PLATFORM' | 'MANUAL';
   }): Promise<Trade[]> => {
     const queryParams = new URLSearchParams();
     if (params?.status) queryParams.append('status', params.status);
     if (params?.type) queryParams.append('type', params.type);
+    if (params?.channel) queryParams.append('channel', params.channel);
 
     const response = await apiClient.get<Trade[]>(
       `/admin/trades/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
     );
+    return response.data;
+  },
+
+  searchCustomers: async (q: string): Promise<ManualCustomer[]> => {
+    const response = await apiClient.get<{ results: ManualCustomer[] }>(
+      `/admin/customers/search/?q=${encodeURIComponent(q)}`
+    );
+    return response.data.results;
+  },
+
+  ensureCustomer: async (data: {
+    phone_number: string;
+    first_name?: string;
+    last_name?: string;
+    national_id?: string;
+  }): Promise<{ message: string; user: ManualCustomer }> => {
+    const response = await apiClient.post('/admin/customers/ensure/', data);
+    return response.data;
+  },
+
+  listManualTrades: async (): Promise<Trade[]> => {
+    const response = await apiClient.get<Trade[]>('/admin/trades/manual/');
+    return response.data;
+  },
+
+  createManualTrade: async (data: {
+    user_id?: number;
+    phone_number?: string;
+    first_name?: string;
+    last_name?: string;
+    national_id?: string;
+    trade_type: 'BUY' | 'SELL';
+    amount: number | string;
+    unit_price: number | string;
+    settlement_mode: 'WALLET' | 'OFFPLATFORM';
+    payment_status: string;
+    delivery_status: string;
+    admin_note?: string;
+    settlement_note?: string;
+  }): Promise<{ message: string; trade: Trade }> => {
+    const response = await apiClient.post('/admin/trades/manual/', data);
+    return response.data;
+  },
+
+  updateManualSettlement: async (
+    tradeId: number,
+    data: {
+      payment_status?: string;
+      delivery_status?: string;
+      settlement_note?: string;
+      admin_note?: string;
+    }
+  ): Promise<{ message: string; trade: Trade }> => {
+    const response = await apiClient.patch(`/admin/trades/manual/${tradeId}/settlement/`, data);
     return response.data;
   },
 

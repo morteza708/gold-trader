@@ -241,7 +241,14 @@ export default function HistoryPage() {
                                  {tradeType === 'buy' ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
                               </div>
                               <div>
-                                 <p className="font-bold text-gray-800 text-sm">{tradeType === 'buy' ? 'خرید طلا' : 'فروش طلا'}</p>
+                                 <div className="flex items-center gap-2">
+                                    <p className="font-bold text-gray-800 text-sm">{tradeType === 'buy' ? 'خرید طلا' : 'فروش طلا'}</p>
+                                    {item.channel === "MANUAL" && (
+                                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md">
+                                        دستی
+                                      </span>
+                                    )}
+                                 </div>
                                  <p className="text-[10px] text-gray-400 dir-ltr font-mono">{item.tracking_code}</p>
                               </div>
                            </div>
@@ -278,7 +285,14 @@ export default function HistoryPage() {
                                     {tradeType === 'buy' ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
                                  </div>
                                  <div>
-                                    <p className="font-bold text-gray-800 text-sm">{tradeType === 'buy' ? 'خرید طلا' : 'فروش طلا'}</p>
+                                    <div className="flex items-center gap-2">
+                                       <p className="font-bold text-gray-800 text-sm">{tradeType === 'buy' ? 'خرید طلا' : 'فروش طلا'}</p>
+                                       {item.channel === "MANUAL" && (
+                                         <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md">
+                                           دستی
+                                         </span>
+                                       )}
+                                    </div>
                                     <p className="text-[10px] text-gray-400 mt-0.5">{item.created_at_jalali}</p>
                                  </div>
                               </div>

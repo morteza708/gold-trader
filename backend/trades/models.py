@@ -282,6 +282,36 @@ class Trade(models.Model):
         ('PENDING', 'در انتظار'),
         ('CANCELLED', 'لغو شده'),
     ]
+    CHANNEL_PLATFORM = 'PLATFORM'
+    CHANNEL_MANUAL = 'MANUAL'
+    CHANNEL_CHOICES = [
+        (CHANNEL_PLATFORM, 'پلتفرم'),
+        (CHANNEL_MANUAL, 'فاکتور دستی'),
+    ]
+    SETTLEMENT_WALLET = 'WALLET'
+    SETTLEMENT_OFFPLATFORM = 'OFFPLATFORM'
+    SETTLEMENT_MODE_CHOICES = [
+        (SETTLEMENT_WALLET, 'از کیف پول'),
+        (SETTLEMENT_OFFPLATFORM, 'خارج از سامانه'),
+    ]
+    PAYMENT_NA = 'NOT_APPLICABLE'
+    PAYMENT_UNPAID = 'UNPAID'
+    PAYMENT_OFFPLATFORM = 'PAID_OFFPLATFORM'
+    PAYMENT_WALLET = 'PAID_WALLET'
+    PAYMENT_STATUS_CHOICES = [
+        (PAYMENT_NA, 'نامشخص / عادی'),
+        (PAYMENT_UNPAID, 'پرداخت‌نشده'),
+        (PAYMENT_OFFPLATFORM, 'پرداخت خارج از سامانه'),
+        (PAYMENT_WALLET, 'پرداخت از کیف'),
+    ]
+    DELIVERY_NA = 'NOT_APPLICABLE'
+    DELIVERY_PENDING = 'PENDING'
+    DELIVERY_DELIVERED = 'DELIVERED'
+    DELIVERY_STATUS_CHOICES = [
+        (DELIVERY_NA, 'ندارد'),
+        (DELIVERY_PENDING, 'در انتظار تحویل'),
+        (DELIVERY_DELIVERED, 'تحویل شد'),
+    ]
     
     user = models.ForeignKey(
         CustomUser,
@@ -354,6 +384,44 @@ class Trade(models.Model):
         blank=True,
         verbose_name='یادداشت مدیر'
     )
+    channel = models.CharField(
+        max_length=16,
+        choices=CHANNEL_CHOICES,
+        default=CHANNEL_PLATFORM,
+        db_index=True,
+        verbose_name='کانال معامله',
+    )
+    settlement_mode = models.CharField(
+        max_length=16,
+        choices=SETTLEMENT_MODE_CHOICES,
+        default=SETTLEMENT_WALLET,
+        verbose_name='حالت تسویه',
+    )
+    payment_status = models.CharField(
+        max_length=24,
+        choices=PAYMENT_STATUS_CHOICES,
+        default=PAYMENT_NA,
+        verbose_name='وضعیت پرداخت',
+    )
+    delivery_status = models.CharField(
+        max_length=24,
+        choices=DELIVERY_STATUS_CHOICES,
+        default=DELIVERY_NA,
+        verbose_name='وضعیت تحویل طلا',
+    )
+    settlement_note = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='یادداشت تسویه',
+    )
+    created_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='manual_trades_created',
+        verbose_name='صادرکننده (ادمین)',
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='تاریخ ایجاد',
@@ -372,6 +440,7 @@ class Trade(models.Model):
             models.Index(fields=['user', '-created_at'], name='trades_trad_user_id_1f28fa_idx'),
             models.Index(fields=['status', '-created_at'], name='trades_trad_status_2a01b5_idx'),
             models.Index(fields=['trade_type', '-created_at'], name='trades_trad_trade_t_e0cc67_idx'),
+            models.Index(fields=['channel', '-created_at'], name='trades_trad_channel_created_idx'),
         ]
     
     def __str__(self):

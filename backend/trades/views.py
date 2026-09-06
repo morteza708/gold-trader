@@ -6,8 +6,9 @@ from django.db.models import Q
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from django.conf import settings
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import os
+import re
 from jalali_date import datetime2jalali
 from django_ratelimit.decorators import ratelimit
 import logging
@@ -367,29 +368,11 @@ def download_invoice_pdf(request, trade_id):
             import traceback
             print(traceback.format_exc())
 
-        # لوگوی برند برای PDF (base64) — فقط اگر فایل پیدا شود؛ در غیر این صورت fallback حرف اول
-        logo_base64 = None
-        brand_invoice_logo = getattr(settings, 'BRAND_INVOICE_LOGO', 'brand/OpalBox-mark.png')
-        logo_candidates = []
-        if os.path.isabs(brand_invoice_logo):
-            logo_candidates.append(brand_invoice_logo)
-        else:
-            logo_candidates.append(os.path.join(settings.BASE_DIR, 'static', brand_invoice_logo))
-        # مسیرهای پشتیبان برای توسعه محلی (monorepo)
-        logo_candidates.extend([
-            os.path.join(settings.BASE_DIR, 'static', 'brand', 'OpalBox-mark.png'),
-            os.path.join(settings.BASE_DIR, '..', 'frontend', 'public', 'OpalBox-mark.png'),
-        ])
-        for candidate in logo_candidates:
-            abs_logo = os.path.abspath(candidate)
-            if os.path.isfile(abs_logo):
-                try:
-                    with open(abs_logo, 'rb') as logo_file:
-                        logo_base64 = base64.b64encode(logo_file.read()).decode('utf-8')
-                    break
-                except Exception as logo_error:
-                    print(f"خطا در خواندن لوگو: {logo_error}")
-        
+        # لوگوی برند برای PDF
+        from settings.invoice_issuer import get_invoice_issuer, load_invoice_logo_base64
+        issuer = get_invoice_issuer(request)
+        logo_base64 = load_invoice_logo_base64() or ''
+
         # تابع تبدیل اعداد به فارسی
         def to_persian_digits(text):
             persian_digits = '۰۱۲۳۴۵۶۷۸۹'
@@ -398,8 +381,15 @@ def download_invoice_pdf(request, trade_id):
                 text = str(text).replace(digit, persian_digits[i])
             return text
 
-        brand_name = getattr(settings, 'BRAND_NAME', 'گلد تریدر')
+        brand_name = issuer['brand_name']
         brand_initial = (brand_name[:1] if brand_name else 'G')
+        national_id = issuer['national_id'] or '—'
+        footer_parts = []
+        if issuer['address']:
+            footer_parts.append(f"آدرس: {issuer['address']}")
+        if issuer['phone']:
+            footer_parts.append(f"تلفن: {issuer['phone']}")
+        footer_text = ' | '.join(footer_parts) if footer_parts else ''
         
         # آماده‌سازی داده‌ها برای template
         context = {
@@ -407,11 +397,11 @@ def download_invoice_pdf(request, trade_id):
             'date': to_persian_digits(date_str),
             'time': to_persian_digits(time_str),
             'seller_label': 'فروشنده' if is_buy else 'خریدار',
-            'seller_name': getattr(settings, 'BRAND_COMPANY_NAME', 'شرکت گلد تریدر'),
+            'seller_name': issuer['company_name'],
             'brand_name': brand_name,
             'brand_initial': brand_initial,
-            'logo_base64': logo_base64 or '',
-            'seller_national_id': '۱۰۱۰۱۲۳۴۵۶۷',
+            'logo_base64': logo_base64,
+            'seller_national_id': to_persian_digits(national_id) if national_id != '—' else national_id,
             'buyer_label': 'خریدار' if is_buy else 'فروشنده',
             'buyer_name': f"{trade.user.first_name} {trade.user.last_name}".strip() or trade.user.phone_number or '-',
             'buyer_mobile': to_persian_digits(trade.user.phone_number or '-'),
@@ -419,7 +409,20 @@ def download_invoice_pdf(request, trade_id):
             'amount': to_persian_digits(f"{float(trade.amount):.3f}"),
             'price': to_persian_digits(f"{int(trade.price):,}"),
             'total': to_persian_digits(f"{int(trade.total):,}"),
-            'font_base64': font_base64 if font_base64 else '',  # فونت به صورت base64
+            'font_base64': font_base64 if font_base64 else '',
+            'footer_text': footer_text,
+            'tagline': issuer['tagline'],
+            'is_manual': getattr(trade, 'channel', None) == Trade.CHANNEL_MANUAL,
+            'settlement_mode_display': (
+                trade.get_settlement_mode_display()
+                if getattr(trade, 'channel', None) == Trade.CHANNEL_MANUAL
+                else ''
+            ),
+            'payment_status_display': (
+                trade.get_payment_status_display()
+                if getattr(trade, 'channel', None) == Trade.CHANNEL_MANUAL
+                else ''
+            ),
         }
         
         # رندر کردن template
@@ -776,7 +779,9 @@ def admin_get_trades(request):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        queryset = Trade.objects.select_related('user', 'user__customer_profile').order_by('-created_at')
+        queryset = Trade.objects.select_related(
+            'user', 'user__customer_profile', 'created_by'
+        ).order_by('-created_at')
         
         # فیلترها
         status_filter = request.query_params.get('status')
@@ -786,6 +791,12 @@ def admin_get_trades(request):
         trade_type = request.query_params.get('type')
         if trade_type:
             queryset = queryset.filter(trade_type=trade_type)
+
+        channel = request.query_params.get('channel')
+        if channel:
+            queryset = queryset.filter(channel=channel)
+
+        queryset = queryset[:500]
         
         serializer = TradeSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -981,4 +992,161 @@ def admin_list_pending_purchases(request):
     except Exception as e:
         logger.error(f"خطا در admin_list_pending_purchases: {e}", exc_info=True)
         return Response({'error': 'خطای سرور'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ==================== فاکتور دستی ====================
+
+def _persian_to_english_phone(value: str) -> str:
+    persian = '۰۱۲۳۴۵۶۷۸۹'
+    arabic = '٠١٢٣٤٥٦٧٨٩'
+    out = str(value or '')
+    for i in range(10):
+        out = out.replace(persian[i], str(i)).replace(arabic[i], str(i))
+    return re.sub(r'\s+', '', out)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_search_customers(request):
+    if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
+        return Response({'error': 'شما دسترسی به این بخش ندارید'}, status=status.HTTP_403_FORBIDDEN)
+
+    from . import manual_trade_service as mts
+    q = request.query_params.get('q', '')
+    users = mts.search_customers(q, limit=20)
+    results = []
+    for u in users:
+        results.append({
+            'id': u.id,
+            'phone_number': u.phone_number,
+            'first_name': u.first_name or '',
+            'last_name': u.last_name or '',
+            'full_name': f'{u.first_name or ""} {u.last_name or ""}'.strip() or None,
+            'national_id': u.national_id or '',
+            'is_phone_verified': u.is_phone_verified,
+            'is_active': u.is_active,
+            'profile_completed': u.profile_completed,
+        })
+    return Response({'results': results})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_ensure_manual_customer(request):
+    if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
+        return Response({'error': 'شما دسترسی به این بخش ندارید'}, status=status.HTTP_403_FORBIDDEN)
+
+    from . import manual_trade_service as mts
+    phone = _persian_to_english_phone(request.data.get('phone_number', ''))
+    try:
+        user = mts.ensure_manual_customer(
+            phone_number=phone,
+            first_name=request.data.get('first_name') or '',
+            last_name=request.data.get('last_name') or '',
+            national_id=_persian_to_english_phone(request.data.get('national_id') or ''),
+        )
+    except mts.ManualTradeError as e:
+        return Response({'error': e.message}, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response({
+        'message': 'کاربر آماده صدور فاکتور است',
+        'user': {
+            'id': user.id,
+            'phone_number': user.phone_number,
+            'first_name': user.first_name or '',
+            'last_name': user.last_name or '',
+            'full_name': f'{user.first_name or ""} {user.last_name or ""}'.strip() or None,
+            'national_id': user.national_id or '',
+            'is_phone_verified': user.is_phone_verified,
+        },
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def admin_manual_trades(request):
+    if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
+        return Response({'error': 'شما دسترسی به این بخش ندارید'}, status=status.HTTP_403_FORBIDDEN)
+
+    from . import manual_trade_service as mts
+    from accounts.models import CustomUser
+
+    if request.method == 'GET':
+        qs = (
+            Trade.objects.filter(channel=Trade.CHANNEL_MANUAL)
+            .select_related('user', 'created_by')
+            .order_by('-created_at')[:200]
+        )
+        return Response(TradeSerializer(qs, many=True).data)
+
+    user_id = request.data.get('user_id')
+    phone = _persian_to_english_phone(request.data.get('phone_number', ''))
+    try:
+        if user_id:
+            existing = CustomUser.objects.get(id=user_id, role=UserRole.CUSTOMER)
+            user = mts.ensure_manual_customer(
+                phone_number=existing.phone_number,
+                first_name=request.data.get('first_name') or '',
+                last_name=request.data.get('last_name') or '',
+                national_id=_persian_to_english_phone(request.data.get('national_id') or ''),
+            )
+        elif phone:
+            user = mts.ensure_manual_customer(
+                phone_number=phone,
+                first_name=request.data.get('first_name') or '',
+                last_name=request.data.get('last_name') or '',
+                national_id=_persian_to_english_phone(request.data.get('national_id') or ''),
+            )
+        else:
+            return Response({'error': 'کاربر یا شماره موبایل الزامی است'}, status=status.HTTP_400_BAD_REQUEST)
+
+        trade = mts.create_manual_trade(
+            user=user,
+            trade_type=request.data.get('trade_type', ''),
+            amount=Decimal(str(request.data.get('amount') or '0')),
+            unit_price=Decimal(str(request.data.get('unit_price') or '0')),
+            settlement_mode=request.data.get('settlement_mode') or Trade.SETTLEMENT_OFFPLATFORM,
+            payment_status=request.data.get('payment_status') or Trade.PAYMENT_OFFPLATFORM,
+            delivery_status=request.data.get('delivery_status') or Trade.DELIVERY_NA,
+            admin_note=request.data.get('admin_note') or '',
+            settlement_note=request.data.get('settlement_note') or '',
+            created_by=request.user,
+        )
+    except CustomUser.DoesNotExist:
+        return Response({'error': 'کاربر یافت نشد'}, status=status.HTTP_404_NOT_FOUND)
+    except (mts.ManualTradeError, InvalidOperation, ValueError, TypeError) as e:
+        msg = getattr(e, 'message', None) or str(e) or 'خطا در صدور فاکتور'
+        return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response({
+        'message': 'فاکتور دستی با موفقیت صادر شد',
+        'trade': TradeSerializer(trade).data,
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def admin_update_manual_settlement(request, trade_id):
+    if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
+        return Response({'error': 'شما دسترسی به این بخش ندارید'}, status=status.HTTP_403_FORBIDDEN)
+
+    from . import manual_trade_service as mts
+    try:
+        trade = Trade.objects.select_related('user', 'created_by').get(id=trade_id)
+        trade = mts.update_manual_settlement(
+            trade=trade,
+            payment_status=request.data.get('payment_status'),
+            delivery_status=request.data.get('delivery_status'),
+            settlement_note=request.data.get('settlement_note'),
+            admin_note=request.data.get('admin_note'),
+        )
+    except Trade.DoesNotExist:
+        return Response({'error': 'فاکتور یافت نشد'}, status=status.HTTP_404_NOT_FOUND)
+    except mts.ManualTradeError as e:
+        return Response({'error': e.message}, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response({
+        'message': 'وضعیت تسویه به‌روزرسانی شد',
+        'trade': TradeSerializer(trade).data,
+    })
 

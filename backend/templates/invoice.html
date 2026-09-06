@@ -219,7 +219,7 @@
                         {% endif %}
                         <div style="display: inline-block; vertical-align: middle; margin-right: 10px;">
                             <div class="company-name">{{ brand_name|default:"گلد تریدر" }}</div>
-                            <div class="company-sub">سامانه هوشمند معاملات طلا</div>
+                            <div class="company-sub">{{ tagline }}</div>
                         </div>
                     </td>
                     <td style="width: 40%; text-align: left;">
@@ -228,6 +228,11 @@
                             شماره: {{ invoice_number }}<br>
                             تاریخ: {{ date }}<br>
                             ساعت: {{ time }}
+                            {% if is_manual %}
+                            <br><strong style="color:#92400e;">فاکتور دستی / حضوری</strong>
+                            {% if settlement_mode_display %}<br>تسویه: {{ settlement_mode_display }}{% endif %}
+                            {% if payment_status_display %}<br>پرداخت: {{ payment_status_display }}{% endif %}
+                            {% endif %}
                         </div>
                     </td>
                 </tr>
@@ -319,7 +324,7 @@
 
         <!-- فوتر چسبان -->
         <div class="footer">
-            آدرس: تهران، بازار زرگرها، پلاک ۱۱۰ | تلفن: ۰۲۱-۸۸۸۸۸۸۸۸
+            {% if footer_text %}{{ footer_text }}{% else %}—{% endif %}
         </div>
 
     </div>
