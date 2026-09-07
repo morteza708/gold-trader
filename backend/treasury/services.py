@@ -34,11 +34,19 @@ def _q0(value: Decimal | int | float | str) -> Decimal:
 
 
 def get_customer_gold_liability() -> Decimal:
-    """جمع طلای موجود در کیف کاربران (بدهی شرکت به مشتریان)"""
+    """جمع طلای موجود در کیف کاربران (= تعهد/طلب طلای مشتریان از شرکت)"""
     from wallet.models import Wallet
 
     total = Wallet.objects.aggregate(s=Sum('gold_balance'))['s']
     return _q6(total or ZERO)
+
+
+def get_customer_rial_balance_total() -> Decimal:
+    """جمع موجودی ریال کیف کاربران (تعهد نقدی شرکت به مشتریان — نه موجودی صندوق فیزیکی)"""
+    from wallet.models import Wallet
+
+    total = Wallet.objects.aggregate(s=Sum('rial_balance'))['s']
+    return _q0(total or ZERO)
 
 
 def get_pending_gold_delivery() -> Decimal:
@@ -98,6 +106,7 @@ def get_coverage_snapshot(treasury: CompanyTreasury | None = None) -> dict[str, 
         'warning_cover_ratio': treasury.warning_cover_ratio,
         'critical_cover_ratio': treasury.critical_cover_ratio,
         'shortfall_gold': shortfall,
+        'customer_rial_balance_total': get_customer_rial_balance_total(),
         'updated_at': treasury.updated_at,
     }
 

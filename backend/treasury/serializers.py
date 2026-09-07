@@ -19,6 +19,9 @@ class CoverageSnapshotSerializer(serializers.Serializer):
     warning_cover_ratio = serializers.DecimalField(max_digits=6, decimal_places=4)
     critical_cover_ratio = serializers.DecimalField(max_digits=6, decimal_places=4)
     shortfall_gold = serializers.DecimalField(max_digits=18, decimal_places=6)
+    customer_rial_balance_total = serializers.DecimalField(
+        max_digits=18, decimal_places=0, required=False
+    )
 
 
 class TreasurySettingsSerializer(serializers.ModelSerializer):

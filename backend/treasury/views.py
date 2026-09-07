@@ -202,30 +202,41 @@ def admin_operational_journal(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def admin_parties(request):
-    """بدهکاران طلا و بستانکاران ریال/طلا (برداشت‌های باز)"""
+    """طلبکاران طلا/ریال (مانده کیف) و برداشت‌های باز"""
     if not _is_admin(request.user):
         return Response({'error': 'شما دسترسی به این بخش ندارید'}, status=status.HTTP_403_FORBIDDEN)
 
-    gold_debtors = []
-    wallets = (
-        Wallet.objects.filter(gold_balance__gt=0)
-        .select_related('user', 'user__customer_profile')
-        .order_by('-gold_balance')[:200]
-    )
-    for w in wallets:
-        u = w.user
+    def _user_row(u, gold_balance, rial_balance):
         name = f'{u.first_name or ""} {u.last_name or ""}'.strip()
         account_code = None
         if hasattr(u, 'customer_profile') and u.customer_profile:
             account_code = u.customer_profile.account_code
-        gold_debtors.append({
+        return {
             'user_id': u.id,
             'phone_number': u.phone_number,
             'full_name': name or None,
             'account_code': account_code,
-            'gold_balance': str(w.gold_balance),
-            'rial_balance': str(int(w.rial_balance)),
-        })
+            'gold_balance': str(gold_balance),
+            'rial_balance': str(int(rial_balance)),
+        }
+
+    gold_creditors = []
+    wallets_gold = (
+        Wallet.objects.filter(gold_balance__gt=0)
+        .select_related('user', 'user__customer_profile')
+        .order_by('-gold_balance')[:200]
+    )
+    for w in wallets_gold:
+        gold_creditors.append(_user_row(w.user, w.gold_balance, w.rial_balance))
+
+    rial_creditors = []
+    wallets_rial = (
+        Wallet.objects.filter(rial_balance__gt=0)
+        .select_related('user', 'user__customer_profile')
+        .order_by('-rial_balance')[:200]
+    )
+    for w in wallets_rial:
+        rial_creditors.append(_user_row(w.user, w.gold_balance, w.rial_balance))
 
     open_withdrawals = []
     wr_qs = (
@@ -246,8 +257,8 @@ def admin_parties(request):
             'withdrawal_type_display': 'برداشت ریال' if wr.withdrawal_type == 'RIAL' else 'برداشت طلا',
             'status': wr.status,
             'status_display': {
-                'PENDING': 'در انتظار',
-                'APPROVED': 'آماده تحویل' if wr.withdrawal_type == 'GOLD' else 'تأیید شده',
+                'PENDING': 'در انتظار بررسی',
+                'APPROVED': 'آماده تحویل' if wr.withdrawal_type == 'GOLD' else 'تأییدشده — در انتظار پرداخت',
             }.get(wr.status, wr.status),
             'amount': str(wr.amount),
             'user_id': u.id,
@@ -259,6 +270,7 @@ def admin_parties(request):
     totals = {
         'total_customer_gold': str(services.get_customer_gold_liability()),
         'total_pending_gold_delivery': str(services.get_pending_gold_delivery()),
+        'total_customer_rial': str(services.get_customer_rial_balance_total()),
         'open_rial_withdrawals': str(
             WithdrawalRequest.objects.filter(
                 withdrawal_type='RIAL', status='PENDING'
@@ -267,7 +279,10 @@ def admin_parties(request):
     }
 
     return Response({
-        'gold_debtors': gold_debtors,
+        # نام‌های جدید + سازگاری عقب‌رو با کلاینت قبلی
+        'gold_creditors': gold_creditors,
+        'rial_creditors': rial_creditors,
+        'gold_debtors': gold_creditors,
         'open_withdrawals': open_withdrawals,
         'totals': totals,
         'coverage': CoverageSnapshotSerializer(services.get_coverage_snapshot()).data,

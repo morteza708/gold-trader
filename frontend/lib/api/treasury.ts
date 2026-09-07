@@ -15,6 +15,7 @@ export interface CoverageSnapshot {
   warning_cover_ratio: string;
   critical_cover_ratio: string;
   shortfall_gold: string;
+  customer_rial_balance_total?: string;
   updated_at?: string;
 }
 
@@ -59,6 +60,9 @@ export interface GoldDebtor {
   gold_balance: string;
   rial_balance: string;
 }
+
+/** @deprecated استفاده از GoldCreditor؛ برای سازگاری نگه داشته شده */
+export type GoldCreditor = GoldDebtor;
 
 export interface OpenWithdrawal {
   id: number;
@@ -197,16 +201,31 @@ export const adminTreasuryAPI = {
   },
 
   getParties: async (): Promise<{
+    gold_creditors: GoldDebtor[];
+    rial_creditors: GoldDebtor[];
     gold_debtors: GoldDebtor[];
     open_withdrawals: OpenWithdrawal[];
     totals: {
       total_customer_gold: string;
       total_pending_gold_delivery: string;
+      total_customer_rial: string;
       open_rial_withdrawals: string;
     };
     coverage: CoverageSnapshot;
   }> => {
     const res = await apiClient.get('/admin/treasury/parties/');
-    return res.data;
+    const data = res.data;
+    return {
+      ...data,
+      gold_creditors: data.gold_creditors || data.gold_debtors || [],
+      rial_creditors: data.rial_creditors || [],
+      gold_debtors: data.gold_debtors || data.gold_creditors || [],
+      totals: {
+        total_customer_gold: data.totals?.total_customer_gold ?? '0',
+        total_pending_gold_delivery: data.totals?.total_pending_gold_delivery ?? '0',
+        total_customer_rial: data.totals?.total_customer_rial ?? '0',
+        open_rial_withdrawals: data.totals?.open_rial_withdrawals ?? '0',
+      },
+    };
   },
 };

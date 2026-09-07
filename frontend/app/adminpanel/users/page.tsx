@@ -831,7 +831,7 @@ function UserDetailModal({
                   <div className="bg-gradient-to-br from-blue-500/20 to-blue-500/10 p-4 rounded-xl border border-blue-500/30">
                     <p className="text-xs text-blue-400 mb-1">موجودی ریالی</p>
                     <p className="text-2xl font-black text-blue-400">
-                      {toPersianDigits(Number(user.rial_balance || 0).toLocaleString())} <span className="text-sm">تومان</span>
+                      {toPersianDigits(Number(user.rial_balance || 0).toLocaleString())} <span className="text-sm">ریال</span>
                     </p>
                   </div>
                 </div>

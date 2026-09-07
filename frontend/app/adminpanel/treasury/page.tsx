@@ -78,10 +78,12 @@ export default function TreasuryPage() {
   const [movements, setMovements] = useState<VaultMovement[]>([]);
   const [journal, setJournal] = useState<JournalRow[]>([]);
   const [debtors, setDebtors] = useState<GoldDebtor[]>([]);
+  const [rialCreditors, setRialCreditors] = useState<GoldDebtor[]>([]);
   const [openWithdrawals, setOpenWithdrawals] = useState<OpenWithdrawal[]>([]);
   const [partiesTotals, setPartiesTotals] = useState<{
     total_customer_gold: string;
     total_pending_gold_delivery: string;
+    total_customer_rial: string;
     open_rial_withdrawals: string;
   } | null>(null);
 
@@ -166,12 +168,13 @@ export default function TreasuryPage() {
   const loadParties = useCallback(async () => {
     try {
       const data = await adminTreasuryAPI.getParties();
-      setDebtors(data.gold_debtors);
+      setDebtors(data.gold_creditors);
+      setRialCreditors(data.rial_creditors);
       setOpenWithdrawals(data.open_withdrawals);
       setPartiesTotals(data.totals);
       setCoverage(data.coverage);
     } catch {
-      toast.error("خطا در بارگذاری بدهکاران و بستانکاران");
+      toast.error("خطا در بارگذاری تعهدات و طرف‌حساب‌ها");
     }
   }, []);
 
@@ -350,7 +353,7 @@ export default function TreasuryPage() {
     { id: "overview", name: "نمای کلی", icon: Scale },
     { id: "pnl", name: "سود و زیان", icon: TrendingUp },
     { id: "vault", name: "ورود و خروج خزانه", icon: Landmark },
-    { id: "parties", name: "بدهکاران و بستانکاران", icon: Users },
+    { id: "parties", name: "تعهدات و طرف‌حساب‌ها", icon: Users },
     { id: "journal", name: "دفتر عملیات", icon: BookOpen },
     { id: "export", name: "خروجی حسابداری", icon: Download },
     { id: "alerts", name: "هشدار و توقف", icon: AlertTriangle },
@@ -373,7 +376,7 @@ export default function TreasuryPage() {
             خزانه و حسابرسی
           </h1>
           <p className="text-sm text-slate-400">
-            موجودی طلای شرکت، سود و زیان عملیاتی، بدهی به مشتریان و هشدار کمبود
+            موجودی طلای شرکت، سود و زیان عملیاتی، تعهد به مشتریان و هشدار کمبود
           </p>
         </div>
         <button
@@ -446,7 +449,8 @@ export default function TreasuryPage() {
                   <p className="text-sm mt-2 leading-7 opacity-90">
                     نسبت پوشش{" "}
                     {toPersianDigits(Number(coverage.cover_percent).toLocaleString())}٪ — موجودی
-                    شرکت باید حداقل برابر بدهی طلا به مشتریان به‌علاوه طلای در انتظار تحویل باشد.
+                    فیزیکی طلای شرکت باید حداقل برابر «تعهد طلا به مشتریان» به‌علاوه «طلای در انتظار
+                    تحویل حضوری» باشد.
                   </p>
                 </div>
               )}
@@ -454,13 +458,13 @@ export default function TreasuryPage() {
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                 {[
                   {
-                    title: "موجودی طلای شرکت",
+                    title: "موجودی طلای شرکت (فیزیکی)",
                     value: coverage
                       ? `${toPersianDigits(Number(coverage.company_gold_balance).toFixed(3))} گرم`
                       : "—",
                   },
                   {
-                    title: "بدهی طلا به مشتریان",
+                    title: "تعهد طلا به مشتریان (طلبکاران)",
                     value: coverage
                       ? `${toPersianDigits(Number(coverage.customer_gold_liability).toFixed(3))} گرم`
                       : "—",
@@ -489,6 +493,12 @@ export default function TreasuryPage() {
                       ? `${toPersianDigits(Number(coverage.avg_cost_per_gram).toLocaleString())} ریال`
                       : "—",
                   },
+                  {
+                    title: "جمع موجودی ریال کیف‌ها",
+                    value: coverage?.customer_rial_balance_total != null
+                      ? `${toPersianDigits(Number(coverage.customer_rial_balance_total).toLocaleString())} ریال`
+                      : "—",
+                  },
                 ].map((card) => (
                   <div
                     key={card.title}
@@ -498,6 +508,15 @@ export default function TreasuryPage() {
                     <p className="text-lg font-black text-white">{card.value}</p>
                   </div>
                 ))}
+              </div>
+
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-sm text-amber-100/90 leading-7">
+                <p className="font-bold text-amber-200 mb-1">تفاوت خزانه با «مدیریت مالی»</p>
+                <p>
+                  کارت‌های «مدیریت مالی» جمع درخواست‌های واریز/برداشت را نشان می‌دهند. خزانه وضعیت
+                  فعلی موجودی فیزیکی طلا و تعهد کیف کاربران را نشان می‌دهد. این دو عدد لزوماً برابر
+                  نیستند و نباید با هم یکی گرفته شوند. واحد پول در این بخش «ریال» است.
+                </p>
               </div>
 
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-sm text-blue-200 leading-7 flex gap-3">
@@ -778,16 +797,22 @@ export default function TreasuryPage() {
 
           {activeTab === "parties" && (
             <div className="space-y-8">
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-sm text-blue-100 leading-7">
+                این تب ماندهٔ فعلی کیف کاربران و برداشت‌های در جریان را نشان می‌دهد. کاربری که طلای
+                کیفش صفر باشد در «طلبکاران طلا» نمی‌آید، حتی اگر قبلاً معامله داشته باشد. موجودی ریال
+                کیف، موجودی صندوق فیزیکی شرکت نیست.
+              </div>
+
               {partiesTotals && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm">
                   <div className="bg-slate-900 border border-slate-700 rounded-xl p-3">
-                    <p className="text-slate-400 text-xs mb-1">جمع بدهی طلا</p>
+                    <p className="text-slate-400 text-xs mb-1">جمع تعهد طلا (طلبکاران)</p>
                     <p className="font-black text-white">
                       {toPersianDigits(Number(partiesTotals.total_customer_gold).toFixed(3))} گرم
                     </p>
                   </div>
                   <div className="bg-slate-900 border border-slate-700 rounded-xl p-3">
-                    <p className="text-slate-400 text-xs mb-1">در انتظار تحویل</p>
+                    <p className="text-slate-400 text-xs mb-1">طلای در انتظار تحویل حضوری</p>
                     <p className="font-black text-white">
                       {toPersianDigits(
                         Number(partiesTotals.total_pending_gold_delivery).toFixed(3)
@@ -796,7 +821,16 @@ export default function TreasuryPage() {
                     </p>
                   </div>
                   <div className="bg-slate-900 border border-slate-700 rounded-xl p-3">
-                    <p className="text-slate-400 text-xs mb-1">برداشت ریال باز</p>
+                    <p className="text-slate-400 text-xs mb-1">جمع موجودی ریال کیف‌ها</p>
+                    <p className="font-black text-white">
+                      {toPersianDigits(
+                        Number(partiesTotals.total_customer_rial || 0).toLocaleString()
+                      )}{" "}
+                      ریال
+                    </p>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-700 rounded-xl p-3">
+                    <p className="text-slate-400 text-xs mb-1">برداشت ریال در انتظار بررسی</p>
                     <p className="font-black text-white">
                       {toPersianDigits(
                         Number(partiesTotals.open_rial_withdrawals).toLocaleString()
@@ -808,14 +842,16 @@ export default function TreasuryPage() {
               )}
 
               <div>
-                <h3 className="font-black text-white mb-3">بدهکاران طلا (موجودی کیف کاربران)</h3>
+                <h3 className="font-black text-white mb-3">طلبکاران طلا (مانده طلای کیف)</h3>
                 <p className="text-xs text-slate-400 mb-3 leading-6">
-                  شرکت به این کاربران طلا بدهکار است. این عدد باید با موجودی فیزیکی خزانه پوشش داده
-                  شود.
+                  شرکت به این کاربران طلا بدهکار است (آن‌ها از شرکت طلا طلب دارند). این عدد باید با
+                  موجودی فیزیکی خزانه پوشش داده شود.
                 </p>
                 <div className="space-y-2 max-h-80 overflow-y-auto">
                   {debtors.length === 0 ? (
-                    <p className="text-slate-500 text-sm text-center py-4">بدهکار طلایی نیست</p>
+                    <p className="text-slate-500 text-sm text-center py-4">
+                      در حال حاضر طلبکار طلایی وجود ندارد
+                    </p>
                   ) : (
                     debtors.map((d) => (
                       <div
@@ -832,6 +868,10 @@ export default function TreasuryPage() {
                               ? ` — کد ${toPersianDigits(d.account_code)}`
                               : ""}
                           </p>
+                          <p className="text-[11px] text-slate-500 mt-1">
+                            مانده ریال کیف:{" "}
+                            {toPersianDigits(Number(d.rial_balance || 0).toLocaleString())} ریال
+                          </p>
                         </div>
                         <p className="font-black text-gold-400 shrink-0">
                           {toPersianDigits(Number(d.gold_balance).toFixed(3))} گرم
@@ -843,10 +883,56 @@ export default function TreasuryPage() {
               </div>
 
               <div>
-                <h3 className="font-black text-white mb-3">برداشت‌های باز (طلب کاربران)</h3>
+                <h3 className="font-black text-white mb-3">طلبکاران ریال (مانده ریال کیف)</h3>
+                <p className="text-xs text-slate-400 mb-3 leading-6">
+                  موجودی ریال قابل‌برداشت کاربران در کیف پلتفرم. این جمع با «جمع مبلغ واریز» در مدیریت
+                  مالی یکی نیست؛ واریزهای تاریخی منهای خریدها و برداشت‌ها را منعکس می‌کند.
+                </p>
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {rialCreditors.length === 0 ? (
+                    <p className="text-slate-500 text-sm text-center py-4">
+                      در حال حاضر موجودی ریال مثبتی در کیف‌ها نیست
+                    </p>
+                  ) : (
+                    rialCreditors.map((d) => (
+                      <div
+                        key={`rial-${d.user_id}`}
+                        className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 flex justify-between gap-3 text-sm"
+                      >
+                        <div>
+                          <p className="font-bold text-white">
+                            {d.full_name || toPersianDigits(d.phone_number)}
+                          </p>
+                          <p className="text-xs text-slate-400 dir-ltr text-right">
+                            {toPersianDigits(d.phone_number)}
+                            {d.account_code
+                              ? ` — کد ${toPersianDigits(d.account_code)}`
+                              : ""}
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-1">
+                            مانده طلا:{" "}
+                            {toPersianDigits(Number(d.gold_balance || 0).toFixed(3))} گرم
+                          </p>
+                        </div>
+                        <p className="font-black text-sky-300 shrink-0">
+                          {toPersianDigits(Number(d.rial_balance).toLocaleString())} ریال
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-black text-white mb-3">برداشت‌های باز (در جریان)</h3>
+                <p className="text-xs text-slate-400 mb-3 leading-6">
+                  درخواست‌های برداشت ریال یا طلا که هنوز تکمیل نشده‌اند.
+                </p>
                 <div className="space-y-2 max-h-80 overflow-y-auto">
                   {openWithdrawals.length === 0 ? (
-                    <p className="text-slate-500 text-sm text-center py-4">برداشت بازی نیست</p>
+                    <p className="text-slate-500 text-sm text-center py-4">
+                      برداشت بازی وجود ندارد
+                    </p>
                   ) : (
                     openWithdrawals.map((w) => (
                       <div
@@ -897,10 +983,14 @@ export default function TreasuryPage() {
                   <option value="DEPOSIT">واریز ریال</option>
                   <option value="BUY">خرید کاربر</option>
                   <option value="SELL">فروش کاربر</option>
+                  <option value="MANUAL_BUY">خرید دستی (ادمین)</option>
+                  <option value="MANUAL_SELL">فروش دستی (ادمین)</option>
                   <option value="WITHDRAW_RIAL">برداشت ریال</option>
                   <option value="GOLD_DELIVERY">تحویل طلا</option>
                   <option value="VAULT_IN">ورود خزانه</option>
                   <option value="VAULT_OUT">خروج خزانه</option>
+                  <option value="PENDING_LOCK">قفل خرید معلق</option>
+                  <option value="PENDING_UNLOCK">آزادسازی خرید معلق</option>
                   <option value="ADJUSTMENT">تعدیل</option>
                 </select>
                 <input
@@ -1019,10 +1109,14 @@ export default function TreasuryPage() {
                       <option value="DEPOSIT">واریز</option>
                       <option value="BUY">خرید</option>
                       <option value="SELL">فروش</option>
+                      <option value="MANUAL_BUY">خرید دستی</option>
+                      <option value="MANUAL_SELL">فروش دستی</option>
                       <option value="WITHDRAW_RIAL">برداشت ریال</option>
                       <option value="GOLD_DELIVERY">تحویل طلا</option>
                       <option value="VAULT_IN">ورود خزانه</option>
                       <option value="VAULT_OUT">خروج خزانه</option>
+                      <option value="PENDING_LOCK">قفل خرید معلق</option>
+                      <option value="PENDING_UNLOCK">آزادسازی خرید معلق</option>
                       <option value="ADJUSTMENT">تعدیل</option>
                     </select>
                   </div>
@@ -1131,16 +1225,33 @@ export default function TreasuryPage() {
               <section>
                 <h3 className="text-white font-black text-lg mb-2">این بخش چیست؟</h3>
                 <p>
-                  «خزانه و حسابرسی» وضعیت واقعی طلای فیزیکی شرکت را از بدهی طلا به مشتریان جدا
-                  نگه می‌دارد. کیف پول کاربران فقط نشان می‌دهد شرکت به آن‌ها چقدر طلا بدهکار است؛
-                  موجودی فیزیکی باید جداگانه در خزانه ثبت شود.
+                  «خزانه و حسابرسی» موجودی فیزیکی طلای شرکت را از تعهد طلا به مشتریان جدا نگه
+                  می‌دارد. مانده طلای کیف کاربر یعنی آن کاربر از شرکت طلا طلب دارد؛ موجودی فیزیکی
+                  باید جداگانه در خزانه ثبت شود تا پوشش کافی باشد.
                 </p>
               </section>
               <section>
                 <h3 className="text-white font-black text-lg mb-2">معادله پوشش</h3>
                 <p className="bg-slate-900 border border-slate-700 rounded-xl p-4 font-bold text-gold-300">
-                  موجودی طلای شرکت ≥ بدهی طلا به مشتریان + طلای در انتظار تحویل حضوری
+                  موجودی طلای شرکت ≥ تعهد طلا به مشتریان + طلای در انتظار تحویل حضوری
                 </p>
+              </section>
+              <section>
+                <h3 className="text-white font-black text-lg mb-2">طلبکار طلا در برابر مدیریت مالی</h3>
+                <ul className="list-disc pr-5 space-y-2">
+                  <li>
+                    <strong className="text-white">طلبکاران طلا:</strong> فقط کاربرانی با مانده طلای
+                    کیف بیشتر از صفر.
+                  </li>
+                  <li>
+                    <strong className="text-white">طلبکاران ریال:</strong> کاربران با مانده ریال کیف
+                    مثبت — این موجودی صندوق فیزیکی شرکت نیست.
+                  </li>
+                  <li>
+                    <strong className="text-white">مدیریت مالی:</strong> جریان درخواست واریز و برداشت
+                    (تاریخی/در جریان)، نه لزوماً مانده فعلی کیف.
+                  </li>
+                </ul>
               </section>
               <section>
                 <h3 className="text-white font-black text-lg mb-2">چه زمانی خرید متوقف می‌شود؟</h3>
@@ -1160,16 +1271,21 @@ export default function TreasuryPage() {
                     انبار/صندوق شرکت می‌شود (خرید عمده از بازار).
                   </li>
                   <li>
-                    <strong className="text-white">خرید کاربر:</strong> فقط بدهی طلای شرکت به کاربر
+                    <strong className="text-white">خرید کاربر:</strong> فقط تعهد طلای شرکت به کاربر
                     زیاد می‌شود؛ طلای فیزیکی کم نمی‌شود تا زمان تحویل حضوری.
                   </li>
                   <li>
-                    <strong className="text-white">فروش کاربر:</strong> بدهی طلا کم می‌شود و همان
+                    <strong className="text-white">فروش کاربر:</strong> تعهد طلا کم می‌شود و همان
                     طلا وارد خزانه شرکت می‌گردد.
                   </li>
                   <li>
                     <strong className="text-white">تحویل حضوری:</strong> طلا از خزانه فیزیکی خارج
                     می‌شود.
+                  </li>
+                  <li>
+                    <strong className="text-white">فاکتور دستی:</strong> رویدادهای خرید/فروش دستی در
+                    دفتر عملیات ثبت می‌شوند؛ تغییر وضعیت تحویل/پرداخت روی فاکتور هنوز به‌تنهایی موجودی
+                    خزانه را جابه‌جا نمی‌کند (فاز بعدی).
                   </li>
                 </ul>
               </section>
@@ -1213,7 +1329,10 @@ export default function TreasuryPage() {
                 <p>
                   پس از استقرار، یک‌بار دستور ثبت مانده افتتاحیه کیف‌ها را اجرا کنید و سپس موجودی
                   واقعی خزانه را از تب «ورود و خروج خزانه» وارد کنید. بدون ثبت موجودی اولیه، پوشش
-                  ممکن است بحرانی نشان داده شود.
+                  ممکن است بحرانی نشان داده شود. برای بررسی یک کاربر خاص:
+                </p>
+                <p className="bg-slate-900 border border-slate-700 rounded-xl p-3 font-mono text-xs dir-ltr text-left mt-2">
+                  python manage.py diagnose_user_ledger --phone 09xxxxxxxxx
                 </p>
               </section>
             </div>
