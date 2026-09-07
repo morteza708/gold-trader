@@ -872,6 +872,12 @@ export default function TreasuryPage() {
                             مانده ریال کیف:{" "}
                             {toPersianDigits(Number(d.rial_balance || 0).toLocaleString())} ریال
                           </p>
+                          <a
+                            href={`/adminpanel/users?userId=${d.user_id}`}
+                            className="inline-block mt-1 text-[11px] font-bold text-gold-400 hover:text-gold-300"
+                          >
+                            مشاهده فعالیت کاربر
+                          </a>
                         </div>
                         <p className="font-black text-gold-400 shrink-0">
                           {toPersianDigits(Number(d.gold_balance).toFixed(3))} گرم
@@ -913,6 +919,12 @@ export default function TreasuryPage() {
                             مانده طلا:{" "}
                             {toPersianDigits(Number(d.gold_balance || 0).toFixed(3))} گرم
                           </p>
+                          <a
+                            href={`/adminpanel/users?userId=${d.user_id}`}
+                            className="inline-block mt-1 text-[11px] font-bold text-sky-300 hover:text-sky-200"
+                          >
+                            مشاهده فعالیت کاربر
+                          </a>
                         </div>
                         <p className="font-black text-sky-300 shrink-0">
                           {toPersianDigits(Number(d.rial_balance).toLocaleString())} ریال

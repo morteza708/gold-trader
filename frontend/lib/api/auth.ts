@@ -192,6 +192,41 @@ export interface AdminUserDetail extends AdminUserListItem {
   is_active: boolean;
 }
 
+export interface UserLedgerEvent {
+  kind: 'trade' | 'deposit' | 'withdrawal' | 'journal';
+  kind_display: string;
+  id: number;
+  created_at: string;
+  created_at_jalali: string | null;
+  title: string;
+  status: string;
+  status_display: string;
+  amount_label: string | null;
+  money_label: string | null;
+  ref_code: string | null;
+  meta: Record<string, unknown>;
+}
+
+export interface UserLedgerResponse {
+  user_id: number;
+  balances: {
+    rial_balance: number;
+    gold_balance: string;
+    available_rial: number;
+    available_gold: string;
+    pending_withdrawal_rial: number;
+    pending_withdrawal_gold: string;
+    pending_trade_rial: number;
+  };
+  events: UserLedgerEvent[];
+  counts: {
+    trades: number;
+    deposits: number;
+    withdrawals: number;
+    journal: number;
+  };
+}
+
 // Admin API Functions
 export const adminAPI = {
   // دریافت لیست کاربران
@@ -228,6 +263,13 @@ export const adminAPI = {
   // دریافت جزئیات کامل یک کاربر
   getUserDetail: async (userId: number): Promise<AdminUserDetail> => {
     const response = await apiClient.get<AdminUserDetail>(`/admin/users/${userId}/`);
+    return response.data;
+  },
+
+  getUserLedger: async (userId: number, limit = 100): Promise<UserLedgerResponse> => {
+    const response = await apiClient.get<UserLedgerResponse>(
+      `/admin/users/${userId}/ledger/?limit=${limit}`
+    );
     return response.data;
   },
 

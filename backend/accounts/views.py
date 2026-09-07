@@ -493,6 +493,36 @@ def admin_users_list(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def admin_user_ledger(request, user_id):
+    """دفترچه فعالیت یکپارچه کاربر (معامله / واریز / برداشت / دفتر عملیات)"""
+    try:
+        if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
+            return Response(
+                {'error': 'شما دسترسی به این بخش ندارید'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        try:
+            user = CustomUser.objects.get(id=user_id)
+        except CustomUser.DoesNotExist:
+            return Response({'error': 'کاربر یافت نشد'}, status=status.HTTP_404_NOT_FOUND)
+
+        from .ledger_service import build_user_ledger
+        limit = request.query_params.get('limit', '100')
+        try:
+            limit_n = max(10, min(int(limit), 300))
+        except (TypeError, ValueError):
+            limit_n = 100
+        return Response(build_user_ledger(user, limit=limit_n), status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"خطا در admin_user_ledger: {e}", exc_info=True)
+        return Response(
+            {'error': f'خطای سرور: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def admin_user_detail(request, user_id):
     """
     دریافت جزئیات کامل یک کاربر برای پنل مدیریت

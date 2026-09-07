@@ -12,7 +12,12 @@ import UserStatusBadge from "@/components/admin/UserStatusBadge";
 import VerificationBadge from "@/components/admin/VerificationBadge";
 import StatsCard from "@/components/admin/StatsCard";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
-import { adminAPI, AdminUserListItem, AdminUserDetail } from "@/lib/api/auth";
+import {
+  adminAPI,
+  AdminUserListItem,
+  AdminUserDetail,
+  UserLedgerResponse,
+} from "@/lib/api/auth";
 import { useDebounce } from "@/hooks/useDebounce";
 // آواتار پیش‌فرض (آیکون کاربر)
 const DEFAULT_AVATAR =
@@ -111,7 +116,7 @@ export default function UsersManagementPage() {
   }, [fetchUsers]);
 
   // دریافت جزئیات کاربر
-  const handleViewDetails = async (user: AdminUserListItem) => {
+  const handleViewDetails = async (user: AdminUserListItem | { id: number }) => {
     setIsLoadingDetail(true);
     setIsDetailModalOpen(true);
     try {
@@ -125,6 +130,18 @@ export default function UsersManagementPage() {
       setIsLoadingDetail(false);
     }
   };
+
+  // باز کردن از لینک خزانه: /adminpanel/users?userId=20
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = new URLSearchParams(window.location.search).get("userId");
+    if (!raw) return;
+    const id = Number(raw);
+    if (!Number.isFinite(id) || id <= 0) return;
+    void handleViewDetails({ id });
+    window.history.replaceState({}, "", "/adminpanel/users");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // تایید مسدودسازی
   const handleConfirmBlock = async () => {
@@ -697,7 +714,6 @@ function UserDetailModal({
   isLoading,
   onClose,
   onToggleStatus,
-  onRefresh,
 }: {
   user: AdminUserDetail;
   isOpen: boolean;
@@ -706,6 +722,32 @@ function UserDetailModal({
   onToggleStatus: (user: AdminUserListItem) => Promise<void>;
   onRefresh?: () => Promise<void>;
 }) {
+  const [ledger, setLedger] = useState<UserLedgerResponse | null>(null);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !user?.id) return;
+    let cancelled = false;
+    setLedgerLoading(true);
+    adminAPI
+      .getUserLedger(user.id)
+      .then((data) => {
+        if (!cancelled) setLedger(data);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLedger(null);
+          toast.error("خطا در بارگذاری فعالیت کاربر");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLedgerLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, user?.id]);
+
   if (!isOpen) return null;
 
   return (
@@ -724,11 +766,11 @@ function UserDetailModal({
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
-        className="bg-slate-800 w-full max-w-2xl rounded-3xl border border-slate-700 shadow-2xl relative z-10 max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-slate-800 w-full max-w-3xl rounded-3xl border border-slate-700 shadow-2xl relative z-10 max-h-[90vh] overflow-hidden flex flex-col"
       >
         {/* Header */}
         <div className="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-900">
-          <h3 className="text-xl font-black text-white">جزئیات کاربر</h3>
+          <h3 className="text-xl font-black text-white">جزئیات و فعالیت کاربر</h3>
           <button
             onClick={onClose}
             className="p-2 hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-white"
@@ -827,12 +869,25 @@ function UserDetailModal({
                     <p className="text-2xl font-black text-gold-400">
                       {toPersianDigits(Number(user.gold_balance || 0).toFixed(3))} <span className="text-sm">گرم</span>
                     </p>
+                    {ledger && (
+                      <p className="text-[11px] text-slate-400 mt-2">
+                        قابل استفاده:{" "}
+                        {toPersianDigits(Number(ledger.balances.available_gold).toFixed(3))} گرم
+                      </p>
+                    )}
                   </div>
                   <div className="bg-gradient-to-br from-blue-500/20 to-blue-500/10 p-4 rounded-xl border border-blue-500/30">
                     <p className="text-xs text-blue-400 mb-1">موجودی ریالی</p>
                     <p className="text-2xl font-black text-blue-400">
-                      {toPersianDigits(Number(user.rial_balance || 0).toLocaleString())} <span className="text-sm">ریال</span>
+                      {toPersianDigits(Number(user.rial_balance || 0).toLocaleString())}{" "}
+                      <span className="text-sm">ریال</span>
                     </p>
+                    {ledger && (
+                      <p className="text-[11px] text-slate-400 mt-2">
+                        قابل استفاده:{" "}
+                        {toPersianDigits(Number(ledger.balances.available_rial).toLocaleString())} ریال
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -912,6 +967,88 @@ function UserDetailModal({
                   <p className="text-sm font-bold text-white">{toPersianDigits(user.last_login_jalali)}</p>
                 </div>
               )}
+
+              {/* دفترچه فعالیت یکپارچه */}
+              <div>
+                <h4 className="text-sm font-bold text-slate-400 mb-2 flex items-center gap-2">
+                  <Activity size={16} />
+                  فعالیت یکپارچه
+                </h4>
+                <p className="text-[11px] text-slate-500 mb-3 leading-5">
+                  معامله، واریز، برداشت و رویدادهای دفتر عملیات در یک تایم‌لاین.
+                </p>
+                {ledger && (
+                  <div className="flex flex-wrap gap-2 text-[11px] mb-3">
+                    <span className="bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg text-slate-300">
+                      معامله: {toPersianDigits(ledger.counts.trades)}
+                    </span>
+                    <span className="bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg text-slate-300">
+                      واریز: {toPersianDigits(ledger.counts.deposits)}
+                    </span>
+                    <span className="bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg text-slate-300">
+                      برداشت: {toPersianDigits(ledger.counts.withdrawals)}
+                    </span>
+                    <span className="bg-slate-900 border border-slate-700 px-2 py-1 rounded-lg text-slate-300">
+                      دفتر: {toPersianDigits(ledger.counts.journal)}
+                    </span>
+                  </div>
+                )}
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {ledgerLoading ? (
+                    <div className="flex justify-center py-8">
+                      <RefreshCw size={22} className="animate-spin text-slate-400" />
+                    </div>
+                  ) : !ledger || ledger.events.length === 0 ? (
+                    <p className="text-slate-500 text-sm text-center py-6">فعالی‌تی ثبت نشده است</p>
+                  ) : (
+                    ledger.events.map((ev) => (
+                      <div
+                        key={`${ev.kind}-${ev.id}`}
+                        className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-sm"
+                      >
+                        <div className="flex justify-between gap-3">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[10px] font-bold bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded">
+                                {ev.kind_display}
+                              </span>
+                              <p className="font-bold text-white">{ev.title}</p>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">
+                              {ev.created_at_jalali
+                                ? toPersianDigits(ev.created_at_jalali)
+                                : "—"}
+                              {ev.ref_code ? (
+                                <span className="mr-2 font-mono dir-ltr inline-block">
+                                  — {ev.ref_code}
+                                </span>
+                              ) : null}
+                            </p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {ev.status_display}
+                              {typeof ev.meta?.note === "string" && ev.meta.note
+                                ? ` — ${ev.meta.note}`
+                                : ""}
+                            </p>
+                          </div>
+                          <div className="text-left shrink-0">
+                            {ev.amount_label && (
+                              <p className="font-bold text-gold-300 text-xs">
+                                {toPersianDigits(ev.amount_label)}
+                              </p>
+                            )}
+                            {ev.money_label && (
+                              <p className="font-bold text-sky-300 text-xs mt-0.5">
+                                {toPersianDigits(ev.money_label)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
 
             </div>
           )}

@@ -15,6 +15,7 @@ urlpatterns = [
     # Admin - Users
     path('admin/users/', views.admin_users_list, name='admin-users-list'),
     path('admin/users/<int:user_id>/', views.admin_user_detail, name='admin-user-detail'),
+    path('admin/users/<int:user_id>/ledger/', views.admin_user_ledger, name='admin-user-ledger'),
     path('admin/users/<int:user_id>/toggle-status/', views.admin_user_toggle_status, name='admin-user-toggle-status'),
     path('admin/register-phone/', views.admin_register_phone, name='admin-register-phone'),
     path('admin/verify-phone/', views.admin_verify_phone, name='admin-verify-phone'),
