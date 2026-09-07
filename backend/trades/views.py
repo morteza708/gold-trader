@@ -1073,9 +1073,27 @@ def admin_manual_trades(request):
     from accounts.models import CustomUser
 
     if request.method == 'GET':
+        from django.db.models import Exists, OuterRef
+        from treasury.models import OperationalJournal
+        from treasury.services import REF_MANUAL_PAYMENT, REF_MANUAL_DELIVERY
+
         qs = (
             Trade.objects.filter(channel=Trade.CHANNEL_MANUAL)
             .select_related('user', 'created_by')
+            .annotate(
+                _payment_effect_applied=Exists(
+                    OperationalJournal.objects.filter(
+                        reference_type=REF_MANUAL_PAYMENT,
+                        reference_id=OuterRef('pk'),
+                    )
+                ),
+                _delivery_effect_applied=Exists(
+                    OperationalJournal.objects.filter(
+                        reference_type=REF_MANUAL_DELIVERY,
+                        reference_id=OuterRef('pk'),
+                    )
+                ),
+            )
             .order_by('-created_at')[:200]
         )
         return Response(TradeSerializer(qs, many=True).data)
@@ -1140,6 +1158,8 @@ def admin_update_manual_settlement(request, trade_id):
             delivery_status=request.data.get('delivery_status'),
             settlement_note=request.data.get('settlement_note'),
             admin_note=request.data.get('admin_note'),
+            created_by=request.user,
+            confirm_delivery=bool(request.data.get('confirm_delivery')),
         )
     except Trade.DoesNotExist:
         return Response({'error': 'فاکتور یافت نشد'}, status=status.HTTP_404_NOT_FOUND)

@@ -997,6 +997,7 @@ export default function TreasuryPage() {
                   <option value="SELL">فروش کاربر</option>
                   <option value="MANUAL_BUY">خرید دستی (ادمین)</option>
                   <option value="MANUAL_SELL">فروش دستی (ادمین)</option>
+                  <option value="OFFPLATFORM_RIAL">ریال خارج از سامانه (دستی)</option>
                   <option value="WITHDRAW_RIAL">برداشت ریال</option>
                   <option value="GOLD_DELIVERY">تحویل طلا</option>
                   <option value="VAULT_IN">ورود خزانه</option>
@@ -1123,6 +1124,7 @@ export default function TreasuryPage() {
                       <option value="SELL">فروش</option>
                       <option value="MANUAL_BUY">خرید دستی</option>
                       <option value="MANUAL_SELL">فروش دستی</option>
+                      <option value="OFFPLATFORM_RIAL">ریال خارج (دستی)</option>
                       <option value="WITHDRAW_RIAL">برداشت ریال</option>
                       <option value="GOLD_DELIVERY">تحویل طلا</option>
                       <option value="VAULT_IN">ورود خزانه</option>

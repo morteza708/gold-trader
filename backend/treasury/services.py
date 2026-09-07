@@ -497,6 +497,132 @@ def maybe_notify_critical_coverage(previous_status: str | None = None) -> None:
         pass
 
 
+REF_MANUAL_PAYMENT = 'manual_offplatform_payment'
+REF_MANUAL_DELIVERY = 'manual_trade_delivery'
+
+
+def manual_payment_effect_applied(trade_id: int) -> bool:
+    return OperationalJournal.objects.filter(
+        reference_type=REF_MANUAL_PAYMENT,
+        reference_id=trade_id,
+    ).exists()
+
+
+def manual_delivery_effect_applied(trade_id: int) -> bool:
+    return OperationalJournal.objects.filter(
+        reference_type=REF_MANUAL_DELIVERY,
+        reference_id=trade_id,
+    ).exists()
+
+
+@transaction.atomic
+def on_manual_offplatform_payment(
+    *,
+    user,
+    trade_type: str,
+    rial_total: Decimal,
+    trade_id: int,
+    created_by=None,
+) -> bool:
+    """
+    ثبت حسابرسی دریافت/پرداخت ریال خارج از سامانه — بدون تغییر کیف کاربر.
+    BUY: +ریال (دریافت از مشتری)، SELL: −ریال (پرداخت به مشتری).
+    Idempotent: فقط یک‌بار به‌ازای هر trade_id.
+    """
+    if manual_payment_effect_applied(trade_id):
+        return False
+
+    from wallet.models import Wallet
+
+    wallet = Wallet.objects.select_for_update().get(user=user)
+    total = _q0(rial_total)
+    if total <= ZERO:
+        return False
+
+    signed = total if trade_type == 'BUY' else -total
+    note = (
+        'دریافت ریال خارج از سامانه بابت خرید دستی'
+        if trade_type == 'BUY'
+        else 'پرداخت ریال خارج از سامانه بابت فروش دستی'
+    )
+    record_journal(
+        asset=OperationalJournal.Asset.RIAL,
+        amount=_q6(signed),
+        event_type=OperationalJournal.EventType.OFFPLATFORM_RIAL,
+        user=user,
+        balance_after=_q6(wallet.rial_balance),
+        reference_type=REF_MANUAL_PAYMENT,
+        reference_id=trade_id,
+        note=note,
+        created_by=created_by,
+    )
+    return True
+
+
+@transaction.atomic
+def on_manual_trade_delivery(
+    *,
+    user,
+    trade_type: str,
+    gold_amount: Decimal,
+    trade_id: int,
+    created_by=None,
+) -> bool:
+    """
+    تحویل فیزیکی طلای خرید دستی: طلای کیف↓ + خروج از خزانه.
+    فروش دستی معمولاً no-op (طلا قبلاً وارد خزانه شده).
+    Idempotent با reference manual_trade_delivery.
+    """
+    if manual_delivery_effect_applied(trade_id):
+        return False
+
+    if trade_type != 'BUY':
+        # فروش دستی: طلا قبلاً از کیف کم و وارد خزانه شده — اثر مالی اضافه ندارد
+        return False
+
+    gold_amount = _q6(gold_amount)
+    if gold_amount <= ZERO:
+        return False
+
+    from wallet.models import Wallet
+
+    wallet = Wallet.objects.select_for_update().get(user=user)
+    if wallet.get_available_gold_balance() < gold_amount:
+        raise TreasuryError(
+            f'موجودی طلای کیف کاربر ({wallet.get_available_gold_balance()} گرم) '
+            f'برای تحویل {gold_amount} گرم کافی نیست.'
+        )
+
+    assert_gold_delivery_allowed(gold_amount)
+
+    wallet.gold_balance = _q6(wallet.gold_balance) - gold_amount
+    wallet.save(update_fields=['gold_balance'])
+
+    treasury = CompanyTreasury.objects.select_for_update().get(pk=CompanyTreasury.get_solo().pk)
+    new_balance, new_avg = _apply_weighted_avg(
+        _q6(treasury.gold_balance),
+        _q0(treasury.avg_cost_per_gram),
+        -gold_amount,
+        ZERO,
+    )
+    treasury.gold_balance = new_balance
+    treasury.avg_cost_per_gram = new_avg
+    treasury.save(update_fields=['gold_balance', 'avg_cost_per_gram', 'updated_at'])
+
+    record_journal(
+        asset=OperationalJournal.Asset.GOLD,
+        amount=-gold_amount,
+        event_type=OperationalJournal.EventType.GOLD_DELIVERY,
+        user=user,
+        balance_after=_q6(wallet.gold_balance),
+        reference_type=REF_MANUAL_DELIVERY,
+        reference_id=trade_id,
+        note='تحویل فیزیکی خرید دستی — کاهش بدهی طلای کاربر و خروج از خزانه',
+        created_by=created_by,
+    )
+    return True
+
+
 @transaction.atomic
 def on_manual_buy_offplatform(
     *,

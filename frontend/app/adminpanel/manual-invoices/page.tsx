@@ -154,6 +154,15 @@ export default function ManualInvoicesPage() {
     if (!price || price <= 0) return toast.error("قیمت واحد را وارد کنید");
     if (!selected && !toEnglishDigits(phone)) return toast.error("کاربر را انتخاب یا موبایل وارد کنید");
 
+    if (tradeType === "BUY" && deliveryStatus === "DELIVERED") {
+      const ok = window.confirm(
+        "وضعیت «تحویل شد» انتخاب شده است.\n" +
+          "با صدور فاکتور، طلا بلافاصله از کیف کاربر کم و از خزانه خارج می‌شود.\n" +
+          "ادامه می‌دهید؟"
+      );
+      if (!ok) return;
+    }
+
     setSaving(true);
     try {
       const result = await adminTradesAPI.createManualTrade({
@@ -188,7 +197,11 @@ export default function ManualInvoicesPage() {
 
   const updateSettlement = async (
     trade: Trade,
-    patch: { payment_status?: string; delivery_status?: string }
+    patch: {
+      payment_status?: string;
+      delivery_status?: string;
+      confirm_delivery?: boolean;
+    }
   ) => {
     try {
       const result = await adminTradesAPI.updateManualSettlement(trade.id, patch);
@@ -198,6 +211,54 @@ export default function ManualInvoicesPage() {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || "خطا در به‌روزرسانی");
     }
+  };
+
+  const onPaymentChange = async (trade: Trade, value: string) => {
+    if (trade.payment_effect_applied && value !== "PAID_OFFPLATFORM") {
+      toast.error("اثر پرداخت قبلاً ثبت شده و قابل برگشت نیست");
+      return;
+    }
+    if (
+      value === "PAID_OFFPLATFORM" &&
+      trade.settlement_mode === "OFFPLATFORM" &&
+      !trade.payment_effect_applied
+    ) {
+      const ok = window.confirm(
+        "با تأیید، یک ردیف حسابرسی ریالی در دفتر عملیات ثبت می‌شود " +
+          "(بدون تغییر موجودی ریال کیف کاربر). ادامه؟"
+      );
+      if (!ok) return;
+    }
+    await updateSettlement(trade, { payment_status: value });
+  };
+
+  const onDeliveryChange = async (trade: Trade, value: string) => {
+    if (trade.delivery_effect_applied && value !== "DELIVERED") {
+      toast.error("اثر تحویل قبلاً ثبت شده و قابل برگشت نیست");
+      return;
+    }
+    if (value === "DELIVERED" && trade.trade_type === "BUY" && !trade.delivery_effect_applied) {
+      const ok = window.confirm(
+        `تحویل خرید دستی — اثر مالی:\n` +
+          `• کاهش ${Number(trade.amount).toFixed(3)} گرم از کیف کاربر\n` +
+          `• خروج همان مقدار از خزانه شرکت\n` +
+          `این عمل یک‌باره و غیرقابل‌برگشت از این صفحه است.\nادامه؟`
+      );
+      if (!ok) return;
+      await updateSettlement(trade, {
+        delivery_status: value,
+        confirm_delivery: true,
+      });
+      return;
+    }
+    if (value === "DELIVERED" && trade.trade_type === "SELL") {
+      const ok = window.confirm(
+        "برای فروش دستی، ثبت «تحویل شد» فقط وضعیت فاکتور را عوض می‌کند؛ " +
+          "طلا قبلاً وارد خزانه شده است."
+      );
+      if (!ok) return;
+    }
+    await updateSettlement(trade, { delivery_status: value });
   };
 
   const refreshAll = async () => {
@@ -445,7 +506,8 @@ export default function ManualInvoicesPage() {
             </select>
             <p className="text-[11px] text-slate-500 mt-1 leading-5">
               خارج از سامانه: خرید فقط طلای کیف را زیاد می‌کند؛ فروش طلا کم می‌کند و به خزانه
-              می‌رود بدون واریز ریال به کیف.
+              می‌رود. با «پرداخت خارج»، ردیف حسابرسی ریالی در دفتر ثبت می‌شود (بدون تغییر کیف ریال).
+              «تحویل شد» روی خرید: طلا از کیف و خزانه خارج می‌شود (با تأیید).
             </p>
           </div>
 
@@ -551,14 +613,23 @@ export default function ManualInvoicesPage() {
                     <span className="bg-slate-800 px-2 py-1 rounded-lg text-slate-300">
                       {t.delivery_status_display}
                     </span>
+                    {t.payment_effect_applied && (
+                      <span className="bg-emerald-900/50 text-emerald-300 px-2 py-1 rounded-lg">
+                        اثر پرداخت ثبت شد
+                      </span>
+                    )}
+                    {t.delivery_effect_applied && (
+                      <span className="bg-amber-900/50 text-amber-200 px-2 py-1 rounded-lg">
+                        اثر تحویل ثبت شد
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <select
                       value={t.payment_status}
-                      onChange={(e) =>
-                        updateSettlement(t, { payment_status: e.target.value })
-                      }
-                      className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs"
+                      disabled={!!t.payment_effect_applied}
+                      onChange={(e) => onPaymentChange(t, e.target.value)}
+                      className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs disabled:opacity-60"
                     >
                       <option value="PAID_OFFPLATFORM">پرداخت خارج</option>
                       <option value="PAID_WALLET">پرداخت کیف</option>
@@ -567,10 +638,9 @@ export default function ManualInvoicesPage() {
                     </select>
                     <select
                       value={t.delivery_status}
-                      onChange={(e) =>
-                        updateSettlement(t, { delivery_status: e.target.value })
-                      }
-                      className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs"
+                      disabled={!!t.delivery_effect_applied}
+                      onChange={(e) => onDeliveryChange(t, e.target.value)}
+                      className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs disabled:opacity-60"
                     >
                       <option value="NOT_APPLICABLE">تحویل: ندارد</option>
                       <option value="PENDING">در انتظار تحویل</option>

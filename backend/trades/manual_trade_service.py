@@ -270,7 +270,35 @@ def create_manual_trade(
                 created_by=created_by,
             )
 
+    _apply_settlement_financial_effects(trade, created_by=created_by)
     return trade
+
+
+def _apply_settlement_financial_effects(trade: Trade, *, created_by=None) -> None:
+    """اعمال یک‌بارهٔ اثر مالی وضعیت‌های پرداخت/تحویل (idempotent)."""
+    if (
+        trade.settlement_mode == Trade.SETTLEMENT_OFFPLATFORM
+        and trade.payment_status == Trade.PAYMENT_OFFPLATFORM
+    ):
+        treasury_services.on_manual_offplatform_payment(
+            user=trade.user,
+            trade_type=trade.trade_type,
+            rial_total=trade.total,
+            trade_id=trade.id,
+            created_by=created_by,
+        )
+
+    if trade.delivery_status == Trade.DELIVERY_DELIVERED and trade.trade_type == 'BUY':
+        try:
+            treasury_services.on_manual_trade_delivery(
+                user=trade.user,
+                trade_type=trade.trade_type,
+                gold_amount=trade.amount,
+                trade_id=trade.id,
+                created_by=created_by,
+            )
+        except TreasuryError as e:
+            raise ManualTradeError(e.message) from e
 
 
 @transaction.atomic
@@ -281,21 +309,44 @@ def update_manual_settlement(
     delivery_status: str | None = None,
     settlement_note: str | None = None,
     admin_note: str | None = None,
+    created_by=None,
+    confirm_delivery: bool = False,
 ) -> Trade:
     if trade.channel != Trade.CHANNEL_MANUAL:
         raise ManualTradeError('فقط فاکتورهای دستی قابل به‌روزرسانی وضعیت تسویه هستند')
+
+    trade = Trade.objects.select_for_update().select_related('user').get(pk=trade.pk)
+
+    payment_applied = treasury_services.manual_payment_effect_applied(trade.id)
+    delivery_applied = treasury_services.manual_delivery_effect_applied(trade.id)
 
     updates = []
     if payment_status is not None:
         valid = {c[0] for c in Trade.PAYMENT_STATUS_CHOICES}
         if payment_status not in valid:
             raise ManualTradeError('وضعیت پرداخت نامعتبر است')
+        if payment_applied and payment_status != Trade.PAYMENT_OFFPLATFORM:
+            raise ManualTradeError(
+                'اثر پرداخت خارج از سامانه قبلاً در دفتر ثبت شده و قابل برگشت نیست'
+            )
         trade.payment_status = payment_status
         updates.append('payment_status')
     if delivery_status is not None:
         valid = {c[0] for c in Trade.DELIVERY_STATUS_CHOICES}
         if delivery_status not in valid:
             raise ManualTradeError('وضعیت تحویل نامعتبر است')
+        if delivery_applied and delivery_status != Trade.DELIVERY_DELIVERED:
+            raise ManualTradeError('اثر تحویل قبلاً در دفتر/خزانه ثبت شده و قابل برگشت نیست')
+        if (
+            delivery_status == Trade.DELIVERY_DELIVERED
+            and trade.trade_type == 'BUY'
+            and not delivery_applied
+            and not confirm_delivery
+        ):
+            raise ManualTradeError(
+                'برای ثبت «تحویل شد» روی خرید دستی، تأیید صریح اثر مالی لازم است '
+                '(کاهش طلای کیف و خروج از خزانه).'
+            )
         trade.delivery_status = delivery_status
         updates.append('delivery_status')
     if settlement_note is not None:
@@ -307,4 +358,6 @@ def update_manual_settlement(
     if updates:
         updates.append('updated_at')
         trade.save(update_fields=updates)
+
+    _apply_settlement_financial_effects(trade, created_by=created_by)
     return trade

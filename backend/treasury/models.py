@@ -73,6 +73,7 @@ class OperationalJournal(models.Model):
         PENDING_UNLOCK = 'PENDING_UNLOCK', 'آزادسازی خرید معلق'
         MANUAL_BUY = 'MANUAL_BUY', 'خرید دستی (ادمین)'
         MANUAL_SELL = 'MANUAL_SELL', 'فروش دستی (ادمین)'
+        OFFPLATFORM_RIAL = 'OFFPLATFORM_RIAL', 'ریال خارج از سامانه (دستی)'
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='زمان ثبت', db_index=True)
     asset = models.CharField(max_length=8, choices=Asset.choices, verbose_name='نوع دارایی')

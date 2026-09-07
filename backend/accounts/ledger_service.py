@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from jalali_date import datetime2jalali
 
@@ -17,6 +17,16 @@ def _jalali(dt: datetime | None) -> str | None:
     if not dt:
         return None
     return datetime2jalali(dt).strftime('%Y/%m/%d %H:%M')
+
+
+def _fmt_gold(value) -> str:
+    """نمایش گرم با حداکثر ۳ رقم اعشار (بدون صفرهای اضافهٔ دیتابیس)."""
+    q = Decimal(str(value)).quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
+    return f'{q:.3f}'
+
+
+def _fmt_rial(value) -> str:
+    return f'{int(Decimal(str(value))):,} ریال'
 
 
 def build_user_ledger(user, *, limit: int = 100) -> dict:
@@ -41,8 +51,8 @@ def build_user_ledger(user, *, limit: int = 100) -> dict:
             'title': title,
             'status': t.status,
             'status_display': t.get_status_display() if hasattr(t, 'get_status_display') else t.status,
-            'amount_label': f'{t.amount} گرم',
-            'money_label': f'{int(t.total):,} ریال',
+            'amount_label': f'{_fmt_gold(t.amount)} گرم',
+            'money_label': _fmt_rial(t.total),
             'ref_code': t.invoice_number or t.tracking_code,
             'meta': {
                 'trade_type': t.trade_type,
@@ -66,7 +76,7 @@ def build_user_ledger(user, *, limit: int = 100) -> dict:
             'status': d.status,
             'status_display': d.get_status_display(),
             'amount_label': None,
-            'money_label': f'{int(d.amount):,} ریال',
+            'money_label': _fmt_rial(d.amount),
             'ref_code': d.request_code,
             'meta': {},
         })
@@ -86,8 +96,8 @@ def build_user_ledger(user, *, limit: int = 100) -> dict:
             'title': 'برداشت طلا' if is_gold else 'برداشت ریال',
             'status': w.status,
             'status_display': w.get_status_display(),
-            'amount_label': f'{w.amount} گرم' if is_gold else None,
-            'money_label': None if is_gold else f'{int(w.amount):,} ریال',
+            'amount_label': f'{_fmt_gold(w.amount)} گرم' if is_gold else None,
+            'money_label': None if is_gold else _fmt_rial(w.amount),
             'ref_code': w.request_code,
             'meta': {'withdrawal_type': w.withdrawal_type},
         })
@@ -98,11 +108,11 @@ def build_user_ledger(user, *, limit: int = 100) -> dict:
     )
     for j in journals:
         if j.asset == OperationalJournal.Asset.GOLD:
-            amount_label = f'{j.amount} گرم'
+            amount_label = f'{_fmt_gold(j.amount)} گرم'
             money_label = None
         else:
             amount_label = None
-            money_label = f'{int(Decimal(j.amount)):,} ریال'
+            money_label = _fmt_rial(j.amount)
         events.append({
             'kind': 'journal',
             'kind_display': 'دفتر عملیات',
@@ -129,11 +139,11 @@ def build_user_ledger(user, *, limit: int = 100) -> dict:
         'user_id': user.id,
         'balances': {
             'rial_balance': int(wallet.rial_balance),
-            'gold_balance': str(wallet.gold_balance),
+            'gold_balance': _fmt_gold(wallet.gold_balance),
             'available_rial': int(wallet.get_available_rial_balance()),
-            'available_gold': str(wallet.get_available_gold_balance()),
+            'available_gold': _fmt_gold(wallet.get_available_gold_balance()),
             'pending_withdrawal_rial': int(wallet.pending_withdrawal_rial),
-            'pending_withdrawal_gold': str(wallet.pending_withdrawal_gold),
+            'pending_withdrawal_gold': _fmt_gold(wallet.pending_withdrawal_gold),
             'pending_trade_rial': int(getattr(wallet, 'pending_trade_rial', 0) or 0),
         },
         'events': events,

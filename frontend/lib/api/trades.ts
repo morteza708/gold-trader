@@ -92,6 +92,8 @@ export interface Trade {
   delivery_status_display?: string;
   settlement_note?: string;
   created_by_name?: string | null;
+  payment_effect_applied?: boolean;
+  delivery_effect_applied?: boolean;
 }
 
 export interface ManualCustomer {
@@ -380,6 +382,7 @@ export const adminTradesAPI = {
       delivery_status?: string;
       settlement_note?: string;
       admin_note?: string;
+      confirm_delivery?: boolean;
     }
   ): Promise<{ message: string; trade: Trade }> => {
     const response = await apiClient.patch(`/admin/trades/manual/${tradeId}/settlement/`, data);

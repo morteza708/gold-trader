@@ -158,6 +158,8 @@ class TradeSerializer(serializers.ModelSerializer):
     payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
     delivery_status_display = serializers.CharField(source='get_delivery_status_display', read_only=True)
     created_by_name = serializers.SerializerMethodField()
+    payment_effect_applied = serializers.SerializerMethodField()
+    delivery_effect_applied = serializers.SerializerMethodField()
     
     def get_user_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.phone_number
@@ -177,6 +179,24 @@ class TradeSerializer(serializers.ModelSerializer):
         u = obj.created_by
         name = f"{u.first_name or ''} {u.last_name or ''}".strip()
         return name or u.phone_number
+
+    def get_payment_effect_applied(self, obj):
+        annotated = getattr(obj, '_payment_effect_applied', None)
+        if annotated is not None:
+            return bool(annotated)
+        if getattr(obj, 'channel', None) != 'MANUAL':
+            return False
+        from treasury.services import manual_payment_effect_applied
+        return manual_payment_effect_applied(obj.id)
+
+    def get_delivery_effect_applied(self, obj):
+        annotated = getattr(obj, '_delivery_effect_applied', None)
+        if annotated is not None:
+            return bool(annotated)
+        if getattr(obj, 'channel', None) != 'MANUAL':
+            return False
+        from treasury.services import manual_delivery_effect_applied
+        return manual_delivery_effect_applied(obj.id)
     
     class Meta:
         model = Trade
@@ -190,6 +210,7 @@ class TradeSerializer(serializers.ModelSerializer):
             'payment_status', 'payment_status_display',
             'delivery_status', 'delivery_status_display',
             'settlement_note', 'created_by_name',
+            'payment_effect_applied', 'delivery_effect_applied',
         ]
 
 
