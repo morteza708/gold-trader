@@ -8,7 +8,9 @@ import {
   Save,
   UserPlus,
   Receipt,
+  AlertTriangle,
 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import toast from "react-hot-toast";
 import {
   adminTradesAPI,
@@ -24,6 +26,41 @@ function displayName(u: Pick<ManualCustomer, "full_name" | "first_name" | "last_
   const joined = `${u.first_name || ""} ${u.last_name || ""}`.trim();
   return joined || "بدون نام";
 }
+
+const PAYMENT_LABELS: Record<string, string> = {
+  PAID_OFFPLATFORM: "پرداخت خارج از سامانه",
+  PAID_WALLET: "پرداخت از کیف",
+  UNPAID: "پرداخت‌نشده",
+  NOT_APPLICABLE: "نامشخص",
+};
+
+const DELIVERY_LABELS: Record<string, string> = {
+  NOT_APPLICABLE: "ندارد",
+  PENDING: "در انتظار تحویل",
+  DELIVERED: "تحویل شد",
+};
+
+type ConfirmTone = "info" | "warning" | "danger";
+
+type SettlementConfirmState = {
+  kind: "settlement";
+  trade: Trade;
+  field: "payment_status" | "delivery_status";
+  nextValue: string;
+  title: string;
+  lines: string[];
+  tone: ConfirmTone;
+  confirmDelivery?: boolean;
+};
+
+type CreateConfirmState = {
+  kind: "create";
+  title: string;
+  lines: string[];
+  tone: ConfirmTone;
+};
+
+type ConfirmState = SettlementConfirmState | CreateConfirmState;
 
 export default function ManualInvoicesPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -51,6 +88,8 @@ export default function ManualInvoicesPage() {
   const [settlementNote, setSettlementNote] = useState("");
 
   const [invoiceTrade, setInvoiceTrade] = useState<Trade | null>(null);
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     document.title = "فاکتور دستی | پنل مدیریت";
@@ -147,22 +186,9 @@ export default function ManualInvoicesPage() {
     };
   }, [priceInfo, tradeType]);
 
-  const handleCreate = async () => {
+  const executeCreate = async () => {
     const amt = Number(toEnglishDigits(amount).replace(/,/g, ""));
     const price = Number(toEnglishDigits(unitPrice).replace(/,/g, ""));
-    if (!amt || amt <= 0) return toast.error("مقدار گرم را وارد کنید");
-    if (!price || price <= 0) return toast.error("قیمت واحد را وارد کنید");
-    if (!selected && !toEnglishDigits(phone)) return toast.error("کاربر را انتخاب یا موبایل وارد کنید");
-
-    if (tradeType === "BUY" && deliveryStatus === "DELIVERED") {
-      const ok = window.confirm(
-        "وضعیت «تحویل شد» انتخاب شده است.\n" +
-          "با صدور فاکتور، طلا بلافاصله از کیف کاربر کم و از خزانه خارج می‌شود.\n" +
-          "ادامه می‌دهید؟"
-      );
-      if (!ok) return;
-    }
-
     setSaving(true);
     try {
       const result = await adminTradesAPI.createManualTrade({
@@ -187,12 +213,49 @@ export default function ManualInvoicesPage() {
       applyFinalPrice(tradeType, priceInfo);
       await loadTrades();
       setInvoiceTrade(result.trade);
+      setConfirmState(null);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } }; message?: string };
       toast.error(err.response?.data?.error || err.message || "خطا در صدور فاکتور");
     } finally {
       setSaving(false);
+      setConfirming(false);
     }
+  };
+
+  const handleCreate = () => {
+    const amt = Number(toEnglishDigits(amount).replace(/,/g, ""));
+    const price = Number(toEnglishDigits(unitPrice).replace(/,/g, ""));
+    if (!amt || amt <= 0) return toast.error("مقدار گرم را وارد کنید");
+    if (!price || price <= 0) return toast.error("قیمت واحد را وارد کنید");
+    if (!selected && !toEnglishDigits(phone)) return toast.error("کاربر را انتخاب یا موبایل وارد کنید");
+
+    const lines: string[] = [
+      `نوع: ${tradeType === "BUY" ? "خرید" : "فروش"} — ${toPersianDigits(amt.toFixed(3))} گرم`,
+      `مبلغ تقریبی: ${toPersianDigits((amt * price).toLocaleString())} ریال`,
+      `تسویه: ${settlementMode === "WALLET" ? "از کیف پول" : "خارج از سامانه"}`,
+      `پرداخت: ${PAYMENT_LABELS[paymentStatus] || paymentStatus}`,
+      `تحویل: ${DELIVERY_LABELS[deliveryStatus] || deliveryStatus}`,
+    ];
+    let tone: ConfirmTone = "info";
+    if (tradeType === "BUY" && deliveryStatus === "DELIVERED") {
+      lines.push(
+        "با «تحویل شد»، طلا بلافاصله از کیف کاربر کم و از خزانه خارج می‌شود."
+      );
+      tone = "danger";
+    } else if (settlementMode === "OFFPLATFORM" && paymentStatus === "PAID_OFFPLATFORM") {
+      lines.push(
+        "با پرداخت خارج، ردیف حسابرسی ریالی در دفتر ثبت می‌شود (بدون تغییر کیف ریال)."
+      );
+      tone = "warning";
+    }
+
+    setConfirmState({
+      kind: "create",
+      title: "تأیید صدور فاکتور دستی",
+      lines,
+      tone,
+    });
   };
 
   const updateSettlement = async (
@@ -203,62 +266,110 @@ export default function ManualInvoicesPage() {
       confirm_delivery?: boolean;
     }
   ) => {
+    setConfirming(true);
     try {
       const result = await adminTradesAPI.updateManualSettlement(trade.id, patch);
       toast.success(result.message);
       setTrades((prev) => prev.map((t) => (t.id === trade.id ? result.trade : t)));
+      setConfirmState(null);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       toast.error(err.response?.data?.error || "خطا در به‌روزرسانی");
+    } finally {
+      setConfirming(false);
     }
   };
 
-  const onPaymentChange = async (trade: Trade, value: string) => {
+  const onPaymentChange = (trade: Trade, value: string) => {
+    if (value === trade.payment_status) return;
     if (trade.payment_effect_applied && value !== "PAID_OFFPLATFORM") {
       toast.error("اثر پرداخت قبلاً ثبت شده و قابل برگشت نیست");
       return;
     }
+
+    const lines = [
+      `فاکتور: ${toPersianDigits(trade.invoice_number)}`,
+      `از «${PAYMENT_LABELS[trade.payment_status || ""] || trade.payment_status}» به «${PAYMENT_LABELS[value] || value}»`,
+    ];
+    let tone: ConfirmTone = "info";
     if (
       value === "PAID_OFFPLATFORM" &&
       trade.settlement_mode === "OFFPLATFORM" &&
       !trade.payment_effect_applied
     ) {
-      const ok = window.confirm(
-        "با تأیید، یک ردیف حسابرسی ریالی در دفتر عملیات ثبت می‌شود " +
-          "(بدون تغییر موجودی ریال کیف کاربر). ادامه؟"
+      lines.push(
+        "با تأیید، یک ردیف حسابرسی ریالی در دفتر عملیات ثبت می‌شود (بدون تغییر موجودی ریال کیف)."
       );
-      if (!ok) return;
+      tone = "warning";
     }
-    await updateSettlement(trade, { payment_status: value });
+
+    setConfirmState({
+      kind: "settlement",
+      trade,
+      field: "payment_status",
+      nextValue: value,
+      title: "تأیید تغییر وضعیت پرداخت",
+      lines,
+      tone,
+    });
   };
 
-  const onDeliveryChange = async (trade: Trade, value: string) => {
+  const onDeliveryChange = (trade: Trade, value: string) => {
+    if (value === trade.delivery_status) return;
     if (trade.delivery_effect_applied && value !== "DELIVERED") {
       toast.error("اثر تحویل قبلاً ثبت شده و قابل برگشت نیست");
       return;
     }
+
+    const lines = [
+      `فاکتور: ${toPersianDigits(trade.invoice_number)}`,
+      `از «${DELIVERY_LABELS[trade.delivery_status || ""] || trade.delivery_status}» به «${DELIVERY_LABELS[value] || value}»`,
+    ];
+    let tone: ConfirmTone = "info";
+    let confirmDelivery = false;
+
     if (value === "DELIVERED" && trade.trade_type === "BUY" && !trade.delivery_effect_applied) {
-      const ok = window.confirm(
-        `تحویل خرید دستی — اثر مالی:\n` +
-          `• کاهش ${Number(trade.amount).toFixed(3)} گرم از کیف کاربر\n` +
-          `• خروج همان مقدار از خزانه شرکت\n` +
-          `این عمل یک‌باره و غیرقابل‌برگشت از این صفحه است.\nادامه؟`
+      lines.push(
+        `کاهش ${toPersianDigits(Number(trade.amount).toFixed(3))} گرم از کیف کاربر`,
+        "خروج همان مقدار از خزانه شرکت",
+        "این عمل یک‌باره و از این صفحه غیرقابل‌برگشت است."
       );
-      if (!ok) return;
-      await updateSettlement(trade, {
-        delivery_status: value,
-        confirm_delivery: true,
-      });
+      tone = "danger";
+      confirmDelivery = true;
+    } else if (value === "DELIVERED" && trade.trade_type === "SELL") {
+      lines.push(
+        "برای فروش دستی فقط وضعیت فاکتور عوض می‌شود؛ طلا قبلاً وارد خزانه شده است."
+      );
+      tone = "info";
+    }
+
+    setConfirmState({
+      kind: "settlement",
+      trade,
+      field: "delivery_status",
+      nextValue: value,
+      title: "تأیید تغییر وضعیت تحویل",
+      lines,
+      tone,
+      confirmDelivery,
+    });
+  };
+
+  const handleConfirmModal = async () => {
+    if (!confirmState) return;
+    if (confirmState.kind === "create") {
+      setConfirming(true);
+      await executeCreate();
       return;
     }
-    if (value === "DELIVERED" && trade.trade_type === "SELL") {
-      const ok = window.confirm(
-        "برای فروش دستی، ثبت «تحویل شد» فقط وضعیت فاکتور را عوض می‌کند؛ " +
-          "طلا قبلاً وارد خزانه شده است."
-      );
-      if (!ok) return;
-    }
-    await updateSettlement(trade, { delivery_status: value });
+    const patch =
+      confirmState.field === "payment_status"
+        ? { payment_status: confirmState.nextValue }
+        : {
+            delivery_status: confirmState.nextValue,
+            confirm_delivery: confirmState.confirmDelivery || undefined,
+          };
+    await updateSettlement(confirmState.trade, patch);
   };
 
   const refreshAll = async () => {
@@ -660,6 +771,125 @@ export default function ManualInvoicesPage() {
           )}
         </div>
       </div>
+
+      <AnimatePresence>
+        {confirmState && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !confirming && !saving && setConfirmState(null)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-800 w-full max-w-md rounded-3xl border border-slate-700 shadow-2xl relative z-10 p-6"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                    confirmState.tone === "danger"
+                      ? "bg-red-500/20"
+                      : confirmState.tone === "warning"
+                        ? "bg-amber-500/20"
+                        : "bg-blue-500/20"
+                  }`}
+                >
+                  <AlertTriangle
+                    className={
+                      confirmState.tone === "danger"
+                        ? "text-red-400"
+                        : confirmState.tone === "warning"
+                          ? "text-amber-400"
+                          : "text-blue-400"
+                    }
+                    size={24}
+                  />
+                </div>
+                <h3 className="text-lg font-black text-white">{confirmState.title}</h3>
+              </div>
+
+              {confirmState.kind === "settlement" && (
+                <div className="bg-slate-900 rounded-xl p-4 mb-4 space-y-2 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-xs text-slate-400">مشتری</span>
+                    <span className="font-bold text-white text-left">
+                      {confirmState.trade.user_name ||
+                        toPersianDigits(confirmState.trade.user_mobile)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-xs text-slate-400">مقدار</span>
+                    <span className="font-bold text-gold-400 dir-ltr">
+                      {toPersianDigits(Number(confirmState.trade.amount).toFixed(3))} گرم
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <ul className="space-y-2 mb-4">
+                {confirmState.lines.map((line, idx) => (
+                  <li
+                    key={`${idx}-${line.slice(0, 24)}`}
+                    className="text-sm text-slate-300 leading-6 flex gap-2"
+                  >
+                    <span className="text-slate-500 shrink-0">•</span>
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+
+              {confirmState.tone !== "info" && (
+                <p
+                  className={`text-xs mb-6 ${
+                    confirmState.tone === "danger" ? "text-red-400" : "text-amber-400"
+                  }`}
+                >
+                  {confirmState.tone === "danger"
+                    ? "این تغییر می‌تواند اثر مالی غیرقابل‌برگشت داشته باشد."
+                    : "پس از تأیید، ردیف مربوط در دفتر عملیات ثبت می‌شود."}
+                </p>
+              )}
+
+              <div className={`flex gap-3 ${confirmState.tone === "info" ? "mt-6" : ""}`}>
+                <button
+                  type="button"
+                  onClick={() => setConfirmState(null)}
+                  disabled={confirming || saving}
+                  className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-colors"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmModal}
+                  disabled={confirming || saving}
+                  className={`flex-1 px-4 py-2.5 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 ${
+                    confirmState.tone === "danger"
+                      ? "bg-red-500 hover:bg-red-600"
+                      : confirmState.tone === "warning"
+                        ? "bg-amber-500 hover:bg-amber-600"
+                        : "bg-gold-500 hover:bg-gold-600"
+                  }`}
+                >
+                  {confirming || saving ? (
+                    <>
+                      <RefreshCw size={16} className="animate-spin" />
+                      در حال ثبت...
+                    </>
+                  ) : (
+                    "تأیید و اعمال"
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <InvoiceModal
         data={invoiceTrade}
