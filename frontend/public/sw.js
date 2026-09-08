@@ -1,6 +1,6 @@
 // Service Worker — OpalBox PWA
-const STATIC_CACHE_NAME = 'opalbox-static-v2';
-const DYNAMIC_CACHE_NAME = 'opalbox-dynamic-v2';
+const STATIC_CACHE_NAME = 'opalbox-static-v3';
+const DYNAMIC_CACHE_NAME = 'opalbox-dynamic-v3';
 
 const STATIC_ASSETS = [
   '/offline.html',
@@ -188,24 +188,31 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   if (event.action === 'close') return;
 
-  const targetUrl = event.notification.data?.url || '/dashboard';
+  const path = event.notification.data?.url || '/dashboard';
+  const targetUrl = new URL(path, self.location.origin).href;
 
   event.waitUntil(
     (async () => {
-      const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const clientList = await clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
+
+      // ترجیح: فوکوس روی همان PWA باز (سشن localStorage حفظ می‌شود)
       for (const client of clientList) {
-        if ('focus' in client) {
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
           await client.focus();
           if ('navigate' in client) {
             try {
               await client.navigate(targetUrl);
             } catch {
-              /* ignore */
+              /* ignore navigate errors on older browsers */
             }
           }
           return;
         }
       }
+
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }

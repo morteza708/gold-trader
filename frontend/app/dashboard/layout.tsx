@@ -205,8 +205,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                <WalletIcon size={20} />
             </button>
             
-            <NotificationPermission compact />
-            <NotificationBell />
+            <div className="flex items-center gap-1 sm:gap-2">
+              <NotificationPermission compact />
+              <NotificationBell />
+            </div>
           </div>
         </header>
         {/* --- نوار وضعیت بازار --- */}

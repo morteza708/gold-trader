@@ -38,29 +38,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initAuth = async () => {
       const token = localStorage.getItem('access_token');
+      const refreshToken = localStorage.getItem('refresh_token');
       const storedUser = localStorage.getItem('user');
 
-      if (token && storedUser) {
+      if (!token && !refreshToken) {
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
+      // اگر user ذخیره‌شده داریم، فعلاً نشان بده تا درخواست شبکه تمام شود (کلیک نوتیف → بدون پرش به لاگین)
+      if (storedUser) {
         try {
-          // تلاش برای دریافت اطلاعات کاربر
-          const userData = await authAPI.getUserInfo();
-          setUser(userData);
-          localStorage.setItem('user', JSON.stringify(userData));
-        } catch (error) {
-          // اگر token معتبر نبود، پاک کن
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          localStorage.removeItem('user');
-          setUser(null);
+          setUser(JSON.parse(storedUser));
+        } catch {
+          /* ignore */
         }
-      } else {
+      }
+
+      try {
+        const userData = await authAPI.getUserInfo();
+        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(userData));
+      } catch {
+        // apiClient روی 401 خودش refresh می‌کند؛ اگر باز هم شکست خورد، پاک کن
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user');
         setUser(null);
       }
 
       setIsLoading(false);
     };
 
-    initAuth();
+    void initAuth();
   }, []);
 
   // مدیریت redirect بر اساس نقش کاربر

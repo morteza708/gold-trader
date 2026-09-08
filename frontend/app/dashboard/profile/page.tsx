@@ -275,9 +275,10 @@ export default function ProfilePage() {
       
       <h1 className="text-2xl font-black text-gray-800 mb-6">تنظیمات حساب کاربری</h1>
 
-      <div className="mb-6">
+      <div className="mb-6 space-y-2">
+        <h2 className="text-sm font-bold text-gray-700">اعلان‌های دستگاه</h2>
         <NotificationPermission />
-        <p className="text-xs text-gray-400 mt-2 leading-5">
+        <p className="text-xs text-gray-400 leading-5">
           برای دریافت اعلان معامله و کیف پول وقتی اپ بسته است، اعلان‌ها را فعال کنید.
           در آیفون ابتدا اپ را با «افزودن به صفحه اصلی» نصب کنید، سپس اعلان را روشن کنید.
         </p>

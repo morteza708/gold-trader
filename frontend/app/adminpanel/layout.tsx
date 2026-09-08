@@ -102,16 +102,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
            <div className="flex items-center gap-4">
              <h2 className="text-lg font-bold text-white">پنل مدیریت</h2>
            </div>
-           <div className="flex items-center gap-4">
+           <div className="flex items-center gap-2">
              <NotificationPermission compact />
              <NotificationBell />
            </div>
          </div>
 
          <div className="p-4 md:p-8 flex-1 overflow-y-auto pb-20 md:pb-8">
-            <div className="mb-4 md:hidden">
-              <NotificationPermission />
-            </div>
             {children}
          </div>
       </main>

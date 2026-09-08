@@ -11,7 +11,7 @@ import {
 } from "@/lib/pwa/push";
 
 type Props = {
-  /** فشرده برای هدر/پروفایل */
+  /** فقط آیکون برای هدر (بدون متن پهن) */
   compact?: boolean;
   className?: string;
 };
@@ -67,9 +67,9 @@ export default function NotificationPermission({ compact = false, className = ""
       setPushReady(sub === "subscribed");
 
       if (sub === "subscribed") {
-        toast.success("اعلان‌های فشاری فعال شد");
+        toast.success("اعلان‌های دستگاه فعال شد");
       } else if (sub === "skipped") {
-        toast.success("اجازه اعلان داده شد (پوش سرور هنوز پیکربندی نشده)");
+        toast.success("اجازه اعلان داده شد");
       }
 
       const registration = await navigator.serviceWorker.ready;
@@ -92,7 +92,7 @@ export default function NotificationPermission({ compact = false, className = ""
     try {
       await unsubscribeFromPush();
       setPushReady(false);
-      toast.success("اعلان فشاری این دستگاه غیرفعال شد");
+      toast.success("اعلان این دستگاه غیرفعال شد");
     } catch {
       toast.error("خطا در غیرفعال‌سازی");
     } finally {
@@ -111,11 +111,11 @@ export default function NotificationPermission({ compact = false, className = ""
           type="button"
           onClick={disable}
           disabled={busy}
-          className={`flex items-center gap-1.5 text-xs text-emerald-600 font-bold disabled:opacity-50 ${className}`}
-          title="اعلان‌ها فعال است — برای قطع روی این دستگاه کلیک کنید"
+          className={`p-2 rounded-xl text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50 ${className}`}
+          title="اعلان‌ها فعال است — برای قطع کلیک کنید"
+          aria-label="قطع اعلان دستگاه"
         >
-          {busy ? <RefreshCw size={14} className="animate-spin" /> : <Bell size={14} />}
-          <span>{pushReady ? "اعلان فعال" : "اعلان مجاز"}</span>
+          {busy ? <RefreshCw size={20} className="animate-spin" /> : <Bell size={20} />}
         </button>
       );
     }
@@ -128,8 +128,8 @@ export default function NotificationPermission({ compact = false, className = ""
           <Bell className="w-4 h-4 shrink-0" />
           <span>
             {pushReady
-              ? "اعلان‌های فشاری روی این دستگاه فعال است"
-              : "اجازه اعلان داده شده — پوش در حال آماده‌سازی"}
+              ? "اعلان‌های این دستگاه فعال است"
+              : "اجازه اعلان داده شده — در حال آماده‌سازی"}
           </span>
         </div>
         <button
@@ -150,10 +150,11 @@ export default function NotificationPermission({ compact = false, className = ""
         type="button"
         onClick={enable}
         disabled={busy}
-        className={`flex items-center gap-1.5 px-3 py-1.5 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors text-xs font-bold disabled:opacity-50 ${className}`}
+        className={`p-2 rounded-xl text-amber-600 hover:bg-amber-50 transition-colors disabled:opacity-50 ${className}`}
+        title="فعال‌سازی اعلان‌ها"
+        aria-label="فعال‌سازی اعلان‌ها"
       >
-        {busy ? <RefreshCw size={14} className="animate-spin" /> : <BellOff size={14} />}
-        <span>فعال‌سازی اعلان</span>
+        {busy ? <RefreshCw size={20} className="animate-spin" /> : <BellOff size={20} />}
       </button>
     );
   }
@@ -166,7 +167,7 @@ export default function NotificationPermission({ compact = false, className = ""
       className={`w-full flex items-center justify-center gap-2 px-4 py-3 bg-gold-500 text-white rounded-2xl hover:bg-gold-600 transition-colors text-sm font-bold disabled:opacity-50 ${className}`}
     >
       {busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <BellOff className="w-4 h-4" />}
-      <span>فعال‌سازی اعلان‌های لحظه‌ای</span>
+      <span>فعال‌سازی اعلان‌های دستگاه</span>
     </button>
   );
 }

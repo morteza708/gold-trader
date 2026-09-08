@@ -79,14 +79,19 @@ apiClient.interceptors.response.use(
             refresh: refreshToken,
           });
 
-          const { access } = response.data;
+          const { access, refresh } = response.data as {
+            access: string;
+            refresh?: string;
+          };
 
-          // ذخیره token جدید
           if (typeof window !== 'undefined') {
             localStorage.setItem('access_token', access);
+            // با ROTATE_REFRESH_TOKENS باید refresh جدید ذخیره شود؛ وگرنه سشن زود قطع می‌شود
+            if (refresh) {
+              localStorage.setItem('refresh_token', refresh);
+            }
           }
 
-          // تکرار request با token جدید
           if (originalRequest.headers) {
             originalRequest.headers.Authorization = `Bearer ${access}`;
           }
