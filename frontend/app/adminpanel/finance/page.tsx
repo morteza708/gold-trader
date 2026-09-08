@@ -10,7 +10,7 @@ import {
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import StatsCard from "@/components/admin/StatsCard";
-import { toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
+import { toPersianDigits, toEnglishDigits, formatKarat, formatGoldGrams } from "@/lib/utils/numberUtils";
 import { type ImageUploadErrorReason } from "@/lib/utils/imageUpload";
 import ImageCompressHelp from "@/components/ui/ImageCompressHelp";
 import { adminWalletAPI, WithdrawalRequest, DepositRequest } from "@/lib/api/auth";
@@ -1306,7 +1306,7 @@ function WithdrawalDetailModal({
                         عیار واقعی:{" "}
                         <strong>
                           {request.delivery_actual_karat != null
-                            ? toPersianDigits(String(request.delivery_actual_karat))
+                            ? toPersianDigits(formatKarat(request.delivery_actual_karat))
                             : "—"}
                         </strong>
                       </p>
@@ -1314,7 +1314,7 @@ function WithdrawalDetailModal({
                         وزن فیزیکی:{" "}
                         <strong>
                           {request.delivery_physical_weight != null
-                            ? `${toPersianDigits(Number(request.delivery_physical_weight).toFixed(3))} گرم`
+                            ? `${toPersianDigits(formatGoldGrams(request.delivery_physical_weight))} گرم`
                             : "—"}
                         </strong>
                       </p>

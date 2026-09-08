@@ -177,22 +177,36 @@
         }
 
         .sign-section {
-            margin-top: 30px;
-            border-top: 1px dashed #999;
-            padding-top: 20px;
+            margin-top: 24px;
             /* تضمین فاصله مناسب از فوتر */
-            margin-bottom: 20px; 
+            margin-bottom: 16px;
+            width: 100%;
         }
-        
+
         .sign-box {
             text-align: center;
             font-weight: bold;
             font-size: 10pt;
+            padding-bottom: 8px;
+        }
+
+        .sign-dash {
+            border-top: 1px dashed #666;
+            height: 28px;
+            margin: 0 8px;
+        }
+
+        .stamp-img {
+            max-height: 52px;
+            max-width: 110px;
+            display: block;
+            margin: 4px auto 6px;
+            object-fit: contain;
         }
 
         .footer {
             /* فوتر به عنوان آخرین آیتم فلکس */
-            margin-top: auto; 
+            margin-top: auto;
             text-align: center;
             font-size: 8pt;
             border-top: 1px solid #000;
@@ -200,7 +214,10 @@
             width: 100%;
         }
 
-    </style>
+        .currency-unit {
+            font-size: 8pt;
+            font-weight: normal;
+        }
 </head>
 <body>
 
@@ -331,21 +348,26 @@
                             </tr>
                             <tr style="background-color: #e5e7eb;">
                                 <td class="t-label" style="background-color: #d1d5db;">قابل پرداخت:</td>
-                                <td class="t-value">{{ total }} <span style="font-size: 8pt; font-weight: normal;">تومان</span></td>
+                                <td class="t-value">{{ total }} <span class="currency-unit">ریال</span></td>
                             </tr>
                         </table>
                     </td>
                 </tr>
             </table>
 
-            <!-- امضا -->
+            <!-- امضا: برچسب بالا، مهر/امضا، خط‌چین (قالب A5) -->
             <table class="sign-section">
                 <tr>
-                    <td>
+                    <td style="width: 50%;">
                         <div class="sign-box">مهر و امضای فروشنده</div>
+                        {% if stamp_base64 %}
+                        <img class="stamp-img" src="data:image/png;base64,{{ stamp_base64 }}" alt="مهر / امضا" />
+                        {% endif %}
+                        <div class="sign-dash"></div>
                     </td>
-                    <td>
+                    <td style="width: 50%;">
                         <div class="sign-box">مهر و امضای خریدار</div>
+                        <div class="sign-dash"></div>
                     </td>
                 </tr>
             </table>

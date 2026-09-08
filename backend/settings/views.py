@@ -44,22 +44,36 @@ def system_settings(request):
         elif request.method == 'PUT':
             data = request.data.copy() if hasattr(request.data, 'copy') else request.data
             clear_logo = False
+            clear_stamp = False
             if hasattr(data, 'pop'):
                 clear_raw = data.pop('clear_invoice_logo', None)
                 if clear_raw is not None:
                     if isinstance(clear_raw, (list, tuple)):
                         clear_raw = clear_raw[0] if clear_raw else None
                     clear_logo = str(clear_raw).strip().lower() in {'1', 'true', 'yes', 'on'}
+                clear_stamp_raw = data.pop('clear_invoice_stamp', None)
+                if clear_stamp_raw is not None:
+                    if isinstance(clear_stamp_raw, (list, tuple)):
+                        clear_stamp_raw = clear_stamp_raw[0] if clear_stamp_raw else None
+                    clear_stamp = str(clear_stamp_raw).strip().lower() in {'1', 'true', 'yes', 'on'}
 
             serializer = SystemSettingsSerializer(
                 settings, data=data, partial=True, context={'request': request}
             )
             if serializer.is_valid():
                 obj = serializer.save()
+                update_fields = []
                 if clear_logo and obj.invoice_logo:
                     obj.invoice_logo.delete(save=False)
                     obj.invoice_logo = None
-                    obj.save(update_fields=['invoice_logo', 'updated_at'])
+                    update_fields.append('invoice_logo')
+                if clear_stamp and obj.invoice_stamp:
+                    obj.invoice_stamp.delete(save=False)
+                    obj.invoice_stamp = None
+                    update_fields.append('invoice_stamp')
+                if update_fields:
+                    update_fields.append('updated_at')
+                    obj.save(update_fields=update_fields)
                 out = SystemSettingsSerializer(obj, context={'request': request})
                 return Response({
                     'message': 'تنظیمات با موفقیت به‌روزرسانی شد',

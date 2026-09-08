@@ -22,6 +22,7 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
     support_hours = serializers.JSONField(required=False)
     support_preview = serializers.SerializerMethodField()
     invoice_logo_url = serializers.SerializerMethodField()
+    invoice_stamp_url = serializers.SerializerMethodField()
 
     class Meta:
         model = SystemSettings
@@ -52,11 +53,14 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             'invoice_tagline',
             'invoice_logo',
             'invoice_logo_url',
+            'invoice_stamp',
+            'invoice_stamp_url',
             'updated_at',
         ]
-        read_only_fields = ['updated_at', 'support_preview', 'invoice_logo_url']
+        read_only_fields = ['updated_at', 'support_preview', 'invoice_logo_url', 'invoice_stamp_url']
         extra_kwargs = {
             'invoice_logo': {'write_only': True, 'required': False},
+            'invoice_stamp': {'write_only': True, 'required': False},
         }
 
     def get_support_preview(self, obj):
@@ -74,7 +78,19 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(url)
         return url
 
-    def validate_invoice_logo(self, value):
+    def get_invoice_stamp_url(self, obj):
+        if not obj.invoice_stamp:
+            return None
+        request = self.context.get('request')
+        try:
+            url = obj.invoice_stamp.url
+        except ValueError:
+            return None
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
+    def _validate_invoice_image(self, value):
         if not value:
             return value
         from accounts.image_upload import get_uploaded_image_error, ensure_optimized_upload
@@ -85,6 +101,12 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             return ensure_optimized_upload(value, purpose='page')
         except ValueError as e:
             raise serializers.ValidationError(str(e))
+
+    def validate_invoice_logo(self, value):
+        return self._validate_invoice_image(value)
+
+    def validate_invoice_stamp(self, value):
+        return self._validate_invoice_image(value)
 
     def _validate_optional_mobile(self, value, field_label, required=False):
         value = support_service.normalize_phone(value)

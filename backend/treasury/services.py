@@ -479,12 +479,14 @@ def maybe_notify_critical_coverage(previous_status: str | None = None) -> None:
     try:
         from notifications.services import create_notification_for_admins
 
+        from trades.delivery_fields import format_gold_grams_compact
+
         create_notification_for_admins(
             title='کمبود موجودی طلای شرکت',
             message=(
                 f'وضعیت پوشش خزانه بحرانی است. '
-                f'موجودی شرکت: {snap["company_gold_balance"]} گرم — '
-                f'بدهی به مشتریان: {snap["obligated_gold"]} گرم. '
+                f'موجودی شرکت: {format_gold_grams_compact(snap["company_gold_balance"])} گرم — '
+                f'بدهی به مشتریان: {format_gold_grams_compact(snap["obligated_gold"])} گرم. '
                 f'خرید کاربران در صورت فعال بودن توقف خودکار، مسدود شده است.'
             ),
             notification_type='SYSTEM',

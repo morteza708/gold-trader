@@ -18,7 +18,7 @@ import AddCardModal from "@/components/dashboard/AddCardModal";
 import WalletTabGuide from "@/components/dashboard/WalletTabGuide";
 import ImageCompressHelp from "@/components/ui/ImageCompressHelp";
 import ImageUploadZone from "@/components/ui/ImageUploadZone";
-import { formatNumber, toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
+import { formatNumber, toPersianDigits, toEnglishDigits, formatKarat, formatGoldGrams } from "@/lib/utils/numberUtils";
 import { validateImageFile } from "@/lib/utils/imageUpload";
 import { walletAPI, depositAccountsAPI, Wallet, BankCard, WithdrawalRequest, DepositRequest, DepositReceipt, DepositAccount, walletUserAPI } from "@/lib/api/auth";
 import { tradesAPI, PendingPurchase } from "@/lib/api/trades";
@@ -1333,7 +1333,7 @@ function WalletContent() {
                                                         <div className="flex justify-between text-sm">
                                                           <span className="text-gray-400">عیار واقعی:</span>
                                                           <span className="font-bold text-gray-800">
-                                                            {toPersianDigits(String(request.delivery_actual_karat))}
+                                                            {toPersianDigits(formatKarat(request.delivery_actual_karat))}
                                                           </span>
                                                         </div>
                                                       )}
@@ -1341,7 +1341,7 @@ function WalletContent() {
                                                         <div className="flex justify-between text-sm">
                                                           <span className="text-gray-400">وزن فیزیکی:</span>
                                                           <span className="font-bold text-gray-800">
-                                                            {toPersianDigits(Number(request.delivery_physical_weight).toFixed(3))} گرم
+                                                            {toPersianDigits(formatGoldGrams(request.delivery_physical_weight))} گرم
                                                           </span>
                                                         </div>
                                                       )}

@@ -532,6 +532,7 @@ export interface SystemSettings {
   invoice_phone?: string;
   invoice_tagline?: string;
   invoice_logo_url?: string | null;
+  invoice_stamp_url?: string | null;
   updated_at: string;
 }
 
@@ -544,6 +545,8 @@ export interface InvoiceIssuer {
   tagline: string;
   logo_url: string | null;
   has_custom_logo: boolean;
+  stamp_url?: string | null;
+  has_stamp?: boolean;
 }
 
 // Wallet API Functions
@@ -1010,6 +1013,8 @@ export const systemSettingsAPI = {
     invoice_tagline?: string;
     invoice_logo?: File | null;
     clear_invoice_logo?: boolean;
+    invoice_stamp?: File | null;
+    clear_invoice_stamp?: boolean;
   }): Promise<{ message: string; settings: SystemSettings }> => {
     const form = new FormData();
     if (data.invoice_brand_name !== undefined) form.append('invoice_brand_name', data.invoice_brand_name);
@@ -1020,6 +1025,8 @@ export const systemSettingsAPI = {
     if (data.invoice_tagline !== undefined) form.append('invoice_tagline', data.invoice_tagline);
     if (data.invoice_logo) form.append('invoice_logo', data.invoice_logo);
     if (data.clear_invoice_logo) form.append('clear_invoice_logo', 'true');
+    if (data.invoice_stamp) form.append('invoice_stamp', data.invoice_stamp);
+    if (data.clear_invoice_stamp) form.append('clear_invoice_stamp', 'true');
     const response = await apiClient.put<{ message: string; settings: SystemSettings }>(
       '/admin/settings/',
       form,

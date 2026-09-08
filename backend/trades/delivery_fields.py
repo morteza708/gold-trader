@@ -93,6 +93,36 @@ def _q3(value) -> Decimal:
     return Decimal(str(value)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
 
 
+def format_karat(value) -> str | None:
+    """عیار برای نمایش/API — بدون صفر اعشار اضافه (۷۴۷ نه ۷۴۷.۰)."""
+    if value is None or value == "":
+        return None
+    try:
+        d = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return str(value)
+    text = format(d.normalize(), "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def format_gold_grams(value, *, places: int = 3) -> str:
+    """وزن طلا با دقت استاندارد پلتفرم (۳ رقم اعشار)."""
+    d = _q3(value) if places == 3 else Decimal(str(value)).quantize(
+        Decimal(10) ** -places, rounding=ROUND_HALF_UP
+    )
+    return f"{d:.{places}f}"
+
+
+def format_gold_grams_compact(value) -> str:
+    """وزن برای متن اعلان — حداکثر ۳ اعشار بدون صفر انتهایی."""
+    text = format_gold_grams(value, places=3)
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
 def extract_delivery_payload(data) -> dict | None:
     """استخراج فیلدهای سند تحویل از body؛ اگر هیچ کلیدی نبود None."""
     if not isinstance(data, dict):
@@ -207,13 +237,13 @@ def delivery_fields_to_dict(instance) -> dict:
     weight = getattr(instance, "delivery_physical_weight", None)
     diff = getattr(instance, "delivery_difference_rial", None)
     return {
-        "delivery_actual_karat": str(karat) if karat is not None else None,
-        "delivery_physical_weight": str(weight) if weight is not None else None,
+        "delivery_actual_karat": format_karat(karat) if karat is not None else None,
+        "delivery_physical_weight": format_gold_grams(weight) if weight is not None else None,
         "delivery_packet_code": getattr(instance, "delivery_packet_code", "") or "",
         "delivery_seri": getattr(instance, "delivery_seri", "") or "",
         "delivery_lab_name": getattr(instance, "delivery_lab_name", "") or "",
         "delivery_notes": getattr(instance, "delivery_notes", "") or "",
-        "delivery_difference_rial": str(diff if diff is not None else 0),
+        "delivery_difference_rial": str(int(diff)) if diff is not None else "0",
         "delivery_difference_method": method,
         "delivery_difference_method_display": method_display,
         "has_delivery_details": bool(
@@ -239,7 +269,7 @@ def delivery_context_for_invoice(instance, *, to_persian) -> dict:
     return {
         "has_delivery_details": True,
         "delivery_actual_karat": to_persian(karat) if karat else "—",
-        "delivery_physical_weight": to_persian(f"{float(weight):.3f}") if weight else "—",
+        "delivery_physical_weight": to_persian(weight) if weight else "—",
         "delivery_packet_code": to_persian(d["delivery_packet_code"]) if d["delivery_packet_code"] else "—",
         "delivery_seri": d["delivery_seri"] or "—",
         "delivery_lab_name": d["delivery_lab_name"] or "—",

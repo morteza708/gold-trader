@@ -166,6 +166,13 @@ class SystemSettings(models.Model):
         blank=True,
         verbose_name='لوگوی فاکتور',
     )
+    invoice_stamp = models.ImageField(
+        upload_to='invoice_stamps/',
+        null=True,
+        blank=True,
+        verbose_name='مهر / امضای دیجیتال فاکتور',
+        help_text='تصویر مهر رسمی یا امضای دیجیتال فروشنده روی فاکتور',
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='تاریخ ایجاد'

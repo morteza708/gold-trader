@@ -24,6 +24,32 @@ export const formatNumber = (num: string | number): string => {
 };
 
 /**
+ * وزن طلا — استاندارد پلتفرم: ۳ رقم اعشار
+ */
+export const formatGoldGrams = (value: number | string | null | undefined): string => {
+  if (value === undefined || value === null || value === "") return "";
+  const n = Number(toEnglishDigits(String(value)));
+  if (!Number.isFinite(n)) return "";
+  return n.toFixed(3);
+};
+
+/**
+ * عیار — بدون صفر اعشار اضافه (۷۴۷ نه ۷۴۷.۰)
+ */
+export const formatKarat = (value: number | string | null | undefined): string => {
+  if (value === undefined || value === null || value === "") return "";
+  const raw = toEnglishDigits(String(value)).trim();
+  if (!raw) return "";
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return raw;
+  if (Number.isInteger(n)) return String(n);
+  return String(n)
+    .replace(/(\.\d*?[1-9])0+$/, "$1")
+    .replace(/\.0+$/, "")
+    .replace(/\.$/, "");
+};
+
+/**
  * فرمت کردن شماره موبایل (فقط اعداد، حداکثر 11 رقم)
  */
 export const formatMobile = (value: string, currentMobile?: string): string => {

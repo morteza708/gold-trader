@@ -3,15 +3,11 @@
 """
 from __future__ import annotations
 
-import base64
-import os
-from decimal import Decimal
-
 from django.conf import settings
 from django.template.loader import render_to_string
 from jalali_date import datetime2jalali
 
-from trades.delivery_fields import delivery_context_for_invoice
+from trades.delivery_fields import delivery_context_for_invoice, format_gold_grams
 from wallet.models import WithdrawalRequest
 
 
@@ -42,29 +38,17 @@ def _to_persian_digits(text):
 
 
 def build_gold_delivery_invoice_html(withdrawal: WithdrawalRequest) -> str:
-    from settings.models import SystemSettings
+    from settings.invoice_issuer import (
+        get_invoice_issuer,
+        load_invoice_font_base64,
+        load_invoice_logo_base64,
+        load_invoice_stamp_base64,
+    )
 
-    settings_obj = SystemSettings.get_settings()
-    issuer = {
-        "brand_name": settings_obj.invoice_brand_name or getattr(settings, "BRAND_NAME", "اپال‌باکس"),
-        "company_name": settings_obj.invoice_company_name or getattr(settings, "BRAND_COMPANY_NAME", ""),
-        "national_id": settings_obj.invoice_national_id or "",
-        "address": settings_obj.invoice_address or "",
-        "phone": settings_obj.invoice_phone or "",
-        "tagline": settings_obj.invoice_tagline or "",
-    }
-
-    logo_base64 = ""
-    if settings_obj.invoice_logo:
-        try:
-            with settings_obj.invoice_logo.open("rb") as f:
-                logo_base64 = base64.b64encode(f.read()).decode("ascii")
-        except Exception:
-            logo_base64 = ""
-
-    font_base64 = ""
-    font_path = os.path.join(settings.BASE_DIR, "..", "frontend", "fonts", "IRANYekanXVF.woff2")
-    # fallback paths used by trade invoice — keep optional
+    issuer = get_invoice_issuer()
+    logo_base64 = load_invoice_logo_base64() or ""
+    stamp_base64 = load_invoice_stamp_base64() or ""
+    font_base64 = load_invoice_font_base64() or ""
 
     when = withdrawal.completed_at or withdrawal.updated_at or withdrawal.created_at
     jalali = datetime2jalali(when) if when else None
@@ -77,7 +61,7 @@ def build_gold_delivery_invoice_html(withdrawal: WithdrawalRequest) -> str:
     if issuer["address"]:
         footer_parts.append(f"آدرس: {issuer['address']}")
     if issuer["phone"]:
-        footer_parts.append(f"تلفن: {issuer['phone']}")
+        footer_parts.append(f"تلفن: {_to_persian_digits(issuer['phone'])}")
 
     buyer_name = (
         f"{withdrawal.user.first_name or ''} {withdrawal.user.last_name or ''}".strip()
@@ -94,12 +78,13 @@ def build_gold_delivery_invoice_html(withdrawal: WithdrawalRequest) -> str:
         "brand_name": brand_name,
         "brand_initial": (brand_name[:1] if brand_name else "G"),
         "logo_base64": logo_base64,
+        "stamp_base64": stamp_base64,
         "seller_national_id": _to_persian_digits(national_id) if national_id != "—" else national_id,
         "buyer_label": "خریدار / تحویل‌گیرنده",
         "buyer_name": buyer_name,
         "buyer_mobile": _to_persian_digits(withdrawal.user.phone_number or "-"),
         "item_description": "تحویل طلای آب‌شده (برداشت از پلتفرم)",
-        "amount": _to_persian_digits(f"{float(withdrawal.amount):.3f}"),
+        "amount": _to_persian_digits(format_gold_grams(withdrawal.amount)),
         "price": "—",
         "total": "—",
         "font_base64": font_base64,
@@ -124,7 +109,7 @@ def render_gold_delivery_pdf_bytes(withdrawal: WithdrawalRequest) -> bytes:
     page_css = CSS(
         string="""
         @page { size: A5; margin: 10mm; }
-        body { font-family: Tahoma, Arial, sans-serif; }
+        body { font-family: 'IRANYekan', Tahoma, Arial, sans-serif; }
         """
     )
     return HTML(string=html_string).write_pdf(stylesheets=[page_css])

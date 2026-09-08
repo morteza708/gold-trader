@@ -1,6 +1,6 @@
 "use client";
 
-import { toEnglishDigits } from "@/lib/utils/numberUtils";
+import { formatKarat, formatNumber, toEnglishDigits, toPersianDigits } from "@/lib/utils/numberUtils";
 
 export type DeliveryFormState = {
   actual_karat: string;
@@ -35,9 +35,12 @@ export function deliveryFormFromApi(data: {
   delivery_difference_method?: string | null;
 }): DeliveryFormState {
   return {
-    actual_karat: data.delivery_actual_karat != null ? String(data.delivery_actual_karat) : "",
+    actual_karat:
+      data.delivery_actual_karat != null ? formatKarat(data.delivery_actual_karat) : "",
     physical_weight:
-      data.delivery_physical_weight != null ? String(data.delivery_physical_weight) : "",
+      data.delivery_physical_weight != null
+        ? toEnglishDigits(String(data.delivery_physical_weight))
+        : "",
     packet_code: data.delivery_packet_code || "",
     seri: data.delivery_seri || "",
     lab_name: data.delivery_lab_name || "",
@@ -52,13 +55,15 @@ export function deliveryFormFromApi(data: {
 
 export function deliveryFormToPayload(form: DeliveryFormState) {
   return {
-    actual_karat: form.actual_karat ? toEnglishDigits(form.actual_karat) : "",
+    actual_karat: form.actual_karat ? formatKarat(form.actual_karat) : "",
     physical_weight: form.physical_weight ? toEnglishDigits(form.physical_weight) : "",
     packet_code: form.packet_code.trim(),
     seri: form.seri.trim().toUpperCase(),
     lab_name: form.lab_name.trim(),
     notes: form.notes.trim(),
-    difference_rial: form.difference_rial ? toEnglishDigits(form.difference_rial) : "0",
+    difference_rial: form.difference_rial
+      ? toEnglishDigits(form.difference_rial).replace(/,/g, "")
+      : "0",
     difference_method: form.difference_method || "",
   };
 }
@@ -89,6 +94,38 @@ export default function DeliveryDocumentFields({
 
   const set = (patch: Partial<DeliveryFormState>) => onChange({ ...value, ...patch });
 
+  const onKaratChange = (raw: string) => {
+    const english = toEnglishDigits(raw).replace(/٫/g, ".");
+    // اجازه عدد صحیح یا یک رقم اعشار (مثل ۷۴۷ یا ۷۴۷.۵)
+    if (english === "" || /^\d{0,4}(\.\d{0,1})?$/.test(english)) {
+      set({ actual_karat: english });
+    }
+  };
+
+  const onPhysicalWeightChange = (raw: string) => {
+    const english = toEnglishDigits(raw).replace(/٫/g, ".").replace(/,/g, "");
+    if (english === "" || /^\d*\.?\d{0,3}$/.test(english)) {
+      set({ physical_weight: english });
+    }
+  };
+
+  const onPacketChange = (raw: string) => {
+    const english = toEnglishDigits(raw).replace(/\D/g, "");
+    set({ packet_code: english });
+  };
+
+  const handleDiffRial = (raw: string) => {
+    const english = toEnglishDigits(raw).replace(/,/g, "");
+    const negative = english.trim().startsWith("-");
+    const digits = english.replace(/[^\d]/g, "");
+    if (!digits && !negative) {
+      set({ difference_rial: "" });
+      return;
+    }
+    const formatted = formatNumber(digits);
+    set({ difference_rial: negative ? `-${formatted}` : formatted });
+  };
+
   return (
     <div className={`rounded-2xl border p-4 space-y-3 ${box}`}>
       <p className={`text-sm font-black ${isDark ? "text-white" : "text-gray-800"}`}>{title}</p>
@@ -100,8 +137,8 @@ export default function DeliveryDocumentFields({
           <label className={`block text-xs mb-1 ${label}`}>عیار واقعی</label>
           <input
             disabled={disabled}
-            value={value.actual_karat}
-            onChange={(e) => set({ actual_karat: toEnglishDigits(e.target.value) })}
+            value={value.actual_karat ? toPersianDigits(value.actual_karat) : ""}
+            onChange={(e) => onKaratChange(e.target.value)}
             placeholder="مثلاً ۷۴۷"
             className={`w-full border rounded-xl px-3 py-2.5 text-sm outline-none dir-ltr text-right ${input}`}
           />
@@ -110,8 +147,8 @@ export default function DeliveryDocumentFields({
           <label className={`block text-xs mb-1 ${label}`}>وزن فیزیکی (گرم)</label>
           <input
             disabled={disabled}
-            value={value.physical_weight}
-            onChange={(e) => set({ physical_weight: toEnglishDigits(e.target.value) })}
+            value={value.physical_weight ? toPersianDigits(value.physical_weight) : ""}
+            onChange={(e) => onPhysicalWeightChange(e.target.value)}
             placeholder="مثلاً ۶.۲۲۰"
             className={`w-full border rounded-xl px-3 py-2.5 text-sm outline-none dir-ltr text-right ${input}`}
           />
@@ -120,8 +157,8 @@ export default function DeliveryDocumentFields({
           <label className={`block text-xs mb-1 ${label}`}>کد ریگیری / پاکت</label>
           <input
             disabled={disabled}
-            value={value.packet_code}
-            onChange={(e) => set({ packet_code: toEnglishDigits(e.target.value) })}
+            value={value.packet_code ? toPersianDigits(value.packet_code) : ""}
+            onChange={(e) => onPacketChange(e.target.value)}
             className={`w-full border rounded-xl px-3 py-2.5 text-sm outline-none dir-ltr text-right ${input}`}
           />
         </div>
@@ -150,8 +187,14 @@ export default function DeliveryDocumentFields({
           <label className={`block text-xs mb-1 ${label}`}>مابه‌التفاوت (ریال)</label>
           <input
             disabled={disabled}
-            value={value.difference_rial}
-            onChange={(e) => set({ difference_rial: toEnglishDigits(e.target.value) })}
+            value={
+              value.difference_rial
+                ? value.difference_rial.startsWith("-")
+                  ? `-${toPersianDigits(value.difference_rial.slice(1))}`
+                  : toPersianDigits(value.difference_rial)
+                : ""
+            }
+            onChange={(e) => handleDiffRial(e.target.value)}
             placeholder="مثبت=دریافت از مشتری"
             className={`w-full border rounded-xl px-3 py-2.5 text-sm outline-none dir-ltr text-right ${input}`}
           />

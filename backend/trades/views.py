@@ -342,41 +342,22 @@ def download_invoice_pdf(request, trade_id):
         # تعیین نوع معامله
         is_buy = trade.trade_type == 'BUY'
         
-        # مسیر فونت - ابتدا از backend/static/fonts/ بررسی می‌کنیم، سپس از frontend
-        font_paths = [
-            os.path.join(settings.BASE_DIR, 'static', 'fonts', 'IRANYekanXVF.woff2'),
-            os.path.join(settings.BASE_DIR, '..', 'frontend', 'fonts', 'IRANYekanXVF.woff2'),
-        ]
-        font_abs_path = None
-        for path in font_paths:
-            abs_path = os.path.abspath(path)
-            if os.path.exists(abs_path):
-                font_abs_path = abs_path
-                break
-        
-        # بررسی وجود فایل فونت
-        if not font_abs_path or not os.path.exists(font_abs_path):
+        from settings.invoice_issuer import (
+            get_invoice_issuer,
+            load_invoice_font_base64,
+            load_invoice_logo_base64,
+            load_invoice_stamp_base64,
+        )
+        font_base64 = load_invoice_font_base64()
+        if not font_base64:
             return Response(
-                {'error': f'فایل فونت یافت نشد. مسیرهای بررسی شده: {font_paths}'},
+                {'error': 'فایل فونت فارسی فاکتور یافت نشد'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
-        # خواندن فونت و تبدیل به base64 برای embed کردن در CSS
-        import base64
-        font_base64 = None
-        try:
-            with open(font_abs_path, 'rb') as font_file:
-                font_data = font_file.read()
-                font_base64 = base64.b64encode(font_data).decode('utf-8')
-        except Exception as font_error:
-            print(f"خطا در خواندن فونت: {font_error}")
-            import traceback
-            print(traceback.format_exc())
 
-        # لوگوی برند برای PDF
-        from settings.invoice_issuer import get_invoice_issuer, load_invoice_logo_base64
         issuer = get_invoice_issuer(request)
         logo_base64 = load_invoice_logo_base64() or ''
+        stamp_base64 = load_invoice_stamp_base64() or ''
 
         # تابع تبدیل اعداد به فارسی
         def to_persian_digits(text):
@@ -393,10 +374,11 @@ def download_invoice_pdf(request, trade_id):
         if issuer['address']:
             footer_parts.append(f"آدرس: {issuer['address']}")
         if issuer['phone']:
-            footer_parts.append(f"تلفن: {issuer['phone']}")
+            footer_parts.append(f"تلفن: {to_persian_digits(issuer['phone'])}")
         footer_text = ' | '.join(footer_parts) if footer_parts else ''
         
         # آماده‌سازی داده‌ها برای template
+        from .delivery_fields import delivery_context_for_invoice, format_gold_grams
         context = {
             'invoice_number': to_persian_digits(trade.invoice_number),
             'date': to_persian_digits(date_str),
@@ -406,12 +388,13 @@ def download_invoice_pdf(request, trade_id):
             'brand_name': brand_name,
             'brand_initial': brand_initial,
             'logo_base64': logo_base64,
+            'stamp_base64': stamp_base64,
             'seller_national_id': to_persian_digits(national_id) if national_id != '—' else national_id,
             'buyer_label': 'خریدار' if is_buy else 'فروشنده',
             'buyer_name': f"{trade.user.first_name} {trade.user.last_name}".strip() or trade.user.phone_number or '-',
             'buyer_mobile': to_persian_digits(trade.user.phone_number or '-'),
             'item_description': f"{'خرید' if is_buy else 'فروش'} طلای آب‌شده",
-            'amount': to_persian_digits(f"{float(trade.amount):.3f}"),
+            'amount': to_persian_digits(format_gold_grams(trade.amount)),
             'price': to_persian_digits(f"{int(trade.price):,}"),
             'total': to_persian_digits(f"{int(trade.total):,}"),
             'font_base64': font_base64 if font_base64 else '',
@@ -429,7 +412,6 @@ def download_invoice_pdf(request, trade_id):
                 else ''
             ),
         }
-        from .delivery_fields import delivery_context_for_invoice
         context.update(delivery_context_for_invoice(trade, to_persian=to_persian_digits))
         
         # رندر کردن template
