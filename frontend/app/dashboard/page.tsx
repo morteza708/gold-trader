@@ -3,9 +3,9 @@
 import { pageTitle } from "@/lib/brand";
 
 import { useState, useEffect } from "react";
-import { 
+import {
   ArrowUpRight, ArrowDownRight, TrendingUp, 
-  Plus, Minus, CreditCard, History, X, Wallet as WalletIcon, AlertCircle, Clock
+  Plus, Minus, CreditCard, History, X, Wallet as WalletIcon, AlertCircle, Clock, FlaskConical
 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -322,6 +322,19 @@ export default function DashboardPage() {
               </div>
               <ArrowDownRight size={20} className="opacity-50 group-hover:opacity-100 transition-opacity" />
            </button>
+
+           <Link
+             href="/dashboard/reygiri"
+             className="flex items-center justify-between bg-amber-50 hover:bg-amber-100 text-amber-800 p-4 rounded-2xl transition-all group w-full border border-amber-100 hover:shadow-lg hover:shadow-amber-100"
+           >
+              <div className="flex items-center gap-4">
+                 <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-amber-600">
+                   <FlaskConical size={20} />
+                 </div>
+                 <span className="font-bold text-lg">استعلام ریگیری</span>
+              </div>
+              <ArrowUpRight size={20} className="opacity-50 group-hover:opacity-100 transition-opacity" />
+           </Link>
         </div>
 
       </div>

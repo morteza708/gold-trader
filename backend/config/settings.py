@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'trades.apps.TradesConfig',
     'notifications.apps.NotificationsConfig',
     'treasury.apps.TreasuryConfig',
+    'reygiri.apps.ReygiriConfig',
 ]
 
 REST_FRAMEWORK = {
@@ -226,6 +227,14 @@ VIRAGOLD_SYMBOL_ID = env.int('VIRAGOLD_SYMBOL_ID', default=1197)
 VIRAGOLD_TOMAN_TO_RIAL = env.int('VIRAGOLD_TOMAN_TO_RIAL', default=10)
 VIRAGOLD_FETCH_INTERVAL = env.float('VIRAGOLD_FETCH_INTERVAL', default=120)  # هر 2 دقیقه (درخواست ویراگلد)
 
+# Reygiri (تهحساب) — Domain هرگز به فرانت ارسال نشود
+REYGIRI_API_BASE = env.str(
+    'REYGIRI_API_BASE',
+    default='https://reygiri.tahesab.ir/ReygiriAPI/',
+)
+REYGIRI_DOMAIN = env.str('REYGIRI_DOMAIN', default='')
+REYGIRI_TIMEOUT = env.float('REYGIRI_TIMEOUT', default=15)
+
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
 # CORS Settings - در production از env خوانده می‌شود
@@ -330,6 +339,11 @@ LOGGING = {
         },
         'trades': {
             'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'reygiri': {
+            'handlers': ['console', 'file'],
             'level': 'INFO',
             'propagate': False,
         },

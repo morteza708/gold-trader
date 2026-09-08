@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
-  Home, User, Wallet as WalletIcon, History, Info, FileText, Bell, Menu as MenuIcon, X, Zap, LogOut,
+  Home, User, Wallet as WalletIcon, History, Info, FileText, Bell, Menu as MenuIcon, X, Zap, LogOut, FlaskConical,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -37,11 +37,12 @@ export const DEFAULT_AVATAR =
 // تعریف آیتم‌های منو
 const menuItems = [
   { name: "خانه", href: "/dashboard", icon: Home },
-  { name: "معامله هوشمند", href: "/dashboard/trade", icon: Zap }, // آیکون رعد برای معامله سریع
+  { name: "معامله هوشمند", href: "/dashboard/trade", icon: Zap },
   { name: "معاملات من", href: "/dashboard/history", icon: History },
   { name: "کیف پول", href: "/dashboard/wallet", icon: WalletIcon },
+  { name: "ریگیری", href: "/dashboard/reygiri", icon: FlaskConical },
   { name: "پروفایل", href: "/dashboard/profile", icon: User },
-  { divider: true }, // خط جداکننده
+  { divider: true },
   { name: "قوانین و مقررات", href: "/dashboard/terms", icon: FileText },
   { name: "درباره ما", href: "/dashboard/about", icon: Info },
 ];

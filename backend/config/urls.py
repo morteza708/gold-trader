@@ -17,6 +17,7 @@ urlpatterns = [
     path('api/', include('trades.urls')),
     path('api/', include('notifications.urls')),
     path('api/', include('treasury.urls')),
+    path('api/', include('reygiri.urls')),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]
 

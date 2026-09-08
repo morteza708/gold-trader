@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Users, Activity, Lock, TrendingUp, Loader2, AlertCircle,
-  UserPlus, DollarSign,
+  UserPlus, DollarSign, FlaskConical, ArrowLeft,
 } from "lucide-react";
 import LiveClock from "@/components/dashboard/LiveClock";
 import MarketSnapshotBar from "@/components/dashboard/MarketSnapshotBar";
@@ -123,6 +124,22 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+
+      <Link
+        href="/adminpanel/reygiri"
+        className="flex items-center justify-between gap-4 bg-slate-800 hover:bg-slate-800/80 border border-slate-700 hover:border-gold-500/40 rounded-3xl p-5 transition-all group"
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-gold-500/15 text-gold-400 flex items-center justify-center">
+            <FlaskConical size={22} />
+          </div>
+          <div>
+            <p className="font-black text-white text-sm">استعلام ریگیری</p>
+            <p className="text-xs text-slate-400 mt-1">عیار پاکت‌ها را از سرویس تهحساب بگیرید</p>
+          </div>
+        </div>
+        <ArrowLeft size={18} className="text-slate-500 group-hover:text-gold-400 transition-colors" />
+      </Link>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {[

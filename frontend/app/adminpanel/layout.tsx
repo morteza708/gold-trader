@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
   LayoutDashboard, Users, CreditCard, Banknote, 
-  Settings, LogOut, Menu, X, ShieldCheck, Phone, FileText, Scale, FilePlus2
+  Settings, LogOut, Menu, X, ShieldCheck, Phone, FileText, Scale, FilePlus2, FlaskConical
 } from "lucide-react";
 import MobileHeader from "@/components/admin/MobileHeader";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -31,6 +31,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: "خزانه و حسابرسی", href: "/adminpanel/treasury", icon: Scale },
     { name: "فاکتور دستی", href: "/adminpanel/manual-invoices", icon: FilePlus2 },
     { name: "مانیتورینگ معاملات", href: "/adminpanel/trades", icon: Banknote },
+    { name: "استعلام ریگیری", href: "/adminpanel/reygiri", icon: FlaskConical },
     { name: "تایید شماره موبایل", href: "/adminpanel/mobile-verification", icon: Phone },
     { name: "صفحات سایت", href: "/adminpanel/pages", icon: FileText },
     { name: "تنظیمات سیستم", href: "/adminpanel/settings", icon: Settings },
