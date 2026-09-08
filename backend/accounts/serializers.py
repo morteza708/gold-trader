@@ -50,28 +50,41 @@ class SendOTPSerializer(serializers.Serializer):
         logger.info(f"[OTP Serializer] شروع - validated_data: {validated_data}")
         phone_number = validated_data['phone_number']
         logger.info(f"[OTP Serializer] phone_number: {phone_number}")
-        
-        user = CustomUser.objects.get(phone_number=phone_number)
-        logger.info(f"[OTP Serializer] کاربر پیدا شد: {user.phone_number}")
-        
-        # تولید کد OTP
-        otp_code = str(get_random_otp())
-        logger.info(f"[OTP Serializer] کد OTP تولید شد: {otp_code}")
-        
-        # ذخیره کد OTP در دیتابیس
-        user.otp_code = otp_code
-        user.otp_code_created = timezone.now()
-        user.save()
-        logger.info(f"[OTP Serializer] کد OTP در دیتابیس ذخیره شد")
-        
-        # ارسال پیامک
+
+        from django.db import transaction
+
+        with transaction.atomic():
+            user = CustomUser.objects.select_for_update().get(phone_number=phone_number)
+            logger.info(f"[OTP Serializer] کاربر پیدا شد: {user.phone_number}")
+
+            otp_code = str(get_random_otp())
+            logger.info(f"[OTP Serializer] کد OTP تولید شد: {otp_code}")
+
+            # فقط فیلدهای OTP را ذخیره کن (بدون لمس تصویر/آواتار)
+            user.otp_code = otp_code
+            user.otp_code_created = timezone.now()
+            user.save(update_fields=['otp_code', 'otp_code_created'])
+            logger.info(f"[OTP Serializer] کد OTP در دیتابیس ذخیره شد")
+
+        # ارسال پیامک بعد از commit
         logger.info(f"[OTP Serializer] در حال فراخوانی send_message...")
         try:
             result = send_message(phone_number, otp_code)
             logger.info(f"[OTP Serializer] نتیجه ارسال پیامک: {result}")
+            if not result:
+                # SMS نرفت؛ کد را نگه می‌داریم تا اگر تأخیر شبکه بود قابل استفاده باشد
+                # ولی به فرانت بگوییم ارسال ناموفق بود تا کاربر بداند
+                raise serializers.ValidationError({
+                    'phone_number': 'ارسال پیامک ناموفق بود. لطفاً چند ثانیه بعد دوباره تلاش کنید.'
+                })
+        except serializers.ValidationError:
+            raise
         except Exception as e:
             logger.error(f"[OTP Serializer] خطا در فراخوانی send_message: {e}", exc_info=True)
-        
+            raise serializers.ValidationError({
+                'phone_number': 'خطا در ارسال پیامک. لطفاً دوباره تلاش کنید.'
+            })
+
         return {'message': 'کد OTP با موفقیت ارسال شد'}
 
 
@@ -100,14 +113,17 @@ class VerifyOTPSerializer(serializers.Serializer):
         
         try:
             user = CustomUser.objects.get(phone_number=phone_number)
-            
-            # بررسی انقضای کد OTP
-            if not user.check_otp_expiration():
+
+            status = user.get_otp_status()
+            if status == 'missing':
+                raise serializers.ValidationError({
+                    'otp_code': 'کد فعالی یافت نشد. لطفاً دوباره درخواست کد دهید.'
+                })
+            if status == 'expired':
                 raise serializers.ValidationError({
                     'otp_code': 'کد OTP منقضی شده است. لطفا مجددا درخواست کد دهید.'
                 })
-            
-            # بررسی صحت کد OTP
+
             if user.otp_code != otp_code:
                 raise serializers.ValidationError({
                     'otp_code': 'کد OTP اشتباه است.'

@@ -2,6 +2,7 @@ from rest_framework import status, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 import uuid
@@ -48,12 +49,18 @@ def send_otp(request):
         try:
             result = serializer.create(serializer.validated_data)
             logger.info(f"[OTP] create() اجرا شد - result: {result}")
+            return Response(
+                {'message': 'کد OTP با موفقیت ارسال شد'},
+                status=status.HTTP_200_OK
+            )
+        except DRFValidationError as e:
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"[OTP] خطا در create(): {e}", exc_info=True)
-        return Response(
-            {'message': 'کد OTP با موفقیت ارسال شد'},
-            status=status.HTTP_200_OK
-        )
+            return Response(
+                {'phone_number': 'خطا در ارسال کد. لطفاً دوباره تلاش کنید.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     logger.warning(f"[OTP] Serializer نامعتبر - errors: {serializer.errors}")
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -69,26 +76,44 @@ def verify_otp(request):
     serializer = VerifyOTPSerializer(data=request.data)
     if serializer.is_valid():
         phone_number = serializer.validated_data['phone_number']
-        user = CustomUser.objects.get(phone_number=phone_number)
-        
-        # پاک کردن کد OTP بعد از استفاده
-        user.otp_code = None
-        user.otp_code_created = None
-        user.save()
-        
-        # تولید JWT Token
-        refresh = RefreshToken.for_user(user)
-        
-        # بررسی اینکه آیا پروفایل کامل است یا نه
-        profile_completed = user.is_profile_complete()
-        
+        otp_code = serializer.validated_data['otp_code']
+
+        from django.db import transaction
+        with transaction.atomic():
+            user = CustomUser.objects.select_for_update().get(phone_number=phone_number)
+
+            # بررسی دوباره داخل قفل (جلوگیری از double-submit)
+            status_otp = user.get_otp_status()
+            if status_otp == 'missing':
+                return Response(
+                    {'otp_code': 'کد فعالی یافت نشد. لطفاً دوباره درخواست کد دهید.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if status_otp == 'expired':
+                return Response(
+                    {'otp_code': 'کد OTP منقضی شده است. لطفا مجددا درخواست کد دهید.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if user.otp_code != otp_code:
+                return Response(
+                    {'otp_code': 'کد OTP اشتباه است.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            user.otp_code = None
+            user.otp_code_created = None
+            user.save(update_fields=['otp_code', 'otp_code_created'])
+
+            refresh = RefreshToken.for_user(user)
+            profile_completed = user.is_profile_complete()
+
         return Response({
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'profile_completed': profile_completed,
             'user': UserSerializer(user).data
         }, status=status.HTTP_200_OK)
-    
+
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

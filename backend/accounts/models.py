@@ -141,12 +141,24 @@ class CustomUser(AbstractUser):
         )
     
     def check_otp_expiration(self):
-        """بررسی انقضای کد OTP (5 دقیقه)"""
-        if not self.otp_code_created:
+        """بررسی انقضای کد OTP (۵ دقیقه). اگر کدی نباشد False."""
+        if not self.otp_code or not self.otp_code_created:
             return False
         now = timezone.now()
         diff_time = now - self.otp_code_created
         return diff_time.total_seconds() <= 300  # 5 دقیقه
+
+    def get_otp_status(self) -> str:
+        """
+        وضعیت OTP برای پیام خطای دقیق:
+        missing | expired | valid
+        """
+        if not self.otp_code or not self.otp_code_created:
+            return 'missing'
+        now = timezone.now()
+        if (now - self.otp_code_created).total_seconds() > 300:
+            return 'expired'
+        return 'valid'
 
 
 class CustomerProfile(models.Model):

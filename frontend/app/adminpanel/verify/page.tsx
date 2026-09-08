@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Edit2, RotateCcw, ShieldCheck } from "lucide-react";
@@ -21,6 +21,7 @@ function VerifyForm() {
   const [timeLeft, setTimeLeft] = useState(120);
   const [isLoading, setIsLoading] = useState(false);
   const [webOtpSession, setWebOtpSession] = useState(0);
+  const verifyingRef = useRef(false);
 
   useEffect(() => {
     if (timeLeft > 0) {
@@ -69,8 +70,10 @@ function VerifyForm() {
   const handleVerify = async (e?: React.FormEvent, codeOverride?: string) => {
     e?.preventDefault();
     const code = codeOverride ?? otp;
-    if (code.length !== OTP_LENGTH || !mobile || isLoading) return;
+    if (code.length !== OTP_LENGTH || !mobile) return;
+    if (verifyingRef.current || isLoading) return;
 
+    verifyingRef.current = true;
     setIsLoading(true);
     const englishMobile = toEnglishDigits(mobile);
     const englishOtp = toEnglishDigits(code);
@@ -83,18 +86,23 @@ function VerifyForm() {
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
         localStorage.removeItem("user");
+        verifyingRef.current = false;
+        setIsLoading(false);
         router.push("/auth/login");
         return;
       }
 
       router.push("/adminpanel");
     } catch (error: any) {
+      verifyingRef.current = false;
       if (error.response?.status === 400) {
         const errorMessage = error.response?.data?.error || error.response?.data?.otp_code?.[0];
         if (errorMessage?.includes("اشتباه") || errorMessage?.includes("نامعتبر")) {
           toast.error("کد وارد شده اشتباه است");
         } else if (errorMessage?.includes("منقضی")) {
           toast.error("کد تایید منقضی شده است. لطفا کد جدید دریافت کنید.");
+        } else if (errorMessage?.includes("یافت نشد") || errorMessage?.includes("درخواست کد")) {
+          toast.error(errorMessage);
         } else {
           toast.error(errorMessage || "کد تایید نامعتبر است");
         }
@@ -103,7 +111,6 @@ function VerifyForm() {
       }
       setOtp("");
       setWebOtpSession((prev) => prev + 1);
-    } finally {
       setIsLoading(false);
     }
   };
