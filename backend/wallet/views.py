@@ -630,7 +630,9 @@ def admin_approve_withdrawal(request, request_id):
 
         with transaction.atomic():
             try:
-                withdrawal_request = WithdrawalRequest.objects.select_for_update().select_related(
+                withdrawal_request = WithdrawalRequest.objects.select_for_update(
+                    of=('self',)
+                ).select_related(
                     'user', 'user__customer_profile'
                 ).get(id=request_id)
             except WithdrawalRequest.DoesNotExist:
@@ -736,7 +738,9 @@ def admin_reject_withdrawal(request, request_id):
         from django.db import transaction
         with transaction.atomic():
             try:
-                withdrawal_request = WithdrawalRequest.objects.select_for_update().select_related(
+                withdrawal_request = WithdrawalRequest.objects.select_for_update(
+                    of=('self',)
+                ).select_related(
                     'user', 'bank_card'
                 ).get(id=request_id)
             except WithdrawalRequest.DoesNotExist:
@@ -828,7 +832,9 @@ def admin_complete_gold_withdrawal(request, request_id):
         from django.utils import timezone
         with transaction.atomic():
             try:
-                withdrawal_request = WithdrawalRequest.objects.select_for_update().select_related(
+                withdrawal_request = WithdrawalRequest.objects.select_for_update(
+                    of=('self',)
+                ).select_related(
                     'user'
                 ).get(id=request_id)
             except WithdrawalRequest.DoesNotExist:
@@ -947,7 +953,9 @@ def admin_complete_rial_withdrawal(request, request_id):
 
         with transaction.atomic():
             try:
-                withdrawal_request = WithdrawalRequest.objects.select_for_update().select_related(
+                withdrawal_request = WithdrawalRequest.objects.select_for_update(
+                    of=('self',)
+                ).select_related(
                     'user', 'user__customer_profile'
                 ).get(id=request_id)
             except WithdrawalRequest.DoesNotExist:
@@ -1235,7 +1243,9 @@ def admin_approve_deposit(request, request_id):
         
         from django.db import transaction
         with transaction.atomic():
-            deposit_request = DepositRequest.objects.select_for_update().select_related(
+            deposit_request = DepositRequest.objects.select_for_update(
+                of=('self',)
+            ).select_related(
                 'user'
             ).get(pk=deposit_request.pk)
             if deposit_request.status != 'PENDING':
@@ -2031,7 +2041,9 @@ def admin_approve_deposit_new_flow(request, request_id):
         users_to_notify = []
 
         with transaction.atomic():
-            deposit_request = DepositRequest.objects.select_for_update().select_related(
+            deposit_request = DepositRequest.objects.select_for_update(
+                of=('self',)
+            ).select_related(
                 'user'
             ).get(pk=deposit_request.pk)
             if deposit_request.status != 'PENDING':
