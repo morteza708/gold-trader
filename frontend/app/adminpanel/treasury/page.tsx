@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useState, type ChangeEvent, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Scale,
   Landmark,
@@ -20,6 +21,7 @@ import {
   Calendar,
   X,
   Download,
+  Loader2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -72,7 +74,43 @@ function formatRial(value: string | number): string {
 }
 
 export default function TreasuryPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20 text-slate-400">
+          <Loader2 className="animate-spin" size={28} />
+        </div>
+      }
+    >
+      <TreasuryPageInner />
+    </Suspense>
+  );
+}
+
+function TreasuryPageInner() {
+  const searchParams = useSearchParams();
+  const tabFromUrl = searchParams.get("tab") as TabId | null;
+  const validTabs: TabId[] = [
+    "overview",
+    "pnl",
+    "vault",
+    "parties",
+    "journal",
+    "export",
+    "alerts",
+    "guide",
+  ];
+  const [activeTab, setActiveTab] = useState<TabId>(
+    tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : "overview"
+  );
+
+  useEffect(() => {
+    if (tabFromUrl && validTabs.includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabFromUrl]);
+
   const [coverage, setCoverage] = useState<CoverageSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [movements, setMovements] = useState<VaultMovement[]>([]);

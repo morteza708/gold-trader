@@ -10,6 +10,7 @@ import LiveClock from "@/components/dashboard/LiveClock";
 import MarketSnapshotBar from "@/components/dashboard/MarketSnapshotBar";
 import MarketControlPanel from "@/components/admin/MarketControlPanel";
 import TreasuryCoverageBanner from "@/components/admin/TreasuryCoverageBanner";
+import AdminSetupOnboardingModal from "@/components/admin/AdminSetupOnboardingModal";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
 import { adminAPI } from "@/lib/api/auth";
 import { useGoldPrice } from "@/hooks/useGoldPrice";
@@ -54,6 +55,8 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8 animate-in fade-in zoom-in duration-500">
+      <AdminSetupOnboardingModal />
+
       <div className="relative flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
         <h1 className="text-2xl font-black text-white order-2 md:order-1">اتاق فرمان</h1>
         <div className="order-1 md:absolute md:left-1/2 md:-translate-x-1/2">

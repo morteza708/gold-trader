@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { 
   Settings, DollarSign, Bell, Users, 
   Building2, Globe, Save, RefreshCw, Plus, 
@@ -19,13 +20,32 @@ import InvoiceIssuerSettingsTab from "@/components/admin/InvoiceIssuerSettingsTa
 import { adminTradesAPI, GoldPriceAdmin } from "@/lib/api/trades";
 import { useGoldPrice } from "@/hooks/useGoldPrice";
 
-// تایپ‌ها (DepositAccount از API import شده است)
+type SettingsTabId = "price" | "financial" | "general" | "invoice" | "support" | "notifications";
 
-export default function SystemSettingsPage() {
-  const [activeTab, setActiveTab] = useState<"price" | "financial" | "general" | "invoice" | "support" | "notifications">("price");
+const VALID_TABS: SettingsTabId[] = [
+  "price",
+  "financial",
+  "general",
+  "invoice",
+  "support",
+  "notifications",
+];
+
+function SystemSettingsPageInner() {
+  const searchParams = useSearchParams();
+  const tabFromUrl = searchParams.get("tab") as SettingsTabId | null;
+  const [activeTab, setActiveTab] = useState<SettingsTabId>(
+    tabFromUrl && VALID_TABS.includes(tabFromUrl) ? tabFromUrl : "price"
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [isAddPhoneModalOpen, setIsAddPhoneModalOpen] = useState(false);
   const [newPhoneNumber, setNewPhoneNumber] = useState("");
+
+  useEffect(() => {
+    if (tabFromUrl && VALID_TABS.includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
 
   // تنظیم title صفحه
   useEffect(() => {
@@ -888,6 +908,20 @@ export default function SystemSettingsPage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function SystemSettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20 text-slate-400">
+          <Loader2 className="animate-spin" size={28} />
+        </div>
+      }
+    >
+      <SystemSettingsPageInner />
+    </Suspense>
   );
 }
 
