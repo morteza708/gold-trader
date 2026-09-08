@@ -211,7 +211,17 @@ class TradeSerializer(serializers.ModelSerializer):
             'delivery_status', 'delivery_status_display',
             'settlement_note', 'created_by_name',
             'payment_effect_applied', 'delivery_effect_applied',
+            'delivery_actual_karat', 'delivery_physical_weight',
+            'delivery_packet_code', 'delivery_seri', 'delivery_lab_name',
+            'delivery_notes', 'delivery_difference_rial',
+            'delivery_difference_method',
         ]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        from .delivery_fields import delivery_fields_to_dict
+        data.update(delivery_fields_to_dict(instance))
+        return data
 
 
 class OrderSerializer(serializers.ModelSerializer):

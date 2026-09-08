@@ -19,6 +19,12 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
 import DepositDetailModalNew from "@/components/admin/DepositDetailModalNew";
 import ImageUploadZone from "@/components/ui/ImageUploadZone";
+import DeliveryDocumentFields, {
+  DeliveryFormState,
+  deliveryFormFromApi,
+  deliveryFormToPayload,
+  emptyDeliveryForm,
+} from "@/components/invoices/DeliveryDocumentFields";
 
 export default function FinancePage() {
   const [activeTab, setActiveTab] = useState<"rial" | "gold" | "deposit">("rial");
@@ -251,12 +257,19 @@ export default function FinancePage() {
     }
   };
 
-  // ثبت تحویل حضوری برداشت طلا
-  const handleCompleteGoldWithdrawal = async (request: WithdrawalRequest) => {
+  // ثبت تحویل حضوری برداشت طلا (با مشخصات سند تحویل)
+  const handleCompleteGoldWithdrawal = async (
+    request: WithdrawalRequest,
+    deliveryPayload?: ReturnType<typeof deliveryFormToPayload>
+  ) => {
     setIsProcessing(request.id);
     try {
-      await adminWalletAPI.completeGoldWithdrawal(request.id);
-      toast.success("تحویل طلا با موفقیت ثبت شد");
+      const result = await adminWalletAPI.completeGoldWithdrawal(
+        request.id,
+        deliveryPayload
+      );
+      toast.success(result.message || "تحویل طلا با موفقیت ثبت شد");
+      setSelectedRequest(result.withdrawal_request);
       setIsDetailModalOpen(false);
       await fetchRequests();
     } catch (error: any) {
@@ -264,6 +277,22 @@ export default function FinancePage() {
       toast.error(error.response?.data?.error || "خطا در ثبت تحویل");
     } finally {
       setIsProcessing(null);
+    }
+  };
+
+  const handleDownloadGoldDeliveryInvoice = async (request: WithdrawalRequest) => {
+    try {
+      const blob = await adminWalletAPI.downloadGoldWithdrawalInvoice(request.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${request.delivery_invoice_number || request.request_code || `gold-${request.id}`}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "خطا در دانلود فاکتور تحویل");
     }
   };
 
@@ -756,6 +785,7 @@ export default function FinancePage() {
               onReject={handleReject}
               onCompleteRial={handleCompleteRialWithdrawal}
               onCompleteGold={handleCompleteGoldWithdrawal}
+              onDownloadGoldInvoice={handleDownloadGoldDeliveryInvoice}
               receiptFile={receiptFile}
               setReceiptFile={setReceiptFile}
               receiptPreviewUrl={receiptPreviewUrl}
@@ -1032,6 +1062,7 @@ function WithdrawalDetailModal({
   onReject,
   onCompleteRial,
   onCompleteGold,
+  onDownloadGoldInvoice,
   receiptFile,
   setReceiptFile,
   receiptPreviewUrl,
@@ -1050,7 +1081,11 @@ function WithdrawalDetailModal({
   onApprove: (request: WithdrawalRequest) => void;
   onReject: (request: WithdrawalRequest) => void;
   onCompleteRial: (request: WithdrawalRequest) => void;
-  onCompleteGold: (request: WithdrawalRequest) => void;
+  onCompleteGold: (
+    request: WithdrawalRequest,
+    delivery?: ReturnType<typeof deliveryFormToPayload>
+  ) => void;
+  onDownloadGoldInvoice: (request: WithdrawalRequest) => void;
   receiptFile: File | null;
   setReceiptFile: (file: File | null) => void;
   receiptPreviewUrl: string | null;
@@ -1062,6 +1097,14 @@ function WithdrawalDetailModal({
   rejectNote: string;
   setRejectNote: (note: string) => void;
 }) {
+  const [goldDelivery, setGoldDelivery] = useState<DeliveryFormState>(() => emptyDeliveryForm());
+
+  useEffect(() => {
+    if (isOpen && request.withdrawal_type === "GOLD") {
+      setGoldDelivery(deliveryFormFromApi(request));
+    }
+  }, [isOpen, request]);
+
   if (!isOpen) return null;
 
   return (
@@ -1225,6 +1268,95 @@ function WithdrawalDetailModal({
                   <p className="text-sm text-white whitespace-pre-line leading-relaxed">
                     {request.gold_pickup_address}
                   </p>
+                </div>
+              </div>
+            )}
+
+            {/* مشخصات تحویل فیزیکی — قبل از ثبت */}
+            {request.withdrawal_type === "GOLD" && request.status === "APPROVED" && (
+              <DeliveryDocumentFields
+                value={goldDelivery}
+                onChange={setGoldDelivery}
+                variant="dark"
+                title="مشخصات تحویل فیزیکی (قبل از ثبت)"
+              />
+            )}
+
+            {/* مشخصات تحویل پس از تکمیل */}
+            {request.withdrawal_type === "GOLD" &&
+              request.status === "COMPLETED" &&
+              (request.has_delivery_details || request.delivery_invoice_number) && (
+              <div>
+                <h4 className="text-sm font-bold text-slate-400 mb-4 flex items-center gap-2">
+                  <FileText size={16} />
+                  سند تحویل طلا
+                </h4>
+                <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2 text-sm text-slate-200">
+                  {request.delivery_invoice_number && (
+                    <p>
+                      شماره فاکتور تحویل:{" "}
+                      <strong className="font-mono dir-ltr">
+                        {toPersianDigits(request.delivery_invoice_number)}
+                      </strong>
+                    </p>
+                  )}
+                  {request.has_delivery_details && (
+                    <>
+                      <p>
+                        عیار واقعی:{" "}
+                        <strong>
+                          {request.delivery_actual_karat != null
+                            ? toPersianDigits(String(request.delivery_actual_karat))
+                            : "—"}
+                        </strong>
+                      </p>
+                      <p>
+                        وزن فیزیکی:{" "}
+                        <strong>
+                          {request.delivery_physical_weight != null
+                            ? `${toPersianDigits(Number(request.delivery_physical_weight).toFixed(3))} گرم`
+                            : "—"}
+                        </strong>
+                      </p>
+                      <p>
+                        ریگیری/پاکت:{" "}
+                        <strong>
+                          {request.delivery_packet_code
+                            ? toPersianDigits(request.delivery_packet_code)
+                            : "—"}
+                        </strong>
+                        {request.delivery_seri ? ` / سری ${request.delivery_seri}` : ""}
+                      </p>
+                      <p>
+                        آزمایشگاه: <strong>{request.delivery_lab_name || "—"}</strong>
+                      </p>
+                      <p>
+                        مابه‌التفاوت:{" "}
+                        <strong>
+                          {toPersianDigits(
+                            Number(request.delivery_difference_rial || 0).toLocaleString()
+                          )}{" "}
+                          ریال
+                        </strong>
+                        {request.delivery_difference_method_display
+                          ? ` (${request.delivery_difference_method_display})`
+                          : ""}
+                      </p>
+                      {request.delivery_notes ? (
+                        <p>
+                          توضیحات: <strong>{request.delivery_notes}</strong>
+                        </p>
+                      ) : null}
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onDownloadGoldInvoice(request)}
+                    className="mt-2 inline-flex items-center gap-2 px-3 py-2 bg-blue-600/80 hover:bg-blue-600 rounded-lg text-xs font-bold"
+                  >
+                    <Download size={14} />
+                    دانلود فاکتور تحویل
+                  </button>
                 </div>
               </div>
             )}
@@ -1414,7 +1546,7 @@ function WithdrawalDetailModal({
           <div className="p-6 border-t border-slate-700 flex justify-end gap-3 bg-slate-900">
             {request.withdrawal_type === 'GOLD' && request.status === 'APPROVED' && (
               <button
-                onClick={() => onCompleteGold(request)}
+                onClick={() => onCompleteGold(request, deliveryFormToPayload(goldDelivery))}
                 disabled={isLoading}
                 className="px-4 py-2 bg-gold-500 hover:bg-gold-600 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
               >
@@ -1429,6 +1561,18 @@ function WithdrawalDetailModal({
                     ثبت تحویل حضوری
                   </>
                 )}
+              </button>
+            )}
+            {request.withdrawal_type === "GOLD" &&
+              request.status === "COMPLETED" &&
+              (request.has_delivery_details || request.delivery_invoice_number) && (
+              <button
+                type="button"
+                onClick={() => onDownloadGoldInvoice(request)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+              >
+                <Download size={16} />
+                دانلود فاکتور تحویل
               </button>
             )}
             <button

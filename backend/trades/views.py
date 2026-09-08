@@ -38,6 +38,11 @@ except ImportError:
     WEASYPRINT_AVAILABLE = False
 
 
+def _extract_delivery_payload(data) -> dict | None:
+    from .delivery_fields import extract_delivery_payload
+    return extract_delivery_payload(data)
+
+
 # ==================== User Endpoints ====================
 
 @api_view(['GET'])
@@ -424,6 +429,8 @@ def download_invoice_pdf(request, trade_id):
                 else ''
             ),
         }
+        from .delivery_fields import delivery_context_for_invoice
+        context.update(delivery_context_for_invoice(trade, to_persian=to_persian_digits))
         
         # رندر کردن template
         try:
@@ -1129,6 +1136,7 @@ def admin_manual_trades(request):
             delivery_status=request.data.get('delivery_status') or Trade.DELIVERY_NA,
             admin_note=request.data.get('admin_note') or '',
             settlement_note=request.data.get('settlement_note') or '',
+            delivery_payload=_extract_delivery_payload(request.data),
             created_by=request.user,
         )
     except CustomUser.DoesNotExist:
@@ -1158,6 +1166,17 @@ def admin_update_manual_settlement(request, trade_id):
             delivery_status=request.data.get('delivery_status'),
             settlement_note=request.data.get('settlement_note'),
             admin_note=request.data.get('admin_note'),
+            amount=(
+                Decimal(str(request.data.get('amount')))
+                if request.data.get('amount') is not None
+                else None
+            ),
+            unit_price=(
+                Decimal(str(request.data.get('unit_price') or request.data.get('price')))
+                if request.data.get('unit_price') is not None or request.data.get('price') is not None
+                else None
+            ),
+            delivery_payload=_extract_delivery_payload(request.data),
             created_by=request.user,
             confirm_delivery=bool(request.data.get('confirm_delivery')),
         )

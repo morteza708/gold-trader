@@ -84,9 +84,19 @@ class WithdrawalRequestSerializer(serializers.ModelSerializer):
             'bank_card', 'bank_card_id', 'receipt_image', 'admin_note',
             'user_info', 'created_at', 'created_at_jalali', 'completed_at',
             'completed_at_jalali', 'updated_at', 'gold_pickup_address',
-            'deposit_receipts_info', 'paid_amount', 'remaining_amount', 'is_fully_paid'
+            'deposit_receipts_info', 'paid_amount', 'remaining_amount', 'is_fully_paid',
+            'delivery_actual_karat', 'delivery_physical_weight',
+            'delivery_packet_code', 'delivery_seri', 'delivery_lab_name',
+            'delivery_notes', 'delivery_difference_rial', 'delivery_difference_method',
+            'delivery_invoice_number',
         ]
-        read_only_fields = ['id', 'status', 'request_code', 'created_at', 'updated_at', 'completed_at']
+        read_only_fields = ['id', 'status', 'request_code', 'created_at', 'updated_at', 'completed_at', 'delivery_invoice_number']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        from trades.delivery_fields import delivery_fields_to_dict
+        data.update(delivery_fields_to_dict(instance))
+        return data
     
     def get_user_info(self, obj):
         """اطلاعات کاربر"""

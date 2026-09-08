@@ -1,6 +1,7 @@
 from django.db import models, IntegrityError, transaction
 from decimal import Decimal
 from accounts.models import CustomUser
+from trades.delivery_fields import GoldDeliveryFieldsMixin
 
 
 class Wallet(models.Model):
@@ -133,7 +134,7 @@ class BankCard(models.Model):
         return f"{self.user.phone_number} - {self.bank_name} - {self.card_number[-4:]}"
 
 
-class WithdrawalRequest(models.Model):
+class WithdrawalRequest(GoldDeliveryFieldsMixin, models.Model):
     """درخواست‌های برداشت (وجه یا طلا)"""
     WITHDRAWAL_TYPE_CHOICES = [
         ('RIAL', 'برداشت وجه ریالی'),
@@ -197,6 +198,15 @@ class WithdrawalRequest(models.Model):
         blank=True,
         verbose_name='یادداشت مدیر',
         help_text='یادداشت مدیر در مورد این درخواست'
+    )
+    delivery_invoice_number = models.CharField(
+        max_length=24,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='شماره فاکتور تحویل طلا',
+        help_text='فقط برای برداشت طلا پس از تحویل',
     )
     created_at = models.DateTimeField(
         auto_now_add=True,

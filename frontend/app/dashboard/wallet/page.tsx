@@ -8,7 +8,7 @@ import {
   CreditCard, ArrowUpCircle, ArrowDownCircle, Plus, 
   Wallet as WalletIcon, History, Copy, CheckCircle2, Trash2, Building2,
   Calendar as CalendarIcon, UploadCloud, X, AlertTriangle, RefreshCw, Coins, Eye,
-  Clock
+  Clock, Download
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -20,7 +20,7 @@ import ImageCompressHelp from "@/components/ui/ImageCompressHelp";
 import ImageUploadZone from "@/components/ui/ImageUploadZone";
 import { formatNumber, toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
 import { validateImageFile } from "@/lib/utils/imageUpload";
-import { walletAPI, depositAccountsAPI, Wallet, BankCard, WithdrawalRequest, DepositRequest, DepositReceipt, DepositAccount } from "@/lib/api/auth";
+import { walletAPI, depositAccountsAPI, Wallet, BankCard, WithdrawalRequest, DepositRequest, DepositReceipt, DepositAccount, walletUserAPI } from "@/lib/api/auth";
 import { tradesAPI, PendingPurchase } from "@/lib/api/trades";
 import { useAuth } from "@/contexts/AuthContext";
 import { useVisibilityPolling } from "@/hooks/useVisibilityPolling";
@@ -385,6 +385,22 @@ function WalletContent() {
     } catch (error: any) {
       console.error('Error deleting card:', error);
       toast.error("خطا در حذف کارت بانکی");
+    }
+  };
+
+  const handleDownloadGoldDeliveryInvoice = async (request: WithdrawalRequest) => {
+    try {
+      const blob = await walletUserAPI.downloadGoldWithdrawalInvoice(request.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${request.delivery_invoice_number || request.request_code || `gold-${request.id}`}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "خطا در دانلود فاکتور تحویل");
     }
   };
 
@@ -1296,6 +1312,70 @@ function WalletContent() {
                                                <div className="mt-2 pt-2 border-t border-gray-200">
                                                   <p className="text-xs text-gray-400 mb-1">آدرس مراجعه حضوری:</p>
                                                   <p className="text-sm font-bold text-gray-800 whitespace-pre-line">{request.gold_pickup_address}</p>
+                                               </div>
+                                            )}
+
+                                            {request.withdrawal_type === 'GOLD' &&
+                                              request.status === 'COMPLETED' &&
+                                              (request.has_delivery_details || request.delivery_invoice_number) && (
+                                               <div className="mt-2 pt-2 border-t border-gray-200 space-y-2">
+                                                  {request.delivery_invoice_number && (
+                                                    <div className="flex justify-between text-sm">
+                                                      <span className="text-gray-400">فاکتور تحویل:</span>
+                                                      <span className="font-mono text-gray-700 dir-ltr">
+                                                        {toPersianDigits(request.delivery_invoice_number)}
+                                                      </span>
+                                                    </div>
+                                                  )}
+                                                  {request.has_delivery_details && (
+                                                    <>
+                                                      {request.delivery_actual_karat != null && (
+                                                        <div className="flex justify-between text-sm">
+                                                          <span className="text-gray-400">عیار واقعی:</span>
+                                                          <span className="font-bold text-gray-800">
+                                                            {toPersianDigits(String(request.delivery_actual_karat))}
+                                                          </span>
+                                                        </div>
+                                                      )}
+                                                      {request.delivery_physical_weight != null && (
+                                                        <div className="flex justify-between text-sm">
+                                                          <span className="text-gray-400">وزن فیزیکی:</span>
+                                                          <span className="font-bold text-gray-800">
+                                                            {toPersianDigits(Number(request.delivery_physical_weight).toFixed(3))} گرم
+                                                          </span>
+                                                        </div>
+                                                      )}
+                                                      {(request.delivery_packet_code || request.delivery_seri) && (
+                                                        <div className="flex justify-between text-sm">
+                                                          <span className="text-gray-400">ریگیری/سری:</span>
+                                                          <span className="font-bold text-gray-800 dir-ltr">
+                                                            {[request.delivery_packet_code, request.delivery_seri]
+                                                              .filter(Boolean)
+                                                              .join(" / ")}
+                                                          </span>
+                                                        </div>
+                                                      )}
+                                                      {Number(request.delivery_difference_rial || 0) !== 0 && (
+                                                        <div className="flex justify-between text-sm">
+                                                          <span className="text-gray-400">مابه‌التفاوت:</span>
+                                                          <span className="font-bold text-gray-800">
+                                                            {toPersianDigits(Number(request.delivery_difference_rial || 0).toLocaleString())} ریال
+                                                            {request.delivery_difference_method_display
+                                                              ? ` (${request.delivery_difference_method_display})`
+                                                              : ""}
+                                                          </span>
+                                                        </div>
+                                                      )}
+                                                    </>
+                                                  )}
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleDownloadGoldDeliveryInvoice(request)}
+                                                    className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700"
+                                                  >
+                                                    <Download size={14} />
+                                                    دانلود فاکتور تحویل
+                                                  </button>
                                                </div>
                                             )}
                                             

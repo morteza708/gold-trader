@@ -190,6 +190,66 @@ export default function InvoiceModal({ data, isOpen, onClose, isAdmin = false }:
               </tbody>
             </table>
 
+            {data.has_delivery_details && (
+              <div className="mb-8 border border-gray-300 rounded-xl p-4 text-sm space-y-2">
+                <p className="font-black text-gray-800 border-b border-gray-200 pb-2 mb-2">
+                  مشخصات تحویل فیزیکی
+                </p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <p>
+                    عیار واقعی:{" "}
+                    <strong>
+                      {data.delivery_actual_karat != null
+                        ? toPersianDigits(String(data.delivery_actual_karat))
+                        : "—"}
+                    </strong>
+                  </p>
+                  <p>
+                    وزن فیزیکی:{" "}
+                    <strong>
+                      {data.delivery_physical_weight != null
+                        ? toPersianDigits(Number(data.delivery_physical_weight).toFixed(3))
+                        : "—"}
+                    </strong>{" "}
+                    گرم
+                  </p>
+                  <p>
+                    کد ریگیری/پاکت:{" "}
+                    <strong>
+                      {data.delivery_packet_code
+                        ? toPersianDigits(data.delivery_packet_code)
+                        : "—"}
+                    </strong>
+                  </p>
+                  <p>
+                    سری: <strong>{data.delivery_seri || "—"}</strong>
+                  </p>
+                  <p className="col-span-2">
+                    آزمایشگاه: <strong>{data.delivery_lab_name || "—"}</strong>
+                  </p>
+                  <p>
+                    مابه‌التفاوت:{" "}
+                    <strong>
+                      {toPersianDigits(
+                        Number(data.delivery_difference_rial || 0).toLocaleString()
+                      )}
+                    </strong>{" "}
+                    ریال
+                  </p>
+                  <p>
+                    نحوه تسویه:{" "}
+                    <strong>{data.delivery_difference_method_display || "—"}</strong>
+                  </p>
+                  <p className="col-span-2">
+                    توضیحات: <strong>{data.delivery_notes || "—"}</strong>
+                  </p>
+                </div>
+                <p className="text-[10px] text-gray-500 pt-1">
+                  وزن دفتر بر اساس معادل عیار ۷۵۰ است؛ موارد بالا مربوط به تحویل فیزیکی‌اند.
+                </p>
+              </div>
+            )}
+
             <div className="flex justify-end mb-12">
               <div className="bg-gray-50 p-4 rounded-xl w-1/2 print:bg-gray-50 print:print-color-adjust-exact">
                 <div className="flex justify-between mb-2 text-sm">

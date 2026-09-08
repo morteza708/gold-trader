@@ -855,6 +855,21 @@ def admin_complete_gold_withdrawal(request, request_id):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            from trades.delivery_fields import (
+                apply_delivery_fields,
+                extract_delivery_payload,
+                normalize_delivery_payload,
+            )
+            from .gold_delivery_invoice import generate_gold_delivery_invoice_number
+
+            delivery_payload = extract_delivery_payload(request.data)
+            if delivery_payload is not None:
+                try:
+                    normalized = normalize_delivery_payload(delivery_payload)
+                except ValueError as e:
+                    return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                apply_delivery_fields(withdrawal_request, normalized, save=False)
+
             from treasury.services import on_gold_delivery_completed, TreasuryError
             try:
                 on_gold_delivery_completed(
@@ -866,9 +881,19 @@ def admin_complete_gold_withdrawal(request, request_id):
             except TreasuryError as e:
                 return Response({'error': e.message}, status=status.HTTP_400_BAD_REQUEST)
             
+            if not withdrawal_request.delivery_invoice_number:
+                withdrawal_request.delivery_invoice_number = generate_gold_delivery_invoice_number()
+
             withdrawal_request.status = 'COMPLETED'
             withdrawal_request.completed_at = timezone.now()
-            withdrawal_request.save(update_fields=['status', 'completed_at'])
+            update_fields = [
+                'status', 'completed_at', 'delivery_invoice_number',
+                'delivery_actual_karat', 'delivery_physical_weight',
+                'delivery_packet_code', 'delivery_seri', 'delivery_lab_name',
+                'delivery_notes', 'delivery_difference_rial',
+                'delivery_difference_method', 'updated_at',
+            ]
+            withdrawal_request.save(update_fields=update_fields)
         
         # ارسال پیامک به کاربر
         account_code = withdrawal_request.user.customer_profile.account_code if hasattr(withdrawal_request.user, 'customer_profile') else 'N/A'
@@ -917,6 +942,48 @@ def admin_complete_gold_withdrawal(request, request_id):
             {'error': f'خطای سرور: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+def _serve_gold_withdrawal_invoice(withdrawal_request, *, filename_prefix='فاکتور-تحویل'):
+    from django.http import HttpResponse
+    from .gold_delivery_invoice import render_gold_delivery_pdf_bytes
+
+    if withdrawal_request.withdrawal_type != 'GOLD':
+        return Response({'error': 'فقط برای برداشت طلا فاکتور تحویل وجود دارد'}, status=status.HTTP_400_BAD_REQUEST)
+    if withdrawal_request.status != 'COMPLETED':
+        return Response({'error': 'فاکتور پس از تکمیل تحویل در دسترس است'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        pdf_data = render_gold_delivery_pdf_bytes(withdrawal_request)
+    except Exception as e:
+        logger.error(f"خطا در تولید PDF تحویل طلا: {e}", exc_info=True)
+        return Response({'error': 'خطا در تولید فاکتور تحویل'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    number = withdrawal_request.delivery_invoice_number or withdrawal_request.request_code
+    response = HttpResponse(pdf_data, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{filename_prefix}-{number}.pdf"'
+    return response
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_gold_withdrawal_invoice(request, request_id):
+    if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
+        return Response({'error': 'شما دسترسی به این بخش ندارید'}, status=status.HTTP_403_FORBIDDEN)
+    try:
+        wr = WithdrawalRequest.objects.select_related('user').get(id=request_id)
+    except WithdrawalRequest.DoesNotExist:
+        return Response({'error': 'درخواست یافت نشد'}, status=status.HTTP_404_NOT_FOUND)
+    return _serve_gold_withdrawal_invoice(wr)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_gold_withdrawal_invoice(request, request_id):
+    try:
+        wr = WithdrawalRequest.objects.select_related('user').get(id=request_id, user=request.user)
+    except WithdrawalRequest.DoesNotExist:
+        return Response({'error': 'درخواست یافت نشد'}, status=status.HTTP_404_NOT_FOUND)
+    return _serve_gold_withdrawal_invoice(wr)
 
 
 @api_view(['POST'])

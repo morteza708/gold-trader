@@ -1,6 +1,7 @@
 from django.db import models
 from accounts.models import CustomUser
 from django_jalali.db import models as jmodels
+from .delivery_fields import GoldDeliveryFieldsMixin
 
 
 class GoldPrice(models.Model):
@@ -270,7 +271,7 @@ class GoldPrice(models.Model):
         }
 
 
-class Trade(models.Model):
+class Trade(GoldDeliveryFieldsMixin, models.Model):
     """معاملات خرید و فروش طلا"""
     TRADE_TYPE_CHOICES = [
         ('BUY', 'خرید'),

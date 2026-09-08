@@ -20,6 +20,12 @@ import {
 } from "@/lib/api/trades";
 import { toPersianDigits, toEnglishDigits, formatNumber } from "@/lib/utils/numberUtils";
 import InvoiceModal from "@/components/dashboard/InvoiceModal";
+import DeliveryDocumentFields, {
+  DeliveryFormState,
+  deliveryFormFromApi,
+  deliveryFormToPayload,
+  emptyDeliveryForm,
+} from "@/components/invoices/DeliveryDocumentFields";
 
 function displayName(u: Pick<ManualCustomer, "full_name" | "first_name" | "last_name">) {
   if (u.full_name?.trim()) return u.full_name.trim();
@@ -86,6 +92,12 @@ export default function ManualInvoicesPage() {
   const [deliveryStatus, setDeliveryStatus] = useState("NOT_APPLICABLE");
   const [adminNote, setAdminNote] = useState("");
   const [settlementNote, setSettlementNote] = useState("");
+  const [createDelivery, setCreateDelivery] = useState<DeliveryFormState>(() => emptyDeliveryForm());
+  const [editTrade, setEditTrade] = useState<Trade | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [editDelivery, setEditDelivery] = useState<DeliveryFormState>(() => emptyDeliveryForm());
+  const [editSaving, setEditSaving] = useState(false);
 
   const [invoiceTrade, setInvoiceTrade] = useState<Trade | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
@@ -205,11 +217,13 @@ export default function ManualInvoicesPage() {
         delivery_status: deliveryStatus,
         admin_note: adminNote,
         settlement_note: settlementNote,
+        ...deliveryFormToPayload(createDelivery),
       });
       toast.success(result.message);
       setAmount("");
       setAdminNote("");
       setSettlementNote("");
+      setCreateDelivery(emptyDeliveryForm());
       applyFinalPrice(tradeType, priceInfo);
       await loadTrades();
       setInvoiceTrade(result.trade);
@@ -277,6 +291,54 @@ export default function ManualInvoicesPage() {
       toast.error(err.response?.data?.error || "خطا در به‌روزرسانی");
     } finally {
       setConfirming(false);
+    }
+  };
+
+  const canEditCore = (trade: Trade) =>
+    trade.settlement_mode === "OFFPLATFORM" &&
+    !trade.payment_effect_applied &&
+    !trade.delivery_effect_applied;
+
+  const canEditDeliveryDoc = (trade: Trade) => !trade.delivery_effect_applied;
+
+  const openEditTrade = (trade: Trade) => {
+    setEditTrade(trade);
+    setEditAmount(formatNumber(String(trade.amount)));
+    setEditPrice(formatNumber(String(trade.price)));
+    setEditDelivery(deliveryFormFromApi(trade));
+  };
+
+  const handleSaveEditTrade = async () => {
+    if (!editTrade) return;
+    if (!canEditDeliveryDoc(editTrade) && !canEditCore(editTrade)) {
+      toast.error("این فاکتور دیگر قابل ویرایش نیست");
+      return;
+    }
+
+    const patch: Parameters<typeof adminTradesAPI.updateManualSettlement>[1] = {
+      ...deliveryFormToPayload(editDelivery),
+    };
+
+    if (canEditCore(editTrade)) {
+      const amt = Number(toEnglishDigits(editAmount).replace(/,/g, ""));
+      const price = Number(toEnglishDigits(editPrice).replace(/,/g, ""));
+      if (!amt || amt <= 0) return toast.error("مقدار گرم معتبر نیست");
+      if (!price || price <= 0) return toast.error("قیمت واحد معتبر نیست");
+      patch.amount = amt;
+      patch.unit_price = price;
+    }
+
+    setEditSaving(true);
+    try {
+      const result = await adminTradesAPI.updateManualSettlement(editTrade.id, patch);
+      toast.success(result.message || "فاکتور به‌روزرسانی شد");
+      setTrades((prev) => prev.map((t) => (t.id === editTrade.id ? result.trade : t)));
+      setEditTrade(null);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      toast.error(err.response?.data?.error || "خطا در ذخیره ویرایش");
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -668,6 +730,12 @@ export default function ManualInvoicesPage() {
             />
           </div>
 
+          <DeliveryDocumentFields
+            value={createDelivery}
+            onChange={setCreateDelivery}
+            variant="dark"
+          />
+
           <button
             type="button"
             onClick={handleCreate}
@@ -757,6 +825,15 @@ export default function ManualInvoicesPage() {
                       <option value="PENDING">در انتظار تحویل</option>
                       <option value="DELIVERED">تحویل شد</option>
                     </select>
+                    {(canEditCore(t) || canEditDeliveryDoc(t)) && (
+                      <button
+                        type="button"
+                        onClick={() => openEditTrade(t)}
+                        className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold"
+                      >
+                        ویرایش
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setInvoiceTrade(t)}
@@ -884,6 +961,111 @@ export default function ManualInvoicesPage() {
                   ) : (
                     "تأیید و اعمال"
                   )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {editTrade && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !editSaving && setEditTrade(null)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-slate-800 w-full max-w-lg rounded-3xl border border-slate-700 shadow-2xl relative z-10 max-h-[90vh] overflow-hidden flex flex-col"
+            >
+              <div className="p-5 border-b border-slate-700 flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-black text-white">ویرایش فاکتور دستی</h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {toPersianDigits(editTrade.invoice_number)} —{" "}
+                    {editTrade.user_name || toPersianDigits(editTrade.user_mobile)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={editSaving}
+                  onClick={() => setEditTrade(null)}
+                  className="text-slate-400 hover:text-white text-sm"
+                >
+                  بستن
+                </button>
+              </div>
+
+              <div className="p-5 overflow-y-auto space-y-4">
+                {canEditCore(editTrade) ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">وزن (گرم)</label>
+                      <input
+                        value={editAmount}
+                        onChange={(e) => setEditAmount(formatNumber(toEnglishDigits(e.target.value)))}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm dir-ltr text-right"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">قیمت واحد</label>
+                      <input
+                        value={editPrice}
+                        onChange={(e) => setEditPrice(formatNumber(toEnglishDigits(e.target.value)))}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm dir-ltr text-right"
+                      />
+                    </div>
+                    <p className="col-span-2 text-[11px] text-amber-400/90 leading-5">
+                      ویرایش وزن/فی فقط قبل از ثبت پرداخت و تحویل، و فقط برای تسویه خارج از سامانه مجاز است.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 leading-5">
+                    وزن دفتر: {toPersianDigits(Number(editTrade.amount).toFixed(3))} گرم — قیمت:{" "}
+                    {toPersianDigits(Number(editTrade.price).toLocaleString())} ریال
+                    {editTrade.settlement_mode === "WALLET"
+                      ? " (تسویه کیف؛ وزن/فی قابل ویرایش نیست)"
+                      : ""}
+                  </p>
+                )}
+
+                {canEditDeliveryDoc(editTrade) ? (
+                  <DeliveryDocumentFields
+                    value={editDelivery}
+                    onChange={setEditDelivery}
+                    variant="dark"
+                  />
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    پس از ثبت تحویل، مشخصات سند تحویل قفل شده است.
+                  </p>
+                )}
+              </div>
+
+              <div className="p-5 border-t border-slate-700 flex gap-3">
+                <button
+                  type="button"
+                  disabled={editSaving}
+                  onClick={() => setEditTrade(null)}
+                  className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-xl text-sm font-bold"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="button"
+                  disabled={editSaving || !canEditDeliveryDoc(editTrade)}
+                  onClick={handleSaveEditTrade}
+                  className="flex-1 px-4 py-2.5 bg-gold-500 hover:bg-gold-600 disabled:opacity-50 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                >
+                  {editSaving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
+                  ذخیره
                 </button>
               </div>
             </motion.div>

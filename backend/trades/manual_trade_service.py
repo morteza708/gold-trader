@@ -15,6 +15,10 @@ from treasury.services import TreasuryError
 
 from .models import Trade, GoldPrice
 from .services import TradeService
+from .delivery_fields import (
+    apply_delivery_fields,
+    normalize_delivery_payload,
+)
 
 ZERO = Decimal('0')
 
@@ -137,6 +141,7 @@ def create_manual_trade(
     delivery_status: str,
     admin_note: str = '',
     settlement_note: str = '',
+    delivery_payload: dict | None = None,
     created_by=None,
 ) -> Trade:
     trade_type = trade_type.upper()
@@ -220,6 +225,13 @@ def create_manual_trade(
         settlement_note=settlement_note or '',
         created_by=created_by,
     )
+
+    if delivery_payload:
+        try:
+            normalized = normalize_delivery_payload(delivery_payload)
+        except ValueError as e:
+            raise ManualTradeError(str(e)) from e
+        apply_delivery_fields(trade, normalized, save=True)
 
     if settlement_mode == Trade.SETTLEMENT_WALLET:
         if trade_type == 'BUY':
@@ -309,6 +321,9 @@ def update_manual_settlement(
     delivery_status: str | None = None,
     settlement_note: str | None = None,
     admin_note: str | None = None,
+    amount: Decimal | None = None,
+    unit_price: Decimal | None = None,
+    delivery_payload: dict | None = None,
     created_by=None,
     confirm_delivery: bool = False,
 ) -> Trade:
@@ -320,7 +335,82 @@ def update_manual_settlement(
     payment_applied = treasury_services.manual_payment_effect_applied(trade.id)
     delivery_applied = treasury_services.manual_delivery_effect_applied(trade.id)
 
+    if delivery_applied and delivery_payload:
+        raise ManualTradeError(
+            'پس از ثبت تحویل، مشخصات سند تحویل قابل ویرایش نیست'
+        )
+
     updates = []
+
+    # ویرایش وزن/فی فقط قبل از پرداخت و تحویل خزانه، و فقط برای تسویه خارج از سامانه
+    wants_core_edit = amount is not None or unit_price is not None
+    if wants_core_edit:
+        if delivery_applied:
+            raise ManualTradeError('پس از ثبت تحویل، وزن و مبلغ قابل ویرایش نیست')
+        if payment_applied:
+            raise ManualTradeError(
+                'پس از ثبت پرداخت خارج از سامانه، وزن و مبلغ قابل ویرایش نیست'
+            )
+        if trade.settlement_mode == Trade.SETTLEMENT_WALLET:
+            raise ManualTradeError(
+                'ویرایش وزن/مبلغ برای فاکتور با تسویه کیف پول پس از صدور ممکن نیست'
+            )
+
+        old_amount = trade.amount
+        old_total = trade.total
+        new_amount = _q3(amount) if amount is not None else trade.amount
+        new_price = _q0(unit_price) if unit_price is not None else trade.price
+        if new_amount <= ZERO:
+            raise ManualTradeError('مقدار باید بیشتر از صفر باشد')
+        if new_price <= ZERO:
+            raise ManualTradeError('قیمت واحد باید بیشتر از صفر باشد')
+        new_total = _q0(new_amount * new_price)
+
+        price_obj = GoldPrice.get_current_price()
+        if price_obj:
+            if trade.trade_type == 'BUY':
+                new_margin = _q0(price_obj.buy_margin * new_amount)
+            else:
+                new_margin = _q0(price_obj.sell_margin * new_amount)
+        else:
+            new_margin = trade.margin_profit
+
+        wallet = Wallet.objects.select_for_update().get(user=trade.user)
+        delta_gold = new_amount - old_amount
+
+        if trade.settlement_mode == Trade.SETTLEMENT_OFFPLATFORM:
+            if trade.trade_type == 'BUY':
+                # طلا قبلاً به کیف اضافه شده؛ اختلاف را اعمال کن
+                if delta_gold > ZERO:
+                    try:
+                        treasury_services.assert_user_buy_allowed()
+                    except TreasuryError as e:
+                        raise ManualTradeError(e.message) from e
+                if wallet.gold_balance + delta_gold < ZERO:
+                    raise ManualTradeError('موجودی طلای کیف برای کاهش وزن فاکتور کافی نیست')
+                wallet.gold_balance += delta_gold
+                wallet.save(update_fields=['gold_balance'])
+            else:
+                # فروش: طلا از کیف کم شده؛ افزایش وزن یعنی طلای بیشتر از کیف
+                if delta_gold > ZERO:
+                    if wallet.get_available_gold_balance() < delta_gold:
+                        raise ManualTradeError('موجودی طلای کیف برای افزایش وزن فروش کافی نیست')
+                    wallet.gold_balance -= delta_gold
+                elif delta_gold < ZERO:
+                    wallet.gold_balance -= delta_gold  # delta منفی → اضافه به کیف
+                wallet.save(update_fields=['gold_balance'])
+
+        trade.amount = new_amount
+        trade.price = new_price
+        trade.total = new_total
+        trade.margin_profit = new_margin
+        updates.extend(['amount', 'price', 'total', 'margin_profit'])
+
+        # اگر بخواهیم موجودی تعهد خزانه با وزن جدید هم‌خوان باشد:
+        # on_manual_* هنگام create زده شده؛ برای سادگی phase1 فقط کیف را اصلاح می‌کنیم
+        # و از تغییر دوباره ژورنال خزانه خودداری می‌کنیم تا اثر دوگانه نسازد.
+        _ = old_total  # reserved for future rial journal adjust
+
     if payment_status is not None:
         valid = {c[0] for c in Trade.PAYMENT_STATUS_CHOICES}
         if payment_status not in valid:
@@ -355,9 +445,23 @@ def update_manual_settlement(
     if admin_note is not None:
         trade.admin_note = admin_note
         updates.append('admin_note')
+
+    if delivery_payload is not None:
+        try:
+            normalized = normalize_delivery_payload(delivery_payload)
+        except ValueError as e:
+            raise ManualTradeError(str(e)) from e
+        updates.extend(apply_delivery_fields(trade, normalized, save=False))
+
     if updates:
-        updates.append('updated_at')
-        trade.save(update_fields=updates)
+        # unique list preserving order
+        seen = set()
+        uniq = []
+        for f in updates + ['updated_at']:
+            if f not in seen:
+                seen.add(f)
+                uniq.append(f)
+        trade.save(update_fields=uniq)
 
     _apply_settlement_financial_effects(trade, created_by=created_by)
     return trade

@@ -493,6 +493,17 @@ export interface WithdrawalRequest {
     created_at_jalali: string | null;
     link_amount: string;
   }>;
+  delivery_actual_karat?: string | number | null;
+  delivery_physical_weight?: string | number | null;
+  delivery_packet_code?: string;
+  delivery_seri?: string;
+  delivery_lab_name?: string;
+  delivery_notes?: string;
+  delivery_difference_rial?: string | number;
+  delivery_difference_method?: string;
+  delivery_difference_method_display?: string;
+  delivery_invoice_number?: string | null;
+  has_delivery_details?: boolean;
 }
 
 export interface SystemSettings {
@@ -856,10 +867,39 @@ export const adminWalletAPI = {
   },
 
   // ثبت تحویل حضوری برداشت طلا
-  completeGoldWithdrawal: async (requestId: number): Promise<{ message: string; withdrawal_request: WithdrawalRequest }> => {
+  completeGoldWithdrawal: async (
+    requestId: number,
+    data?: {
+      actual_karat?: string;
+      physical_weight?: string;
+      packet_code?: string;
+      seri?: string;
+      lab_name?: string;
+      notes?: string;
+      difference_rial?: string;
+      difference_method?: string;
+    }
+  ): Promise<{ message: string; withdrawal_request: WithdrawalRequest }> => {
     const response = await apiClient.patch<{ message: string; withdrawal_request: WithdrawalRequest }>(
-      `/admin/wallet/withdrawals/${requestId}/complete/`
+      `/admin/wallet/withdrawals/${requestId}/complete/`,
+      data || {}
     );
+    return response.data;
+  },
+
+  downloadGoldWithdrawalInvoice: async (requestId: number): Promise<Blob> => {
+    const response = await apiClient.get(`/admin/wallet/withdrawals/${requestId}/invoice/`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
+};
+
+export const walletUserAPI = {
+  downloadGoldWithdrawalInvoice: async (requestId: number): Promise<Blob> => {
+    const response = await apiClient.get(`/wallet/withdrawals/${requestId}/invoice/`, {
+      responseType: "blob",
+    });
     return response.data;
   },
 };

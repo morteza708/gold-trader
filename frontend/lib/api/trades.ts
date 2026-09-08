@@ -94,6 +94,16 @@ export interface Trade {
   created_by_name?: string | null;
   payment_effect_applied?: boolean;
   delivery_effect_applied?: boolean;
+  delivery_actual_karat?: string | number | null;
+  delivery_physical_weight?: string | number | null;
+  delivery_packet_code?: string;
+  delivery_seri?: string;
+  delivery_lab_name?: string;
+  delivery_notes?: string;
+  delivery_difference_rial?: string | number;
+  delivery_difference_method?: string;
+  delivery_difference_method_display?: string;
+  has_delivery_details?: boolean;
 }
 
 export interface ManualCustomer {
@@ -370,6 +380,14 @@ export const adminTradesAPI = {
     delivery_status: string;
     admin_note?: string;
     settlement_note?: string;
+    actual_karat?: string;
+    physical_weight?: string;
+    packet_code?: string;
+    seri?: string;
+    lab_name?: string;
+    notes?: string;
+    difference_rial?: string;
+    difference_method?: string;
   }): Promise<{ message: string; trade: Trade }> => {
     const response = await apiClient.post('/admin/trades/manual/', data);
     return response.data;
@@ -383,6 +401,16 @@ export const adminTradesAPI = {
       settlement_note?: string;
       admin_note?: string;
       confirm_delivery?: boolean;
+      amount?: number | string;
+      unit_price?: number | string;
+      actual_karat?: string;
+      physical_weight?: string;
+      packet_code?: string;
+      seri?: string;
+      lab_name?: string;
+      notes?: string;
+      difference_rial?: string;
+      difference_method?: string;
     }
   ): Promise<{ message: string; trade: Trade }> => {
     const response = await apiClient.patch(`/admin/trades/manual/${tradeId}/settlement/`, data);

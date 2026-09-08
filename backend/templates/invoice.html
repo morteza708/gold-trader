@@ -284,6 +284,35 @@
                 </tbody>
             </table>
 
+            {% if has_delivery_details %}
+            <div style="border: 1px solid #000; padding: 8px; margin-bottom: 12px; font-size: 9pt;">
+                <div style="font-weight: 900; margin-bottom: 6px; text-decoration: underline;">مشخصات تحویل فیزیکی</div>
+                <table style="width:100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 3px 0; width: 50%;">عیار واقعی: <strong>{{ delivery_actual_karat }}</strong></td>
+                        <td style="padding: 3px 0;">وزن فیزیکی: <strong>{{ delivery_physical_weight }}</strong> گرم</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 3px 0;">کد ریگیری/پاکت: <strong>{{ delivery_packet_code }}</strong></td>
+                        <td style="padding: 3px 0;">سری: <strong>{{ delivery_seri }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 3px 0;" colspan="2">آزمایشگاه: <strong>{{ delivery_lab_name }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 3px 0;">مابه‌التفاوت: <strong>{{ delivery_difference_rial }}</strong> ریال</td>
+                        <td style="padding: 3px 0;">نحوه تسویه: <strong>{{ delivery_difference_method_display }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 3px 0;" colspan="2">توضیحات: <strong>{{ delivery_notes }}</strong></td>
+                    </tr>
+                </table>
+                <div style="margin-top: 6px; font-size: 8pt; color: #444;">
+                    وزن دفتر پلتفرم بر اساس معادل عیار ۷۵۰ است؛ مشخصات بالا مربوط به تحویل فیزیکی است.
+                </div>
+            </div>
+            {% endif %}
+
             <!-- جمع کل (اصلاح شده: افزایش عرض باکس) -->
             <table class="summary-wrapper">
                 <tr>
