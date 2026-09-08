@@ -34,6 +34,8 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             'support_landline',
             'whatsapp_number',
             'telegram_username',
+            'bale_id',
+            'rubika_id',
             'support_email',
             'support_hours_enabled',
             'support_hours',
@@ -118,6 +120,12 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
 
     def validate_telegram_username(self, value):
         return support_service.normalize_telegram_username(value)
+
+    def validate_bale_id(self, value):
+        return support_service.normalize_messenger_handle(value)
+
+    def validate_rubika_id(self, value):
+        return support_service.normalize_messenger_handle(value)
 
     def validate_support_hours(self, value):
         return support_service.merge_support_hours(value)

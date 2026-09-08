@@ -34,6 +34,13 @@ export async function fetchVapidPublicKey(): Promise<{
   return response.data;
 }
 
+/** فقط وضعیت subscription محلی — بدون ساخت subscription جدید */
+export async function getLocalPushSubscription(): Promise<PushSubscription | null> {
+  if (!isPushSupported()) return null;
+  const registration = await navigator.serviceWorker.ready;
+  return registration.pushManager.getSubscription();
+}
+
 export async function subscribeToPush(): Promise<PushSubscription | null> {
   if (!isPushSupported()) return null;
 

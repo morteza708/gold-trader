@@ -504,6 +504,8 @@ export interface SystemSettings {
   support_landline?: string;
   whatsapp_number?: string;
   telegram_username?: string;
+  bale_id?: string;
+  rubika_id?: string;
   support_email?: string;
   support_hours_enabled?: boolean;
   support_hours?: Record<string, { enabled: boolean; start: string; end: string }>;
@@ -945,6 +947,8 @@ export const systemSettingsAPI = {
     support_landline?: string;
     whatsapp_number?: string;
     telegram_username?: string;
+    bale_id?: string;
+    rubika_id?: string;
     support_email?: string;
     support_hours_enabled?: boolean;
     support_hours?: Record<string, { enabled: boolean; start: string; end: string }>;

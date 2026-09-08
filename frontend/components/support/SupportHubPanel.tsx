@@ -1,23 +1,33 @@
 "use client";
 
+import type { ComponentType } from "react";
 import {
   Phone,
-  MessageCircle,
-  Send,
   Mail,
   Clock,
   Headphones,
   ExternalLink,
+  type LucideIcon,
 } from "lucide-react";
 import { SupportInfo, SupportChannelType } from "@/lib/api/support";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
+import {
+  WhatsAppIcon,
+  TelegramIcon,
+  BaleIcon,
+  RubikaIcon,
+} from "@/components/support/MessengerIcons";
 
-const CHANNEL_ICONS: Record<SupportChannelType, typeof Phone> = {
+type ChannelIcon = LucideIcon | ComponentType<{ size?: number; className?: string }>;
+
+const CHANNEL_ICONS: Record<SupportChannelType, ChannelIcon> = {
   phone: Phone,
   phone_secondary: Phone,
   landline: Phone,
-  whatsapp: MessageCircle,
-  telegram: Send,
+  whatsapp: WhatsAppIcon,
+  telegram: TelegramIcon,
+  bale: BaleIcon,
+  rubika: RubikaIcon,
   email: Mail,
 };
 
@@ -25,8 +35,10 @@ const CHANNEL_COLORS: Record<SupportChannelType, string> = {
   phone: "bg-emerald-500 hover:bg-emerald-600",
   phone_secondary: "bg-teal-500 hover:bg-teal-600",
   landline: "bg-slate-600 hover:bg-slate-700",
-  whatsapp: "bg-green-600 hover:bg-green-700",
-  telegram: "bg-sky-500 hover:bg-sky-600",
+  whatsapp: "bg-[#25D366] hover:bg-[#1ebe57]",
+  telegram: "bg-[#229ED9] hover:bg-[#1c8bbb]",
+  bale: "bg-[#00ADEF] hover:bg-[#0096d1]",
+  rubika: "bg-[#7B2D8E] hover:bg-[#6a267a]",
   email: "bg-indigo-500 hover:bg-indigo-600",
 };
 
@@ -99,7 +111,7 @@ export default function SupportHubPanel({
       {info.channels.length > 0 ? (
         <div className={`grid gap-3 ${compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}>
           {info.channels.map((channel) => {
-            const Icon = CHANNEL_ICONS[channel.type];
+            const Icon = CHANNEL_ICONS[channel.type] || Phone;
             const disabled =
               !channel.url || (isCallChannel(channel.type) && !canCall);
             return (
@@ -124,7 +136,7 @@ export default function SupportHubPanel({
               >
                 <div
                   className={`w-11 h-11 rounded-xl flex items-center justify-center text-white shrink-0 ${
-                    disabled ? "bg-gray-400" : CHANNEL_COLORS[channel.type]
+                    disabled ? "bg-gray-400" : CHANNEL_COLORS[channel.type] || "bg-slate-500"
                   }`}
                 >
                   <Icon size={20} />

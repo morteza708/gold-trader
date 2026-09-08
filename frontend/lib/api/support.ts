@@ -6,6 +6,8 @@ export type SupportChannelType =
   | 'landline'
   | 'whatsapp'
   | 'telegram'
+  | 'bale'
+  | 'rubika'
   | 'email';
 
 export interface SupportChannel {
@@ -43,6 +45,8 @@ export interface SupportSettings {
   support_landline: string;
   whatsapp_number: string;
   telegram_username: string;
+  bale_id: string;
+  rubika_id: string;
   support_email: string;
   support_hours_enabled: boolean;
   support_hours: Record<string, { enabled: boolean; start: string; end: string }>;

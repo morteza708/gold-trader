@@ -181,6 +181,45 @@ def build_telegram_url(username: str) -> str | None:
     return None
 
 
+def normalize_messenger_handle(value: str | None) -> str:
+    """یوزرنیم یا لینک کامل — خالی را '' برمی‌گرداند."""
+    if not value:
+        return ''
+    return str(value).strip()
+
+
+def build_bale_url(value: str) -> str | None:
+    value = normalize_messenger_handle(value)
+    if not value:
+        return None
+    if re.match(r'^https?://', value, re.I):
+        return value
+    handle = value.lstrip('@').strip('/')
+    if handle:
+        return f'https://ble.ir/{handle}'
+    return None
+
+
+def build_rubika_url(value: str) -> str | None:
+    value = normalize_messenger_handle(value)
+    if not value:
+        return None
+    if re.match(r'^https?://', value, re.I):
+        return value
+    handle = value.lstrip('@').strip('/')
+    if handle:
+        return f'https://rubika.ir/{handle}'
+    return None
+
+
+def display_messenger_value(value: str, url: str | None) -> str:
+    value = normalize_messenger_handle(value)
+    if re.match(r'^https?://', value, re.I):
+        return value
+    handle = value.lstrip('@')
+    return f'@{handle}' if handle else (url or '')
+
+
 def build_tel_url(phone: str) -> str | None:
     phone = normalize_phone(phone)
     if phone:
@@ -206,6 +245,8 @@ def build_public_support_info(settings, now: datetime | None = None) -> dict[str
     landline = normalize_phone(settings.support_landline)
     whatsapp = normalize_phone(settings.whatsapp_number)
     telegram = normalize_telegram_username(settings.telegram_username)
+    bale = normalize_messenger_handle(getattr(settings, 'bale_id', '') or '')
+    rubika = normalize_messenger_handle(getattr(settings, 'rubika_id', '') or '')
     email = (settings.support_email or '').strip()
 
     channels = []
@@ -245,6 +286,22 @@ def build_public_support_info(settings, now: datetime | None = None) -> dict[str
             'label': 'تلگرام',
             'value': f'@{telegram}',
             'url': tg_url,
+        })
+    bale_url = build_bale_url(bale)
+    if bale_url:
+        channels.append({
+            'type': 'bale',
+            'label': 'بله',
+            'value': display_messenger_value(bale, bale_url),
+            'url': bale_url,
+        })
+    rubika_url = build_rubika_url(rubika)
+    if rubika_url:
+        channels.append({
+            'type': 'rubika',
+            'label': 'روبیکا',
+            'value': display_messenger_value(rubika, rubika_url),
+            'url': rubika_url,
         })
     mail_url = build_mailto_url(email)
     if mail_url:

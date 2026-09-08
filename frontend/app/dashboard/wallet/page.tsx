@@ -106,30 +106,57 @@ function WalletContent() {
   const fetchWalletData = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
-      const [walletData, cardsData, withdrawalData, depositData, addressData, accountsData] = await Promise.all([
+      // هر endpoint جدا — خطای یکی بقیه را خراب نکند (مثلاً کیف پول خالی)
+      const [
+        walletResult,
+        cardsResult,
+        withdrawalResult,
+        depositResult,
+        addressResult,
+        accountsResult,
+      ] = await Promise.allSettled([
         walletAPI.getWallet(),
         walletAPI.getBankCards(),
         walletAPI.getWithdrawalRequests(),
         walletAPI.getDepositRequests(),
         walletAPI.getGoldPickupAddress(),
-        depositAccountsAPI.getActiveAccounts().catch(() => []),
+        depositAccountsAPI.getActiveAccounts(),
       ]);
 
-      setWallet(walletData);
-      setCards(cardsData);
-      setWithdrawalRequests(withdrawalData);
-      setDepositRequests(depositData);
-      setGoldPickupAddress(addressData.address || "");
+      if (walletResult.status === "fulfilled") {
+        setWallet(walletResult.value);
+      } else {
+        console.error("Error fetching wallet:", walletResult.reason);
+        if (!silent) toast.error("خطا در دریافت اطلاعات کیف پول");
+      }
+
+      if (cardsResult.status === "fulfilled") {
+        const cardsData = cardsResult.value;
+        setCards(cardsData);
+        if (cardsData.length > 0) {
+          setSelectedCardId((prev) => {
+            if (prev) return prev;
+            const activeCard = cardsData.find((c) => c.is_active);
+            return activeCard ? activeCard.id : cardsData[0].id;
+          });
+        }
+      }
+
+      if (withdrawalResult.status === "fulfilled") {
+        setWithdrawalRequests(withdrawalResult.value);
+      }
+      if (depositResult.status === "fulfilled") {
+        setDepositRequests(depositResult.value);
+      }
+      if (addressResult.status === "fulfilled") {
+        setGoldPickupAddress(addressResult.value.address || "");
+      }
+
+      const accountsData =
+        accountsResult.status === "fulfilled" ? accountsResult.value : [];
       setDepositAccounts(accountsData);
       if (accountsData.length > 0) {
         setSelectedDepositAccountId((prev) => prev ?? accountsData[0].id);
-      }
-      if (cardsData.length > 0) {
-        setSelectedCardId((prev) => {
-          if (prev) return prev;
-          const activeCard = cardsData.find((c) => c.is_active);
-          return activeCard ? activeCard.id : cardsData[0].id;
-        });
       }
     } catch (error: unknown) {
       console.error("Error fetching wallet data:", error);
@@ -145,7 +172,8 @@ function WalletContent() {
     await refreshUser();
   }, [fetchWalletData, loadPendingPurchase, refreshUser]);
 
-  useVisibilityPolling(refreshWalletSilently, { interval: 20000 });
+  // immediate:false تا با load اولیه double-fetch و toast کاذب نسازد
+  useVisibilityPolling(refreshWalletSilently, { interval: 20000, immediate: false });
 
   // بارگذاری اولیه
   useEffect(() => {

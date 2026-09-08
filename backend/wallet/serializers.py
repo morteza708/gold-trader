@@ -56,11 +56,11 @@ class WalletSerializer(serializers.ModelSerializer):
     
     def get_available_rial_balance(self, obj):
         """موجودی ریالی قابل استفاده"""
-        return obj.get_available_rial_balance()
+        return float(obj.get_available_rial_balance())
     
     def get_available_gold_balance(self, obj):
         """موجودی طلای قابل استفاده"""
-        return obj.get_available_gold_balance()
+        return float(obj.get_available_gold_balance())
 
 
 class WithdrawalRequestSerializer(serializers.ModelSerializer):

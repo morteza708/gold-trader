@@ -11,7 +11,6 @@ import MobileHeader from "@/components/admin/MobileHeader";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
 import NotificationBell from "@/components/dashboard/NotificationBell";
-import NotificationPermission from "@/components/PWA/NotificationPermission";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -103,7 +102,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
              <h2 className="text-lg font-bold text-white">پنل مدیریت</h2>
            </div>
            <div className="flex items-center gap-2">
-             <NotificationPermission compact />
              <NotificationBell />
            </div>
          </div>

@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   Headphones,
   Phone,
-  MessageCircle,
   Send,
   Mail,
   Clock,
@@ -21,6 +20,7 @@ import {
   SupportSettings,
 } from "@/lib/api/support";
 import SupportHubPanel from "@/components/support/SupportHubPanel";
+import { WhatsAppIcon, BaleIcon, RubikaIcon } from "@/components/support/MessengerIcons";
 
 const DAY_ORDER = ["sat", "sun", "mon", "tue", "wed", "thu", "fri"] as const;
 const DAY_LABELS: Record<(typeof DAY_ORDER)[number], string> = {
@@ -40,6 +40,8 @@ export function buildSupportSettingsFromApi(data: {
   support_landline?: string;
   whatsapp_number?: string;
   telegram_username?: string;
+  bale_id?: string;
+  rubika_id?: string;
   support_email?: string;
   support_hours_enabled?: boolean;
   support_hours?: SupportSettings["support_hours"];
@@ -56,6 +58,8 @@ export function buildSupportSettingsFromApi(data: {
     support_landline: data.support_landline || "",
     whatsapp_number: data.whatsapp_number || "",
     telegram_username: data.telegram_username || "",
+    bale_id: data.bale_id || "",
+    rubika_id: data.rubika_id || "",
     support_email: data.support_email || "",
     support_hours_enabled: data.support_hours_enabled ?? false,
     support_hours: DAY_ORDER.reduce(
@@ -106,9 +110,11 @@ export default function SupportSettingsTab({ settings, onChange }: SupportSettin
         settings.support_landline ||
         settings.whatsapp_number ||
         settings.telegram_username ||
+        settings.bale_id ||
+        settings.rubika_id ||
         settings.support_email;
       if (!hasChannel) {
-        toast.error("حداقل یک کانال تماس (تلفن، واتساپ، تلگرام یا ایمیل) را وارد کنید");
+        toast.error("حداقل یک کانال تماس را وارد کنید");
         return;
       }
     }
@@ -122,6 +128,8 @@ export default function SupportSettingsTab({ settings, onChange }: SupportSettin
         support_landline: settings.support_landline,
         whatsapp_number: settings.whatsapp_number,
         telegram_username: settings.telegram_username,
+        bale_id: settings.bale_id,
+        rubika_id: settings.rubika_id,
         support_email: settings.support_email,
         support_hours_enabled: settings.support_hours_enabled,
         support_hours: settings.support_hours,
@@ -208,13 +216,15 @@ export default function SupportSettingsTab({ settings, onChange }: SupportSettin
               کانال‌های تماس
             </p>
             {[
-              { key: "support_phone" as const, label: "موبایل پشتیبانی (اصلی)", icon: Phone },
-              { key: "support_phone_secondary" as const, label: "موبایل پشتیبانی (دوم)", icon: Phone },
-              { key: "support_landline" as const, label: "تلفن ثابت", icon: Phone },
-              { key: "whatsapp_number" as const, label: "واتساپ (خالی = همان موبایل اصلی)", icon: MessageCircle },
-              { key: "telegram_username" as const, label: "تلگرام (بدون @)", icon: Send },
-              { key: "support_email" as const, label: "ایمیل پشتیبانی", icon: Mail },
-            ].map(({ key, label, icon: Icon }) => (
+              { key: "support_phone" as const, label: "موبایل پشتیبانی (اصلی)", icon: Phone, placeholder: "09123456789" },
+              { key: "support_phone_secondary" as const, label: "موبایل پشتیبانی (دوم)", icon: Phone, placeholder: "09123456789" },
+              { key: "support_landline" as const, label: "تلفن ثابت", icon: Phone, placeholder: "02112345678" },
+              { key: "whatsapp_number" as const, label: "واتساپ (خالی = همان موبایل اصلی)", icon: WhatsAppIcon, placeholder: "09123456789" },
+              { key: "telegram_username" as const, label: "تلگرام (بدون @)", icon: Send, placeholder: "opalbox_support" },
+              { key: "bale_id" as const, label: "بله (یوزرنیم یا لینک کامل)", icon: BaleIcon, placeholder: "opalbox یا https://ble.ir/..." },
+              { key: "rubika_id" as const, label: "روبیکا (یوزرنیم یا لینک کامل)", icon: RubikaIcon, placeholder: "opalbox یا https://rubika.ir/..." },
+              { key: "support_email" as const, label: "ایمیل پشتیبانی", icon: Mail, placeholder: "support@example.com" },
+            ].map(({ key, label, icon: Icon, placeholder }) => (
               <div key={key}>
                 <label className="block text-xs text-slate-500 mb-1.5 flex items-center gap-1">
                   <Icon size={12} />
@@ -226,11 +236,14 @@ export default function SupportSettingsTab({ settings, onChange }: SupportSettin
                   onChange={(e) =>
                     onChange({
                       ...settings,
-                      [key]: key === "support_email" ? e.target.value : toEnglishDigits(e.target.value),
+                      [key]:
+                        key === "support_email" || key === "bale_id" || key === "rubika_id" || key === "telegram_username"
+                          ? e.target.value
+                          : toEnglishDigits(e.target.value),
                     })
                   }
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm dir-ltr text-right font-mono focus:outline-none focus:border-gold-500"
-                  placeholder={key === "telegram_username" ? "opalbox_support" : "09123456789"}
+                  placeholder={placeholder}
                 />
               </div>
             ))}

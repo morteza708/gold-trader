@@ -77,6 +77,20 @@ class SystemSettings(models.Model):
         default='',
         verbose_name='نام کاربری تلگرام',
     )
+    bale_id = models.CharField(
+        max_length=128,
+        blank=True,
+        default='',
+        verbose_name='آیدی یا لینک بله',
+        help_text='یوزرنیم (مثل opalbox) یا لینک کامل ble.ir',
+    )
+    rubika_id = models.CharField(
+        max_length=128,
+        blank=True,
+        default='',
+        verbose_name='آیدی یا لینک روبیکا',
+        help_text='یوزرنیم یا لینک کامل rubika.ir',
+    )
     support_email = models.EmailField(
         blank=True,
         default='',

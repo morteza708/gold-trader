@@ -13,7 +13,6 @@ import { toPersianDigits } from "@/lib/utils/numberUtils";
 import { useTradesStatus } from "@/hooks/useTradesStatus";
 import MarketStatusBanner from "@/components/dashboard/MarketStatusBanner";
 import { walletAPI, Wallet } from "@/lib/api/auth";
-import NotificationPermission from "@/components/PWA/NotificationPermission";
 import NotificationBell from "@/components/dashboard/NotificationBell";
 import BrandLogo from "@/components/brand/BrandLogo";
 import SupportFab from "@/components/support/SupportFab";
@@ -205,10 +204,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                <WalletIcon size={20} />
             </button>
             
-            <div className="flex items-center gap-1 sm:gap-2">
-              <NotificationPermission compact />
-              <NotificationBell />
-            </div>
+            <NotificationBell />
           </div>
         </header>
         {/* --- نوار وضعیت بازار --- */}

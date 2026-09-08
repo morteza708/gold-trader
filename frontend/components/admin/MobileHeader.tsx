@@ -2,7 +2,6 @@
 
 import { LogOut, Menu } from "lucide-react";
 import NotificationBell from "@/components/dashboard/NotificationBell";
-import NotificationPermission from "@/components/PWA/NotificationPermission";
 
 interface MobileHeaderProps {
   onMenuClick: () => void;
@@ -25,9 +24,6 @@ export default function MobileHeader({ onMenuClick, onLogoutClick }: MobileHeade
       </span>
 
       <div className="flex items-center gap-1 shrink-0">
-        <div className="[&_button]:text-amber-400 [&_button:hover]:bg-slate-800">
-          <NotificationPermission compact />
-        </div>
         <div className="text-white">
           <NotificationBell />
         </div>

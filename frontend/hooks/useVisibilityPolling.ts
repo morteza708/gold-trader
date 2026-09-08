@@ -7,6 +7,8 @@ type UseVisibilityPollingOptions = {
   enabled?: boolean;
   /** وقتی تب مرورگر مخفی است درخواست نزن */
   pauseWhenHidden?: boolean;
+  /** اجرای فوری هنگام mount — اگر صفحه خودش load اولیه دارد false بگذارید */
+  immediate?: boolean;
 };
 
 /**
@@ -18,6 +20,7 @@ export function useVisibilityPolling(
     interval = 20000,
     enabled = true,
     pauseWhenHidden = true,
+    immediate = true,
   }: UseVisibilityPollingOptions = {}
 ) {
   const callbackRef = useRef(callback);
@@ -43,7 +46,9 @@ export function useVisibilityPolling(
   useEffect(() => {
     if (!enabled) return;
 
-    run();
+    if (immediate) {
+      run();
+    }
 
     const intervalId = window.setInterval(run, interval);
 
@@ -62,5 +67,5 @@ export function useVisibilityPolling(
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", onFocus);
     };
-  }, [enabled, interval, run]);
+  }, [enabled, interval, run, immediate]);
 }

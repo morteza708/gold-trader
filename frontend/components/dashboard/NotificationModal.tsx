@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { notificationsAPI, Notification } from "@/lib/api/notifications";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
 import toast from "react-hot-toast";
+import NotificationPermission from "@/components/PWA/NotificationPermission";
 
 interface NotificationModalProps {
   isOpen: boolean;
@@ -385,6 +386,11 @@ export default function NotificationModal({
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* تنظیم اعلان دستگاه — داخل همان زنگوله تا دو آیکون جدا نباشند */}
+            <div className="border-t border-gray-200 dark:border-gray-700 p-3">
+              <NotificationPermission />
             </div>
           </motion.div>
         </>

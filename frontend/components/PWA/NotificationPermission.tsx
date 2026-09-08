@@ -6,12 +6,13 @@ import toast from "react-hot-toast";
 import { brand } from "@/lib/brand";
 import {
   ensurePushSubscription,
+  getLocalPushSubscription,
   isPushSupported,
   unsubscribeFromPush,
 } from "@/lib/pwa/push";
 
 type Props = {
-  /** فقط آیکون برای هدر (بدون متن پهن) */
+  /** فقط آیکون برای هدر (بدون متن پهن) — ترجیحاً استفاده نشود؛ از مودال اعلان‌ها استفاده کنید */
   compact?: boolean;
   className?: string;
 };
@@ -21,21 +22,26 @@ export default function NotificationPermission({ compact = false, className = ""
     "default"
   );
   const [busy, setBusy] = useState(false);
+  /** وضعیت واقعی: آیا این دستگاه subscription فعال دارد؟ */
   const [pushReady, setPushReady] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!isPushSupported()) {
       setPermission("unsupported");
+      setPushReady(false);
       return;
     }
     setPermission(Notification.permission);
-    if (Notification.permission === "granted") {
-      try {
-        const result = await ensurePushSubscription();
-        setPushReady(result === "subscribed");
-      } catch {
-        setPushReady(false);
-      }
+    if (Notification.permission !== "granted") {
+      setPushReady(false);
+      return;
+    }
+    try {
+      // فقط چک وضعیت — بعد از «قطع» نباید دوباره خودکار subscribe شود
+      const sub = await getLocalPushSubscription();
+      setPushReady(!!sub);
+    } catch {
+      setPushReady(false);
     }
   }, []);
 
@@ -51,7 +57,10 @@ export default function NotificationPermission({ compact = false, className = ""
 
     setBusy(true);
     try {
-      const result = await Notification.requestPermission();
+      let result = Notification.permission;
+      if (result !== "granted") {
+        result = await Notification.requestPermission();
+      }
       setPermission(result);
 
       if (result !== "granted") {
@@ -60,6 +69,7 @@ export default function NotificationPermission({ compact = false, className = ""
             ? "اعلان‌ها مسدود است؛ از تنظیمات مرورگر فعال کنید"
             : "اجازه اعلان داده نشد"
         );
+        setPushReady(false);
         return;
       }
 
@@ -68,20 +78,20 @@ export default function NotificationPermission({ compact = false, className = ""
 
       if (sub === "subscribed") {
         toast.success("اعلان‌های دستگاه فعال شد");
+        const registration = await navigator.serviceWorker.ready;
+        await registration.showNotification(brand.name, {
+          body: "اعلان‌ها با موفقیت فعال شد",
+          icon: "/web-app-manifest-192x192.png",
+          badge: "/web-app-manifest-192x192.png",
+          tag: "notification-permission",
+        });
       } else if (sub === "skipped") {
         toast.success("اجازه اعلان داده شد");
       }
-
-      const registration = await navigator.serviceWorker.ready;
-      await registration.showNotification(brand.name, {
-        body: "اعلان‌ها با موفقیت فعال شد",
-        icon: "/web-app-manifest-192x192.png",
-        badge: "/web-app-manifest-192x192.png",
-        tag: "notification-permission",
-      });
     } catch (error) {
       console.error("Error enabling notifications:", error);
       toast.error("خطا در فعال‌سازی اعلان");
+      setPushReady(false);
     } finally {
       setBusy(false);
     }
@@ -104,7 +114,10 @@ export default function NotificationPermission({ compact = false, className = ""
     return null;
   }
 
-  if (permission === "granted") {
+  // منبع حقیقت: subscription فعال، نه فقط Notification.permission
+  const isActive = permission === "granted" && pushReady;
+
+  if (isActive) {
     if (compact) {
       return (
         <button
@@ -126,11 +139,7 @@ export default function NotificationPermission({ compact = false, className = ""
       >
         <div className="flex items-center gap-2 text-sm text-emerald-800 font-bold">
           <Bell className="w-4 h-4 shrink-0" />
-          <span>
-            {pushReady
-              ? "اعلان‌های این دستگاه فعال است"
-              : "اجازه اعلان داده شده — در حال آماده‌سازی"}
-          </span>
+          <span>اعلان‌های این دستگاه فعال است</span>
         </div>
         <button
           type="button"
