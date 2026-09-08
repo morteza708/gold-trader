@@ -438,7 +438,7 @@ def download_invoice_pdf(request, trade_id):
             page_css = CSS(string='''
                 @page {
                     size: A5;
-                    margin: 10mm;
+                    margin: 6mm;
                 }
                 body {
                     font-family: 'IRANYekan', Tahoma, Arial, sans-serif;

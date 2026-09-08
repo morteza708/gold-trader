@@ -4,17 +4,16 @@
     <meta charset="UTF-8">
     <title>فاکتور فروش</title>
     <style>
-        /* --- تنظیمات صفحه --- */
+        /* A5 ≈ ۲۱۰mm؛ حاشیه کم تا محتوا در یک صفحه بماند */
         @page {
             size: A5;
-            margin: 10mm; /* حاشیه دور کاغذ */
+            margin: 6mm;
         }
 
         * {
             box-sizing: border-box;
         }
 
-        /* --- فونت‌ها --- */
         {% if font_base64 %}
         @font-face {
             font-family: 'IRANYekan';
@@ -28,31 +27,28 @@
         }
         {% endif %}
 
+        html, body {
+            margin: 0;
+            padding: 0;
+        }
+
         body {
             font-family: {% if font_base64 %}'IRANYekan'{% else %}Tahoma, Arial{% endif %}, sans-serif;
             direction: rtl;
-            font-size: 10pt;
+            font-size: 8.5pt;
+            line-height: 1.35;
             color: #000;
             background: #fff;
-            margin: 0;
-            padding: 0;
-            height: 100%;
         }
 
-        /* --- کانتینر اصلی با چیدمان فلکس --- 
-           این باعث می‌شود فوتر همیشه پایین بماند بدون تداخل
-        */
+        /* بدون min-height اجباری — همان علت سرریز به صفحه ۲ بود */
         .main-border {
-            border: 2px solid #000;
-            padding: 10px;
-            /* ارتفاع فیکس برای A5 منهای مارجین‌ها حدودی 185mm */
-            min-height: 185mm; 
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
+            border: 1.5px solid #000;
+            padding: 6px 7px 5px;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
 
-        /* --- جداول --- */
         table {
             width: 100%;
             border-collapse: collapse;
@@ -60,75 +56,72 @@
         }
 
         td, th {
-            padding: 5px;
+            padding: 3px 4px;
             vertical-align: middle;
         }
 
-        /* --- هدر --- */
         .header-section {
-            border-bottom: 2px solid #000;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
+            border-bottom: 1.5px solid #000;
+            padding-bottom: 5px;
+            margin-bottom: 6px;
         }
 
         .logo-img {
-            height: 36px;
+            height: 28px;
             width: auto;
-            max-width: 48px;
+            max-width: 40px;
             vertical-align: middle;
             display: inline-block;
         }
 
         .logo-placeholder {
-            font-size: 24px;
+            font-size: 16px;
             font-weight: 900;
-            border: 2px solid #000;
-            padding: 5px 15px;
+            border: 1.5px solid #000;
+            padding: 3px 10px;
             display: inline-block;
-            border-radius: 5px;
+            border-radius: 3px;
             vertical-align: middle;
         }
 
-        .company-name { font-size: 16px; font-weight: 900; margin-top: 5px;}
-        .company-sub { font-size: 9px; color: #444; }
+        .company-name { font-size: 12px; font-weight: 900; margin-top: 2px; }
+        .company-sub { font-size: 7.5px; color: #444; }
 
         .invoice-title {
-            font-size: 18px;
+            font-size: 13px;
             font-weight: 900;
             text-decoration: underline;
-            margin-bottom: 5px;
+            margin-bottom: 2px;
         }
-        .invoice-meta { font-size: 10pt; line-height: 1.5; font-weight: bold;}
+        .invoice-meta { font-size: 8pt; line-height: 1.4; font-weight: bold; }
 
-        /* --- باکس‌های طرفین --- */
         .parties-table {
             border: 1px solid #000;
-            margin-bottom: 15px;
+            margin-bottom: 6px;
         }
         .parties-table td {
             width: 50%;
-            padding: 10px;
+            padding: 5px 6px;
             vertical-align: top;
         }
         .parties-table td:first-child { border-left: 1px solid #000; }
 
-        .p-label { font-size: 9pt; font-weight: bold; color: #555; margin-bottom: 5px; text-decoration: underline;}
-        .p-name { font-size: 11pt; font-weight: 900; margin-bottom: 5px; }
-        .p-info { font-size: 10pt; }
+        .p-label { font-size: 7.5pt; font-weight: bold; color: #555; margin-bottom: 2px; text-decoration: underline; }
+        .p-name { font-size: 9pt; font-weight: 900; margin-bottom: 2px; }
+        .p-info { font-size: 8pt; }
 
-        /* --- جدول کالا --- */
         .items-table {
             border: 1px solid #000;
-            margin-bottom: 15px;
+            margin-bottom: 6px;
         }
         .items-table th {
             background-color: #f0f0f0;
             border-bottom: 1px solid #000;
             border-left: 1px solid #000;
             font-weight: 900;
-            font-size: 9pt;
+            font-size: 7.5pt;
             text-align: center;
-            padding: 8px;
+            padding: 4px 3px;
         }
         .items-table th:last-child { border-left: none; }
 
@@ -136,86 +129,101 @@
             border-bottom: 1px solid #ccc;
             border-left: 1px solid #000;
             text-align: center;
-            padding: 8px;
-            font-size: 10pt;
+            padding: 5px 3px;
+            font-size: 8.5pt;
         }
         .items-table td:last-child { border-left: none; }
 
-        .col-desc { width: 40%; text-align: right !important; font-weight: bold;}
+        .col-desc { width: 40%; text-align: right !important; font-weight: bold; }
         .col-karat { width: 10%; }
         .col-weight { width: 15%; }
         .col-price { width: 17.5%; }
-        .col-total { width: 17.5%; font-weight: bold;}
+        .col-total { width: 17.5%; font-weight: bold; }
 
-        /* --- بخش جمع کل (اصلاح شده) --- */
+        .delivery-box {
+            border: 1px solid #000;
+            padding: 5px 6px;
+            margin-bottom: 6px;
+            font-size: 7.5pt;
+        }
+        .delivery-box .title {
+            font-weight: 900;
+            margin-bottom: 3px;
+            text-decoration: underline;
+            font-size: 8pt;
+        }
+        .delivery-box td {
+            padding: 1.5px 0;
+            vertical-align: top;
+        }
+        .delivery-note {
+            margin-top: 3px;
+            font-size: 7pt;
+            color: #444;
+        }
+
         .summary-wrapper {
             width: 100%;
-            margin-top: 10px;
+            margin-top: 2px;
+            margin-bottom: 4px;
         }
-        
+
         .totals-table {
-            width: 100%; /* جدول داخلی تمام عرض کانتینر خود را بگیرد */
-            border: 2px solid #000;
+            width: 100%;
+            border: 1.5px solid #000;
         }
-        
+
         .totals-table td {
-            padding: 8px;
+            padding: 4px 6px;
             border-bottom: 1px solid #000;
-            /* جلوگیری از شکستن متن */
-            white-space: nowrap; 
+            white-space: nowrap;
         }
-        
-        .t-label { text-align: right; font-weight: bold; width: 35%; background: #f0f0f0;}
-        .t-value { text-align: left; font-weight: 900; width: 65%; padding-left: 10px;}
-        
+
+        .t-label { text-align: right; font-weight: bold; width: 35%; background: #f0f0f0; font-size: 8pt; }
+        .t-value { text-align: left; font-weight: 900; width: 65%; padding-left: 8px; font-size: 8.5pt; }
+
         .totals-table tr:last-child td { border-bottom: none; }
 
-        /* --- بخش امضا و فوتر (Flex Item) --- */
-        /* این دیو فضای خالی را پر می‌کند تا فوتر پایین برود */
-        .spacer {
-            flex-grow: 1; 
-        }
-
         .sign-section {
-            margin-top: 24px;
-            /* تضمین فاصله مناسب از فوتر */
-            margin-bottom: 16px;
+            margin-top: 8px;
+            margin-bottom: 4px;
             width: 100%;
+            page-break-inside: avoid;
         }
 
         .sign-box {
             text-align: center;
             font-weight: bold;
-            font-size: 10pt;
-            padding-bottom: 8px;
+            font-size: 8pt;
+            padding-bottom: 3px;
         }
 
         .sign-dash {
             border-top: 1px dashed #666;
-            height: 28px;
-            margin: 0 8px;
+            height: 16px;
+            margin: 0 6px;
         }
 
         .stamp-img {
-            max-height: 52px;
-            max-width: 110px;
+            max-height: 36px;
+            max-width: 90px;
             display: block;
-            margin: 4px auto 6px;
+            margin: 2px auto 3px;
             object-fit: contain;
         }
 
         .footer {
-            /* فوتر به عنوان آخرین آیتم فلکس */
-            margin-top: auto;
             text-align: center;
-            font-size: 8pt;
+            font-size: 7pt;
             border-top: 1px solid #000;
-            padding-top: 8px;
+            padding-top: 4px;
+            margin-top: 2px;
             width: 100%;
+            page-break-inside: avoid;
         }
 
         .currency-unit {
-            font-size: 8pt;
+            font-size: 7pt;
             font-weight: normal;
         }
     </style>
@@ -223,24 +231,20 @@
 <body>
 
     <div class="main-border">
-        
-        <!-- محتوای اصلی -->
-        <div>
-            <!-- هدر -->
             <table class="header-section">
                 <tr>
-                    <td style="width: 60%;">
+                    <td style="width: 58%;">
                         {% if logo_base64 %}
                         <img class="logo-img" src="data:image/png;base64,{{ logo_base64 }}" alt="{{ brand_name|default:'لوگو' }}" />
                         {% else %}
                         <div class="logo-placeholder">{{ brand_initial|default:"G" }}</div>
                         {% endif %}
-                        <div style="display: inline-block; vertical-align: middle; margin-right: 10px;">
+                        <div style="display: inline-block; vertical-align: middle; margin-right: 8px;">
                             <div class="company-name">{{ brand_name|default:"گلد تریدر" }}</div>
                             <div class="company-sub">{{ tagline }}</div>
                         </div>
                     </td>
-                    <td style="width: 40%; text-align: left;">
+                    <td style="width: 42%; text-align: left;">
                         <div class="invoice-title">فاکتور فروش</div>
                         <div class="invoice-meta">
                             شماره: {{ invoice_number }}<br>
@@ -256,7 +260,6 @@
                 </tr>
             </table>
 
-            <!-- طرفین -->
             <table class="parties-table">
                 <tr>
                     <td>
@@ -272,7 +275,6 @@
                 </tr>
             </table>
 
-            <!-- اقلام -->
             <table class="items-table">
                 <thead>
                     <tr>
@@ -291,53 +293,42 @@
                         <td class="col-price">{{ price }}</td>
                         <td class="col-total">{{ total }}</td>
                     </tr>
-                    <!-- ردیف خالی -->
-                    <tr style="height: 30px;">
-                        <td style="border-left: 1px solid #000;"></td>
-                        <td style="border-left: 1px solid #000;"></td>
-                        <td style="border-left: 1px solid #000;"></td>
-                        <td style="border-left: 1px solid #000;"></td>
-                        <td></td>
-                    </tr>
                 </tbody>
             </table>
 
             {% if has_delivery_details %}
-            <div style="border: 1px solid #000; padding: 8px; margin-bottom: 12px; font-size: 9pt;">
-                <div style="font-weight: 900; margin-bottom: 6px; text-decoration: underline;">مشخصات تحویل فیزیکی</div>
-                <table style="width:100%; border-collapse: collapse;">
+            <div class="delivery-box">
+                <div class="title">مشخصات تحویل فیزیکی</div>
+                <table>
                     <tr>
-                        <td style="padding: 3px 0; width: 50%;">عیار واقعی: <strong>{{ delivery_actual_karat }}</strong></td>
-                        <td style="padding: 3px 0;">وزن فیزیکی: <strong>{{ delivery_physical_weight }}</strong> گرم</td>
+                        <td style="width: 50%;">عیار واقعی: <strong>{{ delivery_actual_karat }}</strong></td>
+                        <td>وزن فیزیکی: <strong>{{ delivery_physical_weight }}</strong> گرم</td>
                     </tr>
                     <tr>
-                        <td style="padding: 3px 0;">کد ریگیری/پاکت: <strong>{{ delivery_packet_code }}</strong></td>
-                        <td style="padding: 3px 0;">سری: <strong>{{ delivery_seri }}</strong></td>
+                        <td>کد ریگیری/پاکت: <strong>{{ delivery_packet_code }}</strong></td>
+                        <td>سری: <strong>{{ delivery_seri }}</strong></td>
                     </tr>
                     <tr>
-                        <td style="padding: 3px 0;" colspan="2">آزمایشگاه: <strong>{{ delivery_lab_name }}</strong></td>
+                        <td colspan="2">آزمایشگاه: <strong>{{ delivery_lab_name }}</strong></td>
                     </tr>
                     <tr>
-                        <td style="padding: 3px 0;">مابه‌التفاوت: <strong>{{ delivery_difference_rial }}</strong> ریال</td>
-                        <td style="padding: 3px 0;">نحوه تسویه: <strong>{{ delivery_difference_method_display }}</strong></td>
+                        <td>مابه‌التفاوت: <strong>{{ delivery_difference_rial }}</strong> ریال</td>
+                        <td>نحوه تسویه: <strong>{{ delivery_difference_method_display }}</strong></td>
                     </tr>
                     <tr>
-                        <td style="padding: 3px 0;" colspan="2">توضیحات: <strong>{{ delivery_notes }}</strong></td>
+                        <td colspan="2">توضیحات: <strong>{{ delivery_notes }}</strong></td>
                     </tr>
                 </table>
-                <div style="margin-top: 6px; font-size: 8pt; color: #444;">
+                <div class="delivery-note">
                     وزن دفتر پلتفرم بر اساس معادل عیار ۷۵۰ است؛ مشخصات بالا مربوط به تحویل فیزیکی است.
                 </div>
             </div>
             {% endif %}
 
-            <!-- جمع کل (اصلاح شده: افزایش عرض باکس) -->
             <table class="summary-wrapper">
                 <tr>
-                    <!-- عرض فضای خالی کاهش یافت (35%) -->
-                    <td style="width: 35%;"></td> 
-                    <!-- عرض باکس قیمت افزایش یافت (65%) -->
-                    <td style="width: 65%; padding: 0;">
+                    <td style="width: 38%;"></td>
+                    <td style="width: 62%; padding: 0;">
                         <table class="totals-table">
                             <tr>
                                 <td class="t-label">جمع کل:</td>
@@ -356,7 +347,6 @@
                 </tr>
             </table>
 
-            <!-- امضا: برچسب بالا، مهر/امضا، خط‌چین (قالب A5) -->
             <table class="sign-section">
                 <tr>
                     <td style="width: 50%;">
@@ -372,13 +362,10 @@
                     </td>
                 </tr>
             </table>
-        </div>
 
-        <!-- فوتر چسبان -->
         <div class="footer">
             {% if footer_text %}{{ footer_text }}{% else %}—{% endif %}
         </div>
-
     </div>
 
 </body>

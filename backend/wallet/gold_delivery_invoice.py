@@ -108,7 +108,7 @@ def render_gold_delivery_pdf_bytes(withdrawal: WithdrawalRequest) -> bytes:
     html_string = build_gold_delivery_invoice_html(withdrawal)
     page_css = CSS(
         string="""
-        @page { size: A5; margin: 10mm; }
+        @page { size: A5; margin: 6mm; }
         body { font-family: 'IRANYekan', Tahoma, Arial, sans-serif; }
         """
     )
