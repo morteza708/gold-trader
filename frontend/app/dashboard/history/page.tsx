@@ -169,7 +169,7 @@ export default function HistoryPage() {
             </div>
 
             {/* فیلتر تاریخ (تقویم) */}
-            <div className="relative w-full sm:w-64 z-20">
+            <div className="relative w-full sm:w-64">
                <DatePicker
                  range
                  calendar={persian}
@@ -178,6 +178,7 @@ export default function HistoryPage() {
                  onChange={setDateRange}
                  placeholder="انتخاب بازه تاریخ..."
                  inputClass="w-full bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 outline-none focus:border-gold-400 text-sm font-bold text-gray-700 text-center cursor-pointer"
+                 zIndex={30}
                />
                <Calendar size={18} className="absolute left-3 top-3.5 text-gray-400 pointer-events-none" />
                {dateRange.length > 0 && (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X, Check, Trash2, Bell, BellOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { notificationsAPI, Notification } from "@/lib/api/notifications";
@@ -25,7 +26,12 @@ export default function NotificationModal({
   const [isLoading, setIsLoading] = useState(true);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const [modalPosition, setModalPosition] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // دریافت اعلان‌ها
   const fetchNotifications = async () => {
@@ -237,33 +243,34 @@ export default function NotificationModal({
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop - در موبایل کامل، در دسکتاپ شفاف‌تر */}
+          {/* خارج از هدر (portal) تا z-index فیلدهای صفحه روی مودال نیاید */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className={`fixed inset-0 z-40 ${
+            className={`fixed inset-0 z-[100] ${
               modalPosition
-                ? 'bg-black/20 md:bg-black/10' // در دسکتاپ: شفاف‌تر
-                : 'bg-black/50' // در موبایل: کامل
+                ? 'bg-black/20 md:bg-black/10'
+                : 'bg-black/50'
             }`}
           />
 
-          {/* Modal */}
           <motion.div
             ref={modalRef}
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl z-50 flex flex-col ${
+            className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl z-[110] flex flex-col ${
               modalPosition
-                ? 'absolute w-96' // در دسکتاپ: absolute و زیر زنگوله
-                : 'fixed top-4 right-4 left-4 md:left-auto md:w-96 max-h-[80vh]' // در موبایل: fixed و center
+                ? 'fixed w-96'
+                : 'fixed top-4 right-4 left-4 md:left-auto md:w-96 max-h-[80vh]'
             }`}
             style={
               modalPosition
@@ -395,7 +402,8 @@ export default function NotificationModal({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 
