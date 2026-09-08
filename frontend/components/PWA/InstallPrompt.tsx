@@ -155,14 +155,15 @@ export default function InstallPrompt() {
     if ((isSafari || isIOS) && !deferredPrompt) {
       toast(
         <div className="text-sm">
-          <p className="font-bold mb-1">نحوه نصب در Safari/iOS:</p>
+          <p className="font-bold mb-1">نصب روی آیفون / سافاری:</p>
           <ol className="list-decimal list-inside space-y-1 text-xs">
-            <li>روی دکمه Share (اشتراک‌گذاری) در پایین صفحه کلیک کنید</li>
-            <li>گزینه "Add to Home Screen" (افزودن به صفحه اصلی) را انتخاب کنید</li>
-            <li>روی "Add" (افزودن) کلیک کنید</li>
+            <li>دکمه Share (مربع با فلش) را بزنید</li>
+            <li>«Add to Home Screen» / «افزودن به صفحه اصلی» را انتخاب کنید</li>
+            <li>روی Add تأیید کنید تا مثل اپ باز شود</li>
+            <li>بعد از نصب، از پروفایل اعلان‌ها را فعال کنید</li>
           </ol>
         </div>,
-        { duration: 10000, icon: "ℹ️" }
+        { duration: 12000, icon: "ℹ️" }
       );
       handleDismiss();
       return;

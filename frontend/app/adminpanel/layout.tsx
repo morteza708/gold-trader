@@ -11,6 +11,7 @@ import MobileHeader from "@/components/admin/MobileHeader";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
 import NotificationBell from "@/components/dashboard/NotificationBell";
+import NotificationPermission from "@/components/PWA/NotificationPermission";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -102,17 +103,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
              <h2 className="text-lg font-bold text-white">پنل مدیریت</h2>
            </div>
            <div className="flex items-center gap-4">
+             <NotificationPermission compact />
              <NotificationBell />
            </div>
          </div>
 
          <div className="p-4 md:p-8 flex-1 overflow-y-auto pb-20 md:pb-8">
+            <div className="mb-4 md:hidden">
+              <NotificationPermission />
+            </div>
             {children}
          </div>
       </main>
 
       {/* Bottom Navigation Bar - موبایل */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-slate-950/95 backdrop-blur-lg border-t border-slate-800">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-slate-950/95 backdrop-blur-lg border-t border-slate-800 pb-safe">
         <div className="grid grid-cols-5 h-16">
           {bottomNavItems.map((item) => {
             const isActive = pathname === item.href;

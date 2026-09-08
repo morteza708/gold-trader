@@ -57,29 +57,34 @@ def create_notification(
 
 
 def send_push_notification_async(notification):
-    """
-    ارسال Push Notification به صورت async (از طریق Celery task)
-    در حال حاضر فقط log می‌کنیم، در آینده می‌توانیم از Celery استفاده کنیم
-    """
+    """صف‌بندی ارسال Web Push برای همه subscriptionهای فعال کاربر."""
     try:
-        # دریافت active subscriptions کاربر
         subscriptions = PushSubscription.objects.filter(
             user=notification.user,
-            is_active=True
+            is_active=True,
         )
-        
-        if subscriptions.exists():
-            # در آینده می‌توانیم از Celery task استفاده کنیم
-            # برای الان فقط log می‌کنیم
-            logger.info(
-                f"Push notification queued for user {notification.user.phone_number}: "
-                f"{notification.title} ({subscriptions.count()} subscriptions)"
-            )
-            
-            # TODO: در فاز بعدی، از Celery task برای ارسال استفاده کنیم
-            # from .tasks import send_push_notification_task
-            # for subscription in subscriptions:
-            #     send_push_notification_task.delay(subscription.id, notification.id)
+        if not subscriptions.exists():
+            return
+
+        from .tasks import send_web_push
+
+        for subscription in subscriptions:
+            try:
+                send_web_push.delay(subscription.id, notification.id)
+            except Exception as e:
+                logger.error(
+                    'Failed to queue web push for subscription %s: %s',
+                    subscription.id,
+                    e,
+                    exc_info=True,
+                )
+
+        logger.info(
+            'Queued web push for user %s: %s (%s subscriptions)',
+            notification.user.phone_number,
+            notification.title,
+            subscriptions.count(),
+        )
     except Exception as e:
         logger.error(f"Error in send_push_notification_async: {e}", exc_info=True)
 

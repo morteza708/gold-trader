@@ -19,6 +19,7 @@ import { UploadSuccessCheck } from "@/components/ui/ImageUploadZone";
 import DatePicker, { DateObject } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
+import NotificationPermission from "@/components/PWA/NotificationPermission";
 
 export default function ProfilePage() {
   const { user, refreshUser, logout } = useAuth();
@@ -273,6 +274,14 @@ export default function ProfilePage() {
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 md:pb-0">
       
       <h1 className="text-2xl font-black text-gray-800 mb-6">تنظیمات حساب کاربری</h1>
+
+      <div className="mb-6">
+        <NotificationPermission />
+        <p className="text-xs text-gray-400 mt-2 leading-5">
+          برای دریافت اعلان معامله و کیف پول وقتی اپ بسته است، اعلان‌ها را فعال کنید.
+          در آیفون ابتدا اپ را با «افزودن به صفحه اصلی» نصب کنید، سپس اعلان را روشن کنید.
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         

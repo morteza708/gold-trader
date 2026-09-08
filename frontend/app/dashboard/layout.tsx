@@ -205,6 +205,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                <WalletIcon size={20} />
             </button>
             
+            <NotificationPermission compact />
             <NotificationBell />
           </div>
         </header>
@@ -277,7 +278,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </AnimatePresence>
 
       {/* --- 4. منوی اپلیکیشنی پایین (Mobile Bottom Navigation) --- */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 md:hidden pb-safe">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 md:hidden pb-safe px-safe">
         <div className="flex justify-around items-center h-16 px-2">
           
           {[

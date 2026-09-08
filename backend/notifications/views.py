@@ -3,10 +3,10 @@ Views for Notifications
 """
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from django.conf import settings
 from django_ratelimit.decorators import ratelimit
-from django.db.models import Q
 import logging
 
 from .models import Notification, PushSubscription
@@ -17,6 +17,18 @@ from .serializers import (
 )
 
 logger = logging.getLogger('notifications')
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def vapid_public_key(request):
+    """کلید عمومی VAPID برای PushManager.subscribe در مرورگر."""
+    key = getattr(settings, 'VAPID_PUBLIC_KEY', '') or ''
+    configured = bool(key and getattr(settings, 'VAPID_PRIVATE_KEY', ''))
+    return Response({
+        'publicKey': key,
+        'configured': configured,
+    })
 
 
 @ratelimit(key='user', rate='10/m', method='POST', block=True)

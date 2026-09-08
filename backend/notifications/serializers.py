@@ -32,7 +32,7 @@ class PushSubscriptionCreateSerializer(serializers.Serializer):
     """
     Serializer برای ایجاد Push Subscription
     """
-    endpoint = serializers.URLField()
+    endpoint = serializers.URLField(max_length=2048)
     keys = serializers.DictField()
     
     def validate_keys(self, value):

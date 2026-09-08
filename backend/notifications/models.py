@@ -70,9 +70,9 @@ class PushSubscription(models.Model):
         on_delete=models.CASCADE,
         related_name='push_subscriptions'
     )
-    endpoint = models.URLField(max_length=500)
-    p256dh = models.CharField(max_length=200)  # Public key
-    auth = models.CharField(max_length=200)    # Auth secret
+    endpoint = models.URLField(max_length=2048)
+    p256dh = models.CharField(max_length=255)  # Public key
+    auth = models.CharField(max_length=255)    # Auth secret
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)

@@ -8,6 +8,7 @@ app_name = 'notifications'
 
 urlpatterns = [
     # Push Notifications
+    path('notifications/push/vapid-public-key/', views.vapid_public_key, name='vapid-public-key'),
     path('notifications/push/subscribe/', views.subscribe_push, name='subscribe-push'),
     path('notifications/push/unsubscribe/', views.unsubscribe_push, name='unsubscribe-push'),
     path('notifications/push/subscriptions/', views.get_subscriptions, name='get-subscriptions'),

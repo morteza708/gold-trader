@@ -211,6 +211,11 @@ JALALI_SETTINGS = {
 
 KAVENEGAR_API_KEY = env.str('KAVENEGAR_API_KEY')
 
+# Web Push (VAPID) — generate with: python -m py_vapid --applicationServerKey
+VAPID_PUBLIC_KEY = env.str('VAPID_PUBLIC_KEY', default='')
+VAPID_PRIVATE_KEY = env.str('VAPID_PRIVATE_KEY', default='')
+VAPID_CLAIM_EMAIL = env.str('VAPID_CLAIM_EMAIL', default='mailto:admin@opalbox.ir')
+
 # Viragold live gold price feed (prices from API are in Toman; stored as Rial)
 VIRAGOLD_API_URL = env.str(
     'VIRAGOLD_API_URL',
@@ -314,6 +319,11 @@ LOGGING = {
         },
         'wallet': {
             'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'notifications': {
+            'handlers': ['console', 'file'],
             'level': 'INFO',
             'propagate': False,
         },

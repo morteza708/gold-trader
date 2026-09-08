@@ -64,5 +64,23 @@ export const notificationsAPI = {
     const response = await apiClient.delete(`/notifications/${notificationId}/`);
     return response.data;
   },
+
+  getVapidPublicKey: async (): Promise<{ publicKey: string; configured: boolean }> => {
+    const response = await apiClient.get('/notifications/push/vapid-public-key/');
+    return response.data;
+  },
+
+  subscribePush: async (subscription: {
+    endpoint: string;
+    keys: { p256dh?: string; auth?: string };
+  }) => {
+    const response = await apiClient.post('/notifications/push/subscribe/', subscription);
+    return response.data;
+  },
+
+  unsubscribePush: async (endpoint: string) => {
+    const response = await apiClient.post('/notifications/push/unsubscribe/', { endpoint });
+    return response.data;
+  },
 };
 
