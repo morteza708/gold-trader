@@ -83,8 +83,15 @@ function VerifyForm() {
       // در صورت موفقیت، AuthContext ریدایرکت می‌کند — قفل را باز نکن
     } catch (error: any) {
       verifyingRef.current = false;
-      if (error.response?.status === 400) {
-        const errorMessage = error.response?.data?.error || error.response?.data?.otp_code?.[0];
+      const status = error.response?.status;
+      const data = error.response?.data;
+      const errorMessage =
+        data?.error ||
+        data?.otp_code?.[0] ||
+        data?.phone_number?.[0] ||
+        (typeof data?.detail === "string" ? data.detail : null);
+
+      if (status === 400) {
         if (errorMessage?.includes("اشتباه") || errorMessage?.includes("نامعتبر")) {
           toast.error("کد وارد شده اشتباه است");
         } else if (errorMessage?.includes("منقضی")) {
@@ -94,8 +101,12 @@ function VerifyForm() {
         } else {
           toast.error(errorMessage || "کد تایید نامعتبر است");
         }
+      } else if (status === 403) {
+        toast.error(errorMessage || "حساب کاربری شما غیرفعال است.");
+      } else if (status === 401) {
+        toast.error("نشست قبلی معتبر نیست. لطفاً دوباره تلاش کنید.");
       } else {
-        toast.error("خطا در تایید کد. لطفا دوباره تلاش کنید.");
+        toast.error(errorMessage || "خطا در تایید کد. لطفا دوباره تلاش کنید.");
       }
       setOtp("");
       setWebOtpSession((prev) => prev + 1);

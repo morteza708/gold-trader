@@ -332,6 +332,7 @@ class UserSerializer(serializers.ModelSerializer):
     has_bank_card = serializers.SerializerMethodField()
     is_active = serializers.BooleanField(read_only=True)
     date_joined_jalali = serializers.SerializerMethodField()
+    profile_completed = serializers.SerializerMethodField()
     
     class Meta:
         model = CustomUser
@@ -355,6 +356,10 @@ class UserSerializer(serializers.ModelSerializer):
             'has_bank_card'
         ]
         read_only_fields = ['id', 'phone_number', 'role', 'date_joined']
+    
+    def get_profile_completed(self, obj):
+        """وضعیت واقعی تکمیل پروفایل (نه فقط فلگ دیتابیس)."""
+        return bool(obj.is_profile_complete())
     
     def get_birth_date(self, obj):
         """تبدیل تاریخ تولد به فرمت شمسی"""
@@ -395,14 +400,15 @@ class UserSerializer(serializers.ModelSerializer):
     
     def get_customer_profile(self, obj):
         """دریافت customer_profile اگر وجود داشته باشد"""
-        if hasattr(obj, 'customer_profile'):
-            return {
-                'account_code': obj.customer_profile.account_code,
-                'created_at': obj.customer_profile.created_at,
-                'updated_at': obj.customer_profile.updated_at,
-            }
-        return None
-
+        try:
+            profile = obj.customer_profile
+        except CustomerProfile.DoesNotExist:
+            return None
+        return {
+            'account_code': profile.account_code,
+            'created_at': profile.created_at.isoformat() if profile.created_at else None,
+            'updated_at': profile.updated_at.isoformat() if profile.updated_at else None,
+        }
 
 class UpdateProfileSerializer(serializers.ModelSerializer):
     """Serializer برای به‌روزرسانی پروفایل کاربر"""
@@ -525,11 +531,15 @@ class AdminRegisterPhoneSerializer(serializers.Serializer):
         
         # ایجاد کاربر جدید با نقش تعیین شده و تایید همزمان
         # چون از پنل مدیریت ثبت می‌شود، به معنای تایید است
-        user = CustomUser.objects.create(
+        user = CustomUser(
             phone_number=phone_number,
             is_phone_verified=True,  # ثبت از پنل مدیریت = تایید همزمان
-            role=role
+            role=role,
+            profile_completed=False,
+            is_active=True,
         )
+        user.set_unusable_password()
+        user.save()
         
         return user
 

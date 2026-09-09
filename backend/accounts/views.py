@@ -79,40 +79,67 @@ def verify_otp(request):
         otp_code = serializer.validated_data['otp_code']
 
         from django.db import transaction
-        with transaction.atomic():
-            user = CustomUser.objects.select_for_update().get(phone_number=phone_number)
+        try:
+            with transaction.atomic():
+                user = CustomUser.objects.select_for_update().get(phone_number=phone_number)
 
-            # بررسی دوباره داخل قفل (جلوگیری از double-submit)
-            status_otp = user.get_otp_status()
-            if status_otp == 'missing':
-                return Response(
-                    {'otp_code': 'کد فعالی یافت نشد. لطفاً دوباره درخواست کد دهید.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            if status_otp == 'expired':
-                return Response(
-                    {'otp_code': 'کد OTP منقضی شده است. لطفا مجددا درخواست کد دهید.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            if user.otp_code != otp_code:
-                return Response(
-                    {'otp_code': 'کد OTP اشتباه است.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                if not user.is_active:
+                    return Response(
+                        {'error': 'حساب کاربری شما غیرفعال است. با پشتیبانی تماس بگیرید.'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
 
-            user.otp_code = None
-            user.otp_code_created = None
-            user.save(update_fields=['otp_code', 'otp_code_created'])
+                # بررسی دوباره داخل قفل (جلوگیری از double-submit)
+                status_otp = user.get_otp_status()
+                if status_otp == 'missing':
+                    return Response(
+                        {'otp_code': 'کد فعالی یافت نشد. لطفاً دوباره درخواست کد دهید.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                if status_otp == 'expired':
+                    return Response(
+                        {'otp_code': 'کد OTP منقضی شده است. لطفا مجددا درخواست کد دهید.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                if str(user.otp_code).strip() != str(otp_code).strip():
+                    return Response(
+                        {'otp_code': 'کد OTP اشتباه است.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-            refresh = RefreshToken.for_user(user)
-            profile_completed = user.is_profile_complete()
+                user.otp_code = None
+                user.otp_code_created = None
+                update_fields = ['otp_code', 'otp_code_created']
+                if not user.is_phone_verified:
+                    user.is_phone_verified = True
+                    update_fields.append('is_phone_verified')
+                # هم‌راستاسازی فلگ دیتابیس با وضعیت واقعی پروفایل
+                really_complete = user.is_profile_complete()
+                if user.profile_completed != really_complete:
+                    user.profile_completed = really_complete
+                    update_fields.append('profile_completed')
+                user.save(update_fields=update_fields)
 
-        return Response({
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-            'profile_completed': profile_completed,
-            'user': UserSerializer(user).data
-        }, status=status.HTTP_200_OK)
+                refresh = RefreshToken.for_user(user)
+                profile_completed = really_complete
+
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'profile_completed': profile_completed,
+                'user': UserSerializer(user, context={'request': request}).data
+            }, status=status.HTTP_200_OK)
+        except CustomUser.DoesNotExist:
+            return Response(
+                {'phone_number': 'شماره موبایل در سیستم یافت نشد.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"[OTP] خطا در verify_otp برای {phone_number}: {e}", exc_info=True)
+            return Response(
+                {'error': 'خطا در تایید کد. لطفا دوباره تلاش کنید.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

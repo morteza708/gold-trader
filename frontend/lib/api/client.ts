@@ -14,19 +14,31 @@ const apiClient: AxiosInstance = axios.create({
 // Request Interceptor - اضافه کردن token به header
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // دریافت token از localStorage
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const url = config.url || '';
+    // برای endpointهای ورود/OTP نباید توکن قدیمی ارسال شود؛
+    // در غیر این صورت JWT نامعتبر → ۴۰۱ حتی روی AllowAny
+    const isPublicAuth =
+      url.includes('/auth/send-otp') ||
+      url.includes('/auth/verify-otp') ||
+      url.includes('/admin/auth/send-otp') ||
+      url.includes('/admin/auth/verify-otp') ||
+      url.includes('send-otp') ||
+      url.includes('verify-otp');
+
+    if (!isPublicAuth) {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+      if (token && config.headers) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } else if (config.headers) {
+      delete config.headers.Authorization;
     }
     
     // Debug log برای درخواست‌های OTP
-    if (config.url?.includes('send-otp')) {
-      console.log('[API Client] درخواست ارسال OTP:', {
+    if (url.includes('send-otp') || url.includes('verify-otp')) {
+      console.log('[API Client] درخواست OTP:', {
         url: config.url,
         baseURL: config.baseURL,
-        fullURL: `${config.baseURL}${config.url}`,
         method: config.method,
         data: config.data,
       });
@@ -64,8 +76,16 @@ apiClient.interceptors.response.use(
     }
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-    // اگر خطای 401 بود و قبلا retry نکرده‌ایم
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const failedUrl = originalRequest?.url || '';
+    const isPublicAuth =
+      failedUrl.includes('send-otp') || failedUrl.includes('verify-otp');
+
+    // روی endpointهای عمومی OTP هرگز refresh/redirect نکن
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !isPublicAuth
+    ) {
       originalRequest._retry = true;
 
       try {

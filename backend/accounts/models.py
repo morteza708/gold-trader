@@ -130,14 +130,13 @@ class CustomUser(AbstractUser):
         super().save(*args, **kwargs)
     
     def is_profile_complete(self):
-        """بررسی اینکه آیا پروفایل کاربر کامل است یا نه"""
-        return (
-            self.first_name and
-            self.last_name and
-            self.national_id and
-            self.national_card_image and
-            self.birth_date and
-            self.profile_completed
+        """بررسی واقعی تکمیل پروفایل بر اساس فیلدها (بدون اتکا به فلگ DB)."""
+        return bool(
+            self.first_name
+            and self.last_name
+            and self.national_id
+            and self.national_card_image
+            and self.birth_date
         )
     
     def check_otp_expiration(self):

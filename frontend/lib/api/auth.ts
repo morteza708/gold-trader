@@ -17,6 +17,9 @@ export interface VerifyOTPResponse {
     role: 'SUPER_ADMIN' | 'SITE_ADMIN' | 'CUSTOMER';
     is_phone_verified: boolean;
     profile_completed: boolean;
+    national_id?: string | null;
+    birth_date?: string | null;
+    avatar?: string | null;
   };
 }
 

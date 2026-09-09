@@ -139,12 +139,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyOTP = async (phoneNumber: string, otpCode: string): Promise<VerifyOTPResponse> => {
     const response: VerifyOTPResponse = await authAPI.verifyOTP(phoneNumber, otpCode);
     
-    // تبدیل response.user به UserInfo (اضافه کردن فیلدهای missing)
+    const profileCompleted = Boolean(response.profile_completed ?? response.user?.profile_completed);
+
+    // تبدیل response.user به UserInfo — وضعیت پروفایل را از فیلد سطح‌بالا همگام کن
     const userInfo: UserInfo = {
       ...response.user,
-      national_id: null,
-      birth_date: null,
-      avatar: null,
+      profile_completed: profileCompleted,
+      national_id: response.user.national_id ?? null,
+      birth_date: response.user.birth_date ?? null,
+      avatar: response.user.avatar ?? null,
     };
     
     // ذخیره token ها
@@ -158,15 +161,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isAdmin = response.user.role === 'SUPER_ADMIN' || response.user.role === 'SITE_ADMIN';
     
     if (isAdmin) {
-      // مدیران مستقیماً به پنل مدیریت می‌روند (نیازی به تکمیل پروفایل ندارند)
       router.push('/adminpanel');
+    } else if (!profileCompleted) {
+      router.push('/auth/profile');
     } else {
-      // مشتریان: اگر پروفایل کامل نشده، به صفحه تکمیل پروفایل
-      if (!response.profile_completed) {
-        router.push('/auth/profile');
-      } else {
-        router.push('/dashboard');
-      }
+      router.push('/dashboard');
     }
 
     return response;

@@ -87,10 +87,17 @@ def ensure_manual_customer(
     national_id: str = '',
 ) -> CustomUser:
     """یافتن یا ساخت مشتری تأییدشده برای فاکتور دستی (بدون OTP)."""
-    phone = ''.join(ch for ch in phone_number if ch.isdigit())
-    # تبدیل ارقام فارسی قبلاً در serializer انجام می‌شود
+    from accounts.services import persian_to_english_numbers
+
+    phone = persian_to_english_numbers(str(phone_number or ''))
+    phone = ''.join(ch for ch in phone if ch.isdigit())
     if not phone.startswith('09') or len(phone) != 11:
         raise ManualTradeError('شماره موبایل نامعتبر است')
+
+    first_name = (first_name or '').strip()
+    last_name = (last_name or '').strip()
+    national_id = persian_to_english_numbers((national_id or '').strip())
+    national_id = ''.join(ch for ch in national_id if ch.isdigit()) or ''
 
     user = CustomUser.objects.filter(phone_number=phone).select_for_update().first()
     if user:
@@ -98,33 +105,38 @@ def ensure_manual_customer(
             raise ManualTradeError('این شماره متعلق به کاربر غیرمشتری است')
         updates = []
         if first_name and not user.first_name:
-            user.first_name = first_name.strip()
+            user.first_name = first_name
             updates.append('first_name')
         if last_name and not user.last_name:
-            user.last_name = last_name.strip()
+            user.last_name = last_name
             updates.append('last_name')
         if national_id and not user.national_id:
-            user.national_id = national_id.strip()
+            user.national_id = national_id
             updates.append('national_id')
         if not user.is_phone_verified:
             user.is_phone_verified = True
             updates.append('is_phone_verified')
-        if (user.first_name or first_name) and (user.last_name or last_name) and not user.profile_completed:
-            user.profile_completed = True
+        # پروفایل کامل فقط با کارت ملی + تاریخ تولد است؛ با نام به‌تنهایی True نکن
+        if user.profile_completed and not user.is_profile_complete():
+            user.profile_completed = False
             updates.append('profile_completed')
         if updates:
             user.save(update_fields=updates)
+        Wallet.objects.get_or_create(user=user)
         return user
 
-    user = CustomUser.objects.create(
+    user = CustomUser(
         phone_number=phone,
-        first_name=(first_name or '').strip(),
-        last_name=(last_name or '').strip(),
-        national_id=(national_id or '').strip() or None,
+        first_name=first_name,
+        last_name=last_name,
+        national_id=national_id or None,
         is_phone_verified=True,
         role=UserRole.CUSTOMER,
-        profile_completed=bool((first_name or '').strip() and (last_name or '').strip()),
+        profile_completed=False,
+        is_active=True,
     )
+    user.set_unusable_password()
+    user.save()
     Wallet.objects.get_or_create(user=user)
     return user
 
