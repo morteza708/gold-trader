@@ -95,20 +95,18 @@ def load_invoice_logo_base64() -> str | None:
 
 
 def load_invoice_stamp_base64() -> str | None:
-    """مهر / امضای دیجیتال آپلودشده برای PDF"""
+    """مهر / امضای دیجیتال آپلودشده برای PDF (با برش حاشیه و پس‌زمینه شفاف)."""
     from .models import SystemSettings
+    from .invoice_stamp import stamp_file_to_png_base64
 
     obj = SystemSettings.get_settings()
     if not obj.invoice_stamp:
         return None
     try:
         path = obj.invoice_stamp.path
-        if os.path.isfile(path):
-            with open(path, 'rb') as f:
-                return base64.b64encode(f.read()).decode('utf-8')
     except Exception:
         return None
-    return None
+    return stamp_file_to_png_base64(path)
 
 
 def load_invoice_font_base64() -> str | None:

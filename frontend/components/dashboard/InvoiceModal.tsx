@@ -281,10 +281,10 @@ export default function InvoiceModal({ data, isOpen, onClose, isAdmin = false }:
                     <img
                       src={issuer.stamp_url}
                       alt="مهر / امضا"
-                      className="mx-auto mb-2 max-h-14 max-w-[110px] object-contain"
+                      className="mx-auto mb-1 max-h-24 max-w-[200px] w-auto object-contain"
                     />
                   ) : null}
-                  <div className="border-t border-dashed border-gray-500 h-10 mx-2" />
+                  <div className="border-t border-dashed border-gray-500 h-12 mx-2" />
                 </div>
                 <div>
                   <p className="mb-2">مهر و امضای خریدار</p>

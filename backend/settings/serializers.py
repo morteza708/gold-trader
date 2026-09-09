@@ -106,7 +106,18 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
         return self._validate_invoice_image(value)
 
     def validate_invoice_stamp(self, value):
-        return self._validate_invoice_image(value)
+        if not value:
+            return value
+        from accounts.image_upload import get_uploaded_image_error
+        from .invoice_stamp import prepare_invoice_stamp_image
+
+        error = get_uploaded_image_error(value)
+        if error:
+            raise serializers.ValidationError(error)
+        try:
+            return prepare_invoice_stamp_image(value)
+        except ValueError as e:
+            raise serializers.ValidationError(str(e))
 
     def _validate_optional_mobile(self, value, field_label, required=False):
         value = support_service.normalize_phone(value)

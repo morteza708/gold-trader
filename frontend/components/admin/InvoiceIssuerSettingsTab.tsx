@@ -196,15 +196,15 @@ export default function InvoiceIssuerSettingsTab() {
           <Stamp size={16} /> مهر رسمی / امضای دیجیتال
         </p>
         <p className="text-[11px] text-slate-400 leading-6">
-          تصویر PNG یا JPG شفاف ترجیحاً؛ در بخش «مهر و امضای فروشنده» روی PDF و پیش‌نمایش فاکتور
-          نمایش داده می‌شود.
+          ترجیحاً PNG با پس‌زمینه شفاف. حاشیه سیاه زیاد لازم نیست — سیستم هنگام آپلود
+          حاشیه خالی را برش می‌دهد. اندازه پیشنهادی حدود ۶۰۰×۳۰۰ پیکسل.
         </p>
         {(stampFile || stampUrl) && !clearStamp && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={stampFile ? URL.createObjectURL(stampFile) : stampUrl || ""}
             alt="مهر / امضا"
-            className="h-20 w-auto object-contain bg-white rounded-lg p-2"
+            className="h-28 w-auto max-w-full object-contain bg-slate-100 rounded-lg p-3"
           />
         )}
         <div className="flex flex-wrap gap-2">
