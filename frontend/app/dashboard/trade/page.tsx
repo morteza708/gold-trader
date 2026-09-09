@@ -205,52 +205,92 @@ export default function TradePage() {
         <div className="lg:col-span-2 space-y-6">
           
           {/* فرم ایجاد سفارش */}
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-            <h2 className="text-xl font-black text-gray-800 mb-6">ثبت سفارش جدید</h2>
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-black text-gray-800 mb-5 sm:mb-6">ثبت سفارش جدید</h2>
             
             {/* نوع سفارش */}
             <div className="mb-6">
               <label className="block text-sm font-bold text-gray-700 mb-3">
                 نوع سفارش
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
+                  type="button"
                   onClick={() => buyAllowed && setOrderType("BUY_LIMIT")}
                   disabled={!buyAllowed}
-                  className={`p-4 rounded-2xl border-2 transition-all ${
+                  className={`w-full text-right p-4 rounded-2xl border-2 transition-all ${
                     !buyAllowed
                       ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
                       : orderType === "BUY_LIMIT"
-                      ? "border-green-500 bg-green-50 text-green-700"
-                      : "border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300"
+                      ? "border-green-500 bg-green-50 text-green-800 shadow-sm shadow-green-100"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-green-300 hover:bg-green-50/40"
                   }`}
                 >
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <TrendingDown size={20} />
-                    <span className="font-bold">خرید در قیمت پایین</span>
+                  <div className="flex items-center gap-3 mb-2">
+                    <span
+                      className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
+                        !buyAllowed
+                          ? "bg-gray-200 text-gray-400"
+                          : orderType === "BUY_LIMIT"
+                          ? "bg-green-500 text-white"
+                          : "bg-green-100 text-green-600"
+                      }`}
+                    >
+                      <TrendingDown size={20} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <span className="font-black text-sm sm:text-base block">خرید در قیمت پایین</span>
+                      {!buyAllowed && (
+                        <span className="text-[10px] font-bold text-amber-600">فعلاً غیرفعال</span>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500">
-                    وقتی قیمت به {prices ? toPersianDigits(prices.buy.toLocaleString()) : "-"} ریال یا کمتر برسد
+                  <p className="text-xs text-gray-500 leading-6 pr-[52px]">
+                    وقتی قیمت به{" "}
+                    <span className="font-bold text-gray-700">
+                      {prices ? toPersianDigits(prices.buy.toLocaleString()) : "—"}
+                    </span>{" "}
+                    ریال یا کمتر برسد
                   </p>
                 </button>
-                
+
                 <button
+                  type="button"
                   onClick={() => sellAllowed && setOrderType("SELL_LIMIT")}
                   disabled={!sellAllowed}
-                  className={`p-4 rounded-2xl border-2 transition-all ${
+                  className={`w-full text-right p-4 rounded-2xl border-2 transition-all ${
                     !sellAllowed
                       ? "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60"
                       : orderType === "SELL_LIMIT"
-                      ? "border-red-500 bg-red-50 text-red-700"
-                      : "border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300"
+                      ? "border-red-500 bg-red-50 text-red-800 shadow-sm shadow-red-100"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-red-300 hover:bg-red-50/40"
                   }`}
                 >
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <TrendingUp size={20} />
-                    <span className="font-bold">فروش در قیمت بالا</span>
+                  <div className="flex items-center gap-3 mb-2">
+                    <span
+                      className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
+                        !sellAllowed
+                          ? "bg-gray-200 text-gray-400"
+                          : orderType === "SELL_LIMIT"
+                          ? "bg-red-500 text-white"
+                          : "bg-red-100 text-red-600"
+                      }`}
+                    >
+                      <TrendingUp size={20} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <span className="font-black text-sm sm:text-base block">فروش در قیمت بالا</span>
+                      {!sellAllowed && (
+                        <span className="text-[10px] font-bold text-amber-600">فعلاً غیرفعال</span>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500">
-                    وقتی قیمت به {prices ? toPersianDigits(prices.sell.toLocaleString()) : "-"} ریال یا بیشتر برسد
+                  <p className="text-xs text-gray-500 leading-6 pr-[52px]">
+                    وقتی قیمت به{" "}
+                    <span className="font-bold text-gray-700">
+                      {prices ? toPersianDigits(prices.sell.toLocaleString()) : "—"}
+                    </span>{" "}
+                    ریال یا بیشتر برسد
                   </p>
                 </button>
               </div>
@@ -261,7 +301,7 @@ export default function TradePage() {
               <label className="block text-sm font-bold text-gray-700 mb-2">
                 قیمت هدف (ریال)
               </label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Input
                   type="text"
                   inputMode="numeric"
@@ -277,7 +317,7 @@ export default function TradePage() {
                 <Button
                   onClick={handleApplySuggestedPrice}
                   variant="outline"
-                  className="whitespace-nowrap"
+                  className="whitespace-nowrap w-full sm:w-auto justify-center"
                 >
                   قیمت پیشنهادی
                 </Button>

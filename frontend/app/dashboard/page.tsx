@@ -153,8 +153,8 @@ export default function DashboardPage() {
                 }`}
               >
                  {!buyAllowed && (
-                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/50 backdrop-blur-[1px]">
-                     <span className="text-[11px] font-bold text-amber-200 bg-amber-500/20 border border-amber-400/30 px-3 py-1 rounded-full">
+                   <div className="absolute inset-x-0 bottom-0 z-10 flex items-end justify-center pb-2.5 pt-8 bg-gradient-to-t from-slate-950/85 via-slate-900/40 to-transparent pointer-events-none">
+                     <span className="text-[11px] font-bold text-amber-200 bg-amber-500/25 border border-amber-400/40 px-3 py-1 rounded-full shadow-sm">
                        خرید غیرفعال
                      </span>
                    </div>
@@ -164,7 +164,7 @@ export default function DashboardPage() {
                     <span className="text-base font-bold">بخرید</span>
                     <ArrowDownRight size={18} />
                  </div>
-                 <h2 className="text-3xl font-black text-white tracking-tight group-hover:scale-105 transition-transform drop-shadow-lg">
+                 <h2 className="text-3xl font-black text-white tracking-tight group-hover:scale-105 transition-transform drop-shadow-lg relative z-[1]">
                    {priceLoading ? (
                      <span className="text-gray-400">در حال بارگذاری...</span>
                    ) : prices ? (
@@ -173,7 +173,7 @@ export default function DashboardPage() {
                      <span className="text-gray-400">-</span>
                    )}
                  </h2>
-                 <span className="text-[11px] text-gray-400 mt-1 block">تومان / گرم</span>
+                 <span className={`text-[11px] mt-1 block relative z-[1] ${buyAllowed ? "text-gray-400" : "text-gray-500 pb-7"}`}>تومان / گرم</span>
               </div>
 
               {/* وسط: متن "نقدی فردا" (بدون باکس) */}
@@ -201,8 +201,8 @@ export default function DashboardPage() {
                 }`}
               >
                  {!sellAllowed && (
-                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/50 backdrop-blur-[1px]">
-                     <span className="text-[11px] font-bold text-amber-200 bg-amber-500/20 border border-amber-400/30 px-3 py-1 rounded-full">
+                   <div className="absolute inset-x-0 bottom-0 z-10 flex items-end justify-center pb-2.5 pt-8 bg-gradient-to-t from-slate-950/85 via-slate-900/40 to-transparent pointer-events-none">
+                     <span className="text-[11px] font-bold text-amber-200 bg-amber-500/25 border border-amber-400/40 px-3 py-1 rounded-full shadow-sm">
                        فروش غیرفعال
                      </span>
                    </div>
@@ -212,7 +212,7 @@ export default function DashboardPage() {
                     <span className="text-base font-bold">بفروشید</span>
                     <ArrowUpRight size={18} />
                  </div>
-                 <h2 className="text-3xl font-black text-white tracking-tight group-hover:scale-105 transition-transform drop-shadow-lg">
+                 <h2 className="text-3xl font-black text-white tracking-tight group-hover:scale-105 transition-transform drop-shadow-lg relative z-[1]">
                    {priceLoading ? (
                      <span className="text-gray-400">در حال بارگذاری...</span>
                    ) : prices ? (
@@ -221,7 +221,7 @@ export default function DashboardPage() {
                      <span className="text-gray-400">-</span>
                    )}
                  </h2>
-                 <span className="text-[11px] text-gray-400 mt-1 block">تومان / گرم</span>
+                 <span className={`text-[11px] mt-1 block relative z-[1] ${sellAllowed ? "text-gray-400" : "text-gray-500 pb-7"}`}>تومان / گرم</span>
               </div>
 
            </div>
