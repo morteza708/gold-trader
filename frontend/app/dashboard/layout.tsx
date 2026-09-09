@@ -16,6 +16,7 @@ import { walletAPI, Wallet } from "@/lib/api/auth";
 import NotificationBell from "@/components/dashboard/NotificationBell";
 import BrandLogo from "@/components/brand/BrandLogo";
 import SupportFab from "@/components/support/SupportFab";
+import NotificationEnableModal from "@/components/PWA/NotificationEnableModal";
 
 // آواتار پیش‌فرض (آیکون کاربر)
 export const DEFAULT_AVATAR =
@@ -320,6 +321,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       </div>
       <SupportFab />
+      <NotificationEnableModal />
     </ProtectedRoute>
   );
 }

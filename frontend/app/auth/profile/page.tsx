@@ -5,21 +5,23 @@ import { useRouter } from "next/navigation";
 import {
   User,
   CreditCard,
-  Calendar as CalendarIcon,
   Info,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import BirthDateFields from "@/components/ui/BirthDateFields";
 import toast from "react-hot-toast";
 import { toEnglishDigits, toPersianDigits } from "@/lib/utils/numberUtils";
+import {
+  EMPTY_BIRTH_PARTS,
+  JalaliBirthParts,
+  formatJalaliBirthDate,
+  validateJalaliBirthParts,
+} from "@/lib/utils/jalaliBirthDate";
 import { MAX_IMAGE_SIZE_LABEL } from "@/lib/utils/imageUpload";
 import ImageCompressHelp from "@/components/ui/ImageCompressHelp";
 import ImageUploadZone from "@/components/ui/ImageUploadZone";
 import { useAuth } from "@/contexts/AuthContext";
-
-import DatePicker, { DateObject } from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
 
 type FieldErrors = {
   firstName?: string;
@@ -37,12 +39,12 @@ export default function ProfilePage() {
     firstName: string;
     lastName: string;
     nationalCode: string;
-    birthDate: string | DateObject | null;
+    birthDate: JalaliBirthParts;
   }>({
     firstName: "",
     lastName: "",
     nationalCode: "",
-    birthDate: null,
+    birthDate: { ...EMPTY_BIRTH_PARTS },
   });
 
   const [nationalCard, setNationalCard] = useState<File | null>(null);
@@ -115,8 +117,9 @@ export default function ProfilePage() {
     if (formData.nationalCode.length !== 10) {
       errors.nationalCode = "کد ملی باید ۱۰ رقم باشد";
     }
-    if (!formData.birthDate) {
-      errors.birthDate = "تاریخ تولد الزامی است";
+    const birthErr = validateJalaliBirthParts(formData.birthDate);
+    if (birthErr) {
+      errors.birthDate = birthErr;
     }
     if (!nationalCard) {
       errors.nationalCard = "آپلود تصویر کارت ملی الزامی است";
@@ -155,67 +158,6 @@ export default function ProfilePage() {
     return mapped;
   };
 
-  const formatBirthDate = (): string | null => {
-    if (!formData.birthDate) return null;
-
-    if (formData.birthDate instanceof DateObject) {
-      const year = formData.birthDate.year;
-      let month: number;
-      if (typeof formData.birthDate.month === "number") {
-        month = formData.birthDate.month;
-      } else if (
-        formData.birthDate.month &&
-        typeof formData.birthDate.month === "object" &&
-        "number" in formData.birthDate.month
-      ) {
-        month = (formData.birthDate.month as { number: number }).number;
-      } else {
-        month =
-          (formData.birthDate as DateObject & { monthIndex?: number }).monthIndex !==
-          undefined
-            ? (formData.birthDate as DateObject & { monthIndex?: number }).monthIndex! + 1
-            : 1;
-      }
-      const day = formData.birthDate.day;
-
-      if (year == null || month == null || day == null) return null;
-
-      const yearNum = parseInt(String(year), 10);
-      const monthNum = parseInt(String(month), 10);
-      const dayNum = parseInt(String(day), 10);
-
-      if (
-        isNaN(yearNum) ||
-        isNaN(monthNum) ||
-        isNaN(dayNum) ||
-        yearNum <= 0 ||
-        monthNum <= 0 ||
-        monthNum > 12 ||
-        dayNum <= 0 ||
-        dayNum > 31
-      ) {
-        return null;
-      }
-
-      return `${yearNum}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-    }
-
-    if (typeof formData.birthDate === "string" && formData.birthDate.trim()) {
-      const dateStr = formData.birthDate.replace(/\//g, "-").trim();
-      const parts = dateStr.split("-").filter((p) => p.trim());
-      if (parts.length !== 3) return null;
-
-      const year = toEnglishDigits(parts[0].trim());
-      const month = toEnglishDigits(parts[1].trim());
-      const day = toEnglishDigits(parts[2].trim());
-
-      if (!/^\d+$/.test(year) || !/^\d+$/.test(month) || !/^\d+$/.test(day)) return null;
-      return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-    }
-
-    return null;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -226,7 +168,7 @@ export default function ProfilePage() {
       return;
     }
 
-    const formattedDate = formatBirthDate();
+    const formattedDate = formatJalaliBirthDate(formData.birthDate);
     if (!formattedDate) {
       setFieldErrors((prev) => ({ ...prev, birthDate: "تاریخ انتخاب شده نامعتبر است" }));
       return;
@@ -318,44 +260,14 @@ export default function ProfilePage() {
           error={fieldErrors.nationalCode}
         />
 
-        <div className="w-full">
-          <label className="block text-sm font-bold text-gray-700 mb-2">تاریخ تولد</label>
-          <div className="relative group">
-            <DatePicker
-              calendar={persian}
-              locale={persian_fa}
-              value={formData.birthDate}
-              onChange={(date: DateObject | DateObject[] | null) => {
-                clearFieldError("birthDate");
-                if (date && !Array.isArray(date)) {
-                  setFormData((prev) => ({ ...prev, birthDate: date }));
-                } else if (date && Array.isArray(date) && date.length > 0) {
-                  setFormData((prev) => ({ ...prev, birthDate: date[0] }));
-                } else {
-                  setFormData((prev) => ({ ...prev, birthDate: null }));
-                }
-              }}
-              calendarPosition="bottom-right"
-              containerClassName="w-full"
-              inputClass={`w-full bg-gray-50 text-gray-900 border-2 rounded-xl px-4 py-3 outline-none transition-all duration-300 pr-12 cursor-pointer font-bold text-center ${
-                fieldErrors.birthDate
-                  ? "border-red-300 focus:border-red-500 bg-red-50"
-                  : "border-gray-200 focus:border-gold-500"
-              }`}
-              placeholder="انتخاب کنید"
-            />
-            <div
-              className={`absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none ${
-                fieldErrors.birthDate ? "text-red-400" : "text-gray-400"
-              }`}
-            >
-              <CalendarIcon size={18} />
-            </div>
-          </div>
-          {fieldErrors.birthDate && (
-            <p className="text-xs text-red-500 mt-1 font-medium">{fieldErrors.birthDate}</p>
-          )}
-        </div>
+        <BirthDateFields
+          value={formData.birthDate}
+          error={fieldErrors.birthDate}
+          onChange={(birthDate) => {
+            clearFieldError("birthDate");
+            setFormData((prev) => ({ ...prev, birthDate }));
+          }}
+        />
 
         <div className="w-full">
           <label className="block text-sm font-bold text-gray-700 mb-2">تصویر کارت ملی</label>

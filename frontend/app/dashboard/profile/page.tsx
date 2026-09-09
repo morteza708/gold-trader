@@ -13,12 +13,16 @@ import toast from "react-hot-toast";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { authAPI, UpdateProfileData } from "@/lib/api/auth";
-import { toPersianDigits, toEnglishDigits } from "@/lib/utils/numberUtils";
+import { toPersianDigits } from "@/lib/utils/numberUtils";
 import { IMAGE_FILE_ACCEPT, prepareImageForUpload } from "@/lib/utils/imageUpload";
 import { UploadSuccessCheck } from "@/components/ui/ImageUploadZone";
-import DatePicker, { DateObject } from "react-multi-date-picker";
-import persian from "react-date-object/calendars/persian";
-import persian_fa from "react-date-object/locales/persian_fa";
+import BirthDateFields from "@/components/ui/BirthDateFields";
+import {
+  EMPTY_BIRTH_PARTS,
+  JalaliBirthParts,
+  formatJalaliBirthDate,
+  parseJalaliBirthParts,
+} from "@/lib/utils/jalaliBirthDate";
 import NotificationPermission from "@/components/PWA/NotificationPermission";
 
 export default function ProfilePage() {
@@ -37,11 +41,11 @@ export default function ProfilePage() {
   const [formData, setFormData] = useState<{
     firstName: string;
     lastName: string;
-    birthDate: DateObject | null;
+    birthDate: JalaliBirthParts;
   }>({
     firstName: "",
     lastName: "",
-    birthDate: null,
+    birthDate: { ...EMPTY_BIRTH_PARTS },
   });
   
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -59,66 +63,13 @@ export default function ProfilePage() {
       </svg>`
     );
 
-  // کمکی: تبدیل رشته تاریخ به DateObject شمسی (پشتیبانی از فرمت‌های مختلف)
-  const parseBirthDate = (dateStr?: string | null): DateObject | null => {
-    if (!dateStr) return null;
-    try {
-      const cleaned = toEnglishDigits(dateStr).replace(/[./]/g, "-").replace(/\/+/g, "-").trim();
-      const parts = cleaned.split("-").filter(Boolean);
-      if (parts.length !== 3) return null;
-
-      let year: number;
-      let month: number;
-      let day: number;
-
-      const [a, b, c] = parts;
-
-      // حالت سال در ابتدای رشته (YYYY-MM-DD)
-      if (a.length === 4) {
-        year = parseInt(a, 10);
-        month = parseInt(b, 10);
-        day = parseInt(c, 10);
-      }
-      // حالت سال در انتهای رشته (DD-MM-YYYY)
-      else if (c.length === 4) {
-        year = parseInt(c, 10);
-        month = parseInt(b, 10);
-        day = parseInt(a, 10);
-      }
-      // حالت سال دو رقمی (DD-MM-YY) را به 13xx/14xx نگاشت می‌کنیم
-      else {
-        const twoDigitYear = parseInt(c, 10);
-        year = twoDigitYear < 50 ? 1400 + twoDigitYear : 1300 + twoDigitYear;
-        month = parseInt(b, 10);
-        day = parseInt(a, 10);
-      }
-
-      if (
-        isNaN(year) || isNaN(month) || isNaN(day) ||
-        month < 1 || month > 12 || day < 1 || day > 31
-      ) {
-        return null;
-      }
-
-      return new DateObject({
-        calendar: persian,
-        locale: persian_fa,
-        year,
-        month,
-        day,
-      });
-    } catch {
-      return null;
-    }
-  };
-
   // بارگذاری اطلاعات کاربر در فرم
   useEffect(() => {
     if (user) {
       setFormData({
         firstName: user.first_name || "",
         lastName: user.last_name || "",
-        birthDate: parseBirthDate(user.birth_date),
+        birthDate: parseJalaliBirthParts(user.birth_date),
       });
       setAvatarPreview(null);
       setAvatarFile(null);
@@ -170,7 +121,7 @@ export default function ProfilePage() {
       setFormData({
         firstName: user.first_name || "",
         lastName: user.last_name || "",
-        birthDate: parseBirthDate(user.birth_date),
+        birthDate: parseJalaliBirthParts(user.birth_date),
       });
       setAvatarPreview(null);
       setAvatarFile(null);
@@ -191,40 +142,23 @@ export default function ProfilePage() {
       return;
     }
 
+    const hasAnyBirth =
+      Boolean(formData.birthDate.day) ||
+      Boolean(formData.birthDate.month) ||
+      Boolean(formData.birthDate.year);
+    let formattedDate: string | undefined;
+    if (hasAnyBirth) {
+      const formatted = formatJalaliBirthDate(formData.birthDate);
+      if (!formatted) {
+        toast.error("تاریخ تولد نامعتبر است");
+        return;
+      }
+      formattedDate = formatted;
+    }
+
     setIsLoading(true);
 
     try {
-      // تبدیل تاریخ به فرمت YYYY-MM-DD (شمسی)
-      let formattedDate: string | undefined;
-      if (formData.birthDate) {
-        try {
-          const year = formData.birthDate.year;
-          let month: number;
-          if (typeof formData.birthDate.month === 'number') {
-            month = formData.birthDate.month;
-          } else if (formData.birthDate.month && typeof formData.birthDate.month === 'object' && 'number' in formData.birthDate.month) {
-            month = (formData.birthDate.month as any).number;
-          } else {
-            month = (formData.birthDate as any).monthIndex !== undefined
-              ? (formData.birthDate as any).monthIndex + 1
-              : 1;
-          }
-          const day = formData.birthDate.day;
-
-          if (year && month && day) {
-            const yearNum = parseInt(String(year), 10);
-            const monthNum = parseInt(String(month), 10);
-            const dayNum = parseInt(String(day), 10);
-
-            if (!isNaN(yearNum) && !isNaN(monthNum) && !isNaN(dayNum)) {
-              formattedDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-            }
-          }
-        } catch (error) {
-          console.error('Error formatting date:', error);
-        }
-      }
-
       // آماده‌سازی داده‌ها برای ارسال
       const updateData: UpdateProfileData = {
         first_name: formData.firstName.trim(),
@@ -446,36 +380,13 @@ export default function ProfilePage() {
                    disabled={true}
                    className="bg-gray-50 border-transparent text-gray-400 cursor-not-allowed text-center"
                  />
-                 <div className="space-y-2">
-                   <label className="block text-xs font-bold text-gray-700 mb-1">
-                     تاریخ تولد
-                   </label>
-                   <DatePicker
-                     value={formData.birthDate}
-                     onChange={(date: DateObject | DateObject[] | null) => {
-                       if (date instanceof DateObject) {
-                         setFormData({...formData, birthDate: date});
-                       } else if (Array.isArray(date) && date.length > 0 && date[0] instanceof DateObject) {
-                         setFormData({...formData, birthDate: date[0]});
-                       } else {
-                         setFormData({...formData, birthDate: null});
-                       }
-                     }}
-                     calendar={persian}
-                     locale={persian_fa}
-                     calendarPosition="bottom-right"
-                     format="YYYY/MM/DD"
-                     disabled={!isEditing || isLoading}
-                     className={!isEditing ? "bg-gray-50 border-transparent text-gray-500" : ""}
-                     containerClassName="w-full"
-                     inputClass={`w-full px-4 py-2.5 rounded-xl border text-center ${
-                       !isEditing 
-                         ? "bg-gray-50 border-transparent text-gray-500 cursor-not-allowed" 
-                         : "bg-white border-gray-200 text-gray-800 focus:border-gold-500 focus:ring-1 focus:ring-gold-500"
-                     }`}
-                     placeholder="تاریخ تولد را انتخاب کنید"
-                   />
-                 </div>
+                 <BirthDateFields
+                   dense
+                   value={formData.birthDate}
+                   disabled={!isEditing || isLoading}
+                   onChange={(birthDate) => setFormData({ ...formData, birthDate })}
+                   className={`md:col-span-2 ${!isEditing ? "opacity-80" : ""}`}
+                 />
               </div>
 
               {/* هشدار برای فیلدهای قفل شده */}

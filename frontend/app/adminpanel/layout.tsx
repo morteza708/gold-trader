@@ -11,6 +11,7 @@ import MobileHeader from "@/components/admin/MobileHeader";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
 import NotificationBell from "@/components/dashboard/NotificationBell";
+import NotificationEnableModal from "@/components/PWA/NotificationEnableModal";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -144,6 +145,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Overlay موبایل */}
       {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm"></div>}
       </div>
+      <NotificationEnableModal delayMs={2200} />
     </ProtectedRoute>
   );
 }
