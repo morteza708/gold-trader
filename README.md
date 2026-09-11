@@ -109,6 +109,25 @@ Migrations when models change:
 docker compose -f docker-compose.production.yml exec backend python manage.py migrate
 ```
 
+### Go-live financial reset (keep users)
+
+Safe management command to wipe test trades/deposits/withdrawals/treasury journal and zero wallets **without deleting users**, bank cards, settings, or gold prices.
+
+```bash
+# 1) Backup DB first (pg_dump)
+# 2) Preview counts only
+docker compose -f docker-compose.production.yml exec backend \
+  python manage.py go_live_reset --dry-run
+
+# 3) Execute (exact confirm phrase required)
+docker compose -f docker-compose.production.yml exec backend \
+  python manage.py go_live_reset --confirm GO_LIVE_RESET
+```
+
+Optional flags: `--clear-push`, `--keep-tokens`, `--clear-sessions`.
+
+After reset: set real company vault balance in admin, verify active gold price, test OTP login.
+
 ---
 
 ## Business Flows
@@ -495,6 +514,19 @@ docker compose -f docker-compose.production.yml restart backend celery_worker
 ```
 
 تغییرات UI حتماً نیاز به `build frontend` دارد.
+
+### ریست مالی قبل از شروع رسمی (حفظ کاربران)
+
+```bash
+# بک‌آپ DB بگیرید، سپس:
+docker compose -f docker-compose.production.yml exec backend \
+  python manage.py go_live_reset --dry-run
+
+docker compose -f docker-compose.production.yml exec backend \
+  python manage.py go_live_reset --confirm GO_LIVE_RESET
+```
+
+کاربران، کارت بانکی، تنظیمات و قیمت طلا حفظ می‌شوند؛ معاملات/واریز/برداشت/دفتر خزانه پاک و کیف پول‌ها صفر می‌شوند.
 
 ---
 
