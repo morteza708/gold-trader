@@ -55,15 +55,35 @@ export interface GoldPriceAdmin {
   live_symbol_name?: string;
 }
 
-export interface GoldPriceHistory {
-  buy_base_price: number;
-  sell_base_price: number;
-  buy_final_price: number;
-  sell_final_price: number;
-  source: 'MANUAL' | 'API';
-  created_at: string;
-  created_at_jalali: string;
+export type ChartRange = '24h' | '7d' | '30d';
+
+export interface PriceChartPoint {
+  t: string;
+  t_jalali: string;
+  buy: number;
+  sell: number;
+  source?: 'MANUAL' | 'API';
 }
+
+export interface PriceChartStats {
+  open: number | null;
+  close: number | null;
+  high: number | null;
+  low: number | null;
+  change: number | null;
+  change_percent: number | null;
+}
+
+export interface PriceChartResponse {
+  range: ChartRange;
+  generated_at: string;
+  label: string;
+  series: PriceChartPoint[];
+  stats: PriceChartStats;
+}
+
+/** @deprecated use PriceChartPoint — kept for older admin history calls */
+export type GoldPriceHistory = PriceChartPoint;
 
 export interface Trade {
   id: number;
@@ -163,6 +183,13 @@ export const tradesAPI = {
   // دریافت قیمت فعلی (قیمت نهایی)
   getCurrentPrice: async (): Promise<GoldPrice> => {
     const response = await apiClient.get<GoldPrice>('/trades/price/');
+    return response.data;
+  },
+
+  getPriceChart: async (range: ChartRange = '24h'): Promise<PriceChartResponse> => {
+    const response = await apiClient.get<PriceChartResponse>('/trades/price/chart/', {
+      params: { range },
+    });
     return response.data;
   },
 
@@ -319,10 +346,11 @@ export const adminTradesAPI = {
     return response.data;
   },
 
-  // دریافت تاریخچه قیمت‌ها
-  getPriceHistory: async (days: number = 30): Promise<GoldPriceHistory[]> => {
-    const response = await apiClient.get<GoldPriceHistory[]>(
-      `/admin/trades/price/history/?days=${days}`
+  // دریافت تاریخچه قیمت‌ها برای نمودار
+  getPriceHistory: async (range: ChartRange = '24h'): Promise<PriceChartResponse> => {
+    const response = await apiClient.get<PriceChartResponse>(
+      '/admin/trades/price/history/',
+      { params: { range } }
     );
     return response.data;
   },

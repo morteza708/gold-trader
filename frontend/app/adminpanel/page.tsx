@@ -15,11 +15,19 @@ import { toPersianDigits } from "@/lib/utils/numberUtils";
 import { adminAPI } from "@/lib/api/auth";
 import { useGoldPrice } from "@/hooks/useGoldPrice";
 import { useTradesStatus } from "@/hooks/useTradesStatus";
+import { usePriceChart } from "@/hooks/usePriceChart";
+import PriceTrendChart from "@/components/charts/PriceTrendChart";
+import type { ChartRange } from "@/lib/api/trades";
 
 export default function AdminDashboard() {
   const { prices, loading: priceLoading } = useGoldPrice(5000);
   const { status: tradesStatus, loading: statusLoading, refresh: refreshMarketStatus } =
     useTradesStatus(5000, true);
+  const [chartRange, setChartRange] = useState<ChartRange>("24h");
+  const { data: chartData, loading: chartLoading } = usePriceChart(chartRange, {
+    admin: true,
+    interval: 45000,
+  });
 
   const [stats, setStats] = useState({
     total_users: 0,
@@ -73,7 +81,7 @@ export default function AdminDashboard() {
           onUpdated={refreshMarketStatus}
         />
 
-        <div className="bg-slate-800 rounded-3xl p-8 border border-slate-700 flex flex-col justify-center gap-4">
+        <div className="bg-slate-800 rounded-3xl p-8 border border-slate-700 flex flex-col justify-start gap-4">
           <div className="flex justify-between items-center text-slate-400 text-sm mb-2">
             <span>نرخ زنده (دریافت از API)</span>
             {priceLoading ? (
@@ -125,6 +133,19 @@ export default function AdminDashboard() {
               <span className="text-slate-400">قیمت در دسترس نیست</span>
             </div>
           )}
+
+          <div className="pt-4 border-t border-slate-700">
+            <p className="text-xs text-slate-400 mb-3">روند قیمت معامله</p>
+            <PriceTrendChart
+              range={chartRange}
+              onRangeChange={setChartRange}
+              series={chartData?.series || []}
+              stats={chartData?.stats ?? null}
+              loading={chartLoading}
+              variant="admin"
+              height={220}
+            />
+          </div>
         </div>
       </div>
 

@@ -359,6 +359,26 @@ if not os.path.exists(LOGS_DIR):
 _redis_url = env.str('REDIS_URL', default='redis://redis:6379/0')
 CELERY_BROKER_URL = env.str('CELERY_BROKER_URL', default=_redis_url)
 CELERY_RESULT_BACKEND = env.str('CELERY_RESULT_BACKEND', default=_redis_url)
+
+# Chart cache on Redis db 1 (Celery uses db 0). Falls back inside chart_service on errors.
+_cache_url = env.str('REDIS_CACHE_URL', default='')
+if not _cache_url:
+    _cache_url = _redis_url.rstrip('/')
+    if _cache_url.endswith('/0'):
+        _cache_url = _cache_url[:-1] + '1'
+    elif '/0?' in _cache_url:
+        _cache_url = _cache_url.replace('/0?', '/1?', 1)
+    else:
+        _cache_url = f'{_cache_url}/1'
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': _cache_url,
+        'KEY_PREFIX': 'opalbox',
+        'TIMEOUT': 45,
+    }
+}
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'

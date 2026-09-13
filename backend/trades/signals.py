@@ -2,6 +2,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from .models import GoldPrice
 from .services import TradeService
+from .chart_service import invalidate_price_chart_cache
 
 
 @receiver(post_save, sender=GoldPrice)
@@ -12,6 +13,8 @@ def check_pending_orders_on_price_update(sender, instance, created, **kwargs):
     فقط وقتی قیمت جدید فعال است (is_active=True) بررسی می‌کنیم
     """
     if instance.is_active:
+        if created:
+            invalidate_price_chart_cache()
         try:
             executed_count = TradeService.check_and_execute_pending_orders()
             if executed_count > 0:

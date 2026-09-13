@@ -93,7 +93,7 @@ export default function MarketSnapshotBar({
       )}
       {hasRange && (
         <span>
-          بازه امروز: {formatAmount(low!)} تا {formatAmount(high!)}
+          بازه امروز بازار: {formatAmount(low!)} تا {formatAmount(high!)}
         </span>
       )}
       {time && <span>زمان نرخ: {time}</span>}

@@ -13,17 +13,21 @@ import LiveClock from "@/components/dashboard/LiveClock";
 import TradeModal from "@/components/dashboard/TradeModal";
 import MarketSnapshotBar from "@/components/dashboard/MarketSnapshotBar";
 import WelcomeOnboardingModal from "@/components/dashboard/WelcomeOnboardingModal";
+import PriceSparkline from "@/components/charts/PriceSparkline";
 import { useGoldPrice } from "@/hooks/useGoldPrice";
 import { useTradesStatus } from "@/hooks/useTradesStatus";
+import { usePriceChart } from "@/hooks/usePriceChart";
 import { isBuyAllowed, isSellAllowed } from "@/lib/utils/marketStatus";
 import toast from "react-hot-toast";
 import { toPersianDigits } from "@/lib/utils/numberUtils";
+import { chartDirection, formatChartPercent, seriesValues } from "@/lib/charts/priceChart";
 import { walletAPI, Wallet } from "@/lib/api/auth";
 import { tradesAPI, Trade, PendingPurchase } from "@/lib/api/trades";
 
 export default function DashboardPage() {
   const [modalType, setModalType] = useState<"buy" | "sell" | null>(null);
   const { prices, loading: priceLoading } = useGoldPrice(10000); // هر 10 ثانیه
+  const { data: sparkChart } = usePriceChart("24h", { interval: 45000 });
   const { status: tradesStatus } = useTradesStatus(15000);
   const buyAllowed = isBuyAllowed(tradesStatus);
   const sellAllowed = isSellAllowed(tradesStatus);
@@ -236,6 +240,37 @@ export default function DashboardPage() {
                market_price_time={prices.market_price_time}
                last_synced_at_jalali={prices.last_synced_at_jalali}
              />
+           )}
+
+           {sparkChart && sparkChart.series.length > 0 && (
+             <Link href="/dashboard/market" className="block group">
+               <div className="flex items-center justify-between mb-2">
+                 <span className="text-[11px] text-slate-400">
+                   روند ۲۴ ساعت — قیمت معامله در اپال‌باکس
+                   {sparkChart.stats.change_percent !== null && (
+                     <span
+                       className={`mr-2 font-bold ${
+                         chartDirection(sparkChart.stats) === "up"
+                           ? "text-emerald-400"
+                           : chartDirection(sparkChart.stats) === "down"
+                             ? "text-red-400"
+                             : "text-slate-400"
+                       }`}
+                     >
+                       {sparkChart.stats.change_percent > 0 ? "+" : ""}
+                       {formatChartPercent(sparkChart.stats.change_percent)}٪
+                     </span>
+                   )}
+                 </span>
+                 <span className="text-[11px] font-bold text-gold-400 group-hover:text-gold-300">
+                   جزئیات روند
+                 </span>
+               </div>
+               <PriceSparkline
+                 values={seriesValues(sparkChart.series, "buy")}
+                 direction={chartDirection(sparkChart.stats)}
+               />
+             </Link>
            )}
         </div>
       </div>

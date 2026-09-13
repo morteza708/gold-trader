@@ -6,6 +6,7 @@ app_name = 'trades'
 urlpatterns = [
     # User Endpoints
     path('trades/price/', views.get_current_price, name='get-current-price'),
+    path('trades/price/chart/', views.get_price_chart, name='get-price-chart'),
     path('trades/status/', views.get_trades_status, name='get-trades-status'),
     path('trades/buy/', views.buy_gold, name='buy-gold'),
     path('trades/sell/', views.sell_gold, name='sell-gold'),

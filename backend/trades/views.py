@@ -19,7 +19,6 @@ from .serializers import (
     GoldPriceSerializer,
     GoldPriceAdminSerializer,
     CreateGoldPriceSerializer,
-    GoldPriceHistorySerializer,
     TradeSerializer,
     OrderSerializer,
     CreateOrderSerializer,
@@ -28,6 +27,7 @@ from .serializers import (
 )
 from .services import TradeService
 from .pending_purchase_service import PendingPurchaseService
+from .chart_service import build_price_chart, parse_range
 
 logger = logging.getLogger('trades')
 
@@ -65,6 +65,26 @@ def get_current_price(request):
         logger.error(f"خطا در get_current_price: {e}", exc_info=True)
         return Response(
             {'error': 'خطا در دریافت قیمت. لطفاً دوباره تلاش کنید.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_price_chart(request):
+    """
+    سری نمودار قیمت معامله برای کاربر (بدون حاشیه سود و قیمت پایه).
+    """
+    try:
+        range_key = parse_range(request.query_params.get('range'), days=None)
+        payload = build_price_chart(range_key, include_source=False)
+        return Response(payload, status=status.HTTP_200_OK)
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        logger.error(f"خطا در get_price_chart: {e}", exc_info=True)
+        return Response(
+            {'error': 'خطا در دریافت نمودار قیمت. لطفاً دوباره تلاش کنید.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -732,7 +752,7 @@ def admin_update_price(request):
 @permission_classes([IsAuthenticated])
 def admin_get_price_history(request):
     """
-    دریافت تاریخچه قیمت‌ها برای نمودار (Admin)
+    نمودار تاریخچه قیمت برای ادمین (خرید/فروش نهایی + منبع، بدون dump خام).
     """
     try:
         if request.user.role not in [UserRole.SITE_ADMIN, UserRole.SUPER_ADMIN]:
@@ -740,17 +760,18 @@ def admin_get_price_history(request):
                 {'error': 'شما دسترسی به این بخش ندارید'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
-        days = int(request.query_params.get('days', 30))
-        history = GoldPrice.get_price_history(days=days)
-        serializer = GoldPriceHistorySerializer(history, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+
+        days = request.query_params.get('days')
+        days_int = int(days) if days not in (None, '') else None
+        range_key = parse_range(request.query_params.get('range'), days=days_int)
+        payload = build_price_chart(range_key, include_source=True)
+        return Response(payload, status=status.HTTP_200_OK)
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
-        import traceback
-        print(f"خطا در admin_get_price_history: {e}")
-        print(traceback.format_exc())
+        logger.error(f"خطا در admin_get_price_history: {e}", exc_info=True)
         return Response(
-            {'error': f'خطای سرور: {str(e)}'},
+            {'error': 'خطا در دریافت تاریخچه قیمت. لطفاً دوباره تلاش کنید.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
